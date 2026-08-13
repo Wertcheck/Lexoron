@@ -107,12 +107,15 @@ Konfigurationssystem, nicht über Codeänderungen. Ziel: mehrere Kanzlei-Profile
 
 1. **Python-Version:** verbindliche Zielversion ist **3.13.x** (auf dem Windows-Entwicklungsrechner
    des Anwalts vorhanden). `pyproject.toml` setzt `requires-python = ">=3.13"`.
-   - Hinweis Entwicklungs-Sandbox: In der aktuellen Claude-Sandbox ist nur Python 3.12.3
-     installierbar (kein 3.13-Paket über apt erreichbar, keine Netzwerkfreigabe für
-     Fremdquellen). Sandbox-Tests werden dort **ausschließlich als vorläufiger
-     Kompatibilitäts-/Smoke-Test** über die lokale, nicht versionierte pip-Option
-     `--ignore-requires-python` ausgeführt – `pyproject.toml` bleibt dabei unverändert.
-     **Dies ersetzt nicht den finalen Test auf dem Python-3.13-Zielsystem.**
+   - Hinweis Entwicklungs-Sandbox: In der Claude-Sandbox ist nur Python 3.12.3 installierbar
+     (kein 3.13-Paket über apt erreichbar, keine Netzwerkfreigabe für Fremdquellen). Dort
+     wurde nur ein **vorläufiger** Kompatibilitäts-/Smoke-Test über die lokale, nicht
+     versionierte pip-Option `--ignore-requires-python` durchgeführt – `pyproject.toml` blieb
+     dabei unverändert.
+   - **Finaler Test bestanden:** Auf dem Windows-Zielsystem des Anwalts (Python 3.13.15)
+     wurden Installation (`pip install -e ".[dev]"`) und Tests (`pytest`) erfolgreich und ohne
+     jeden Workaround durchgeführt: `2 passed`. Damit ist Prompt 02 vollständig
+     abgeschlossen.
 2. **Datenbank:** SQLite für den Prototyp. Die Datenzugriffsschicht wird (ab Prompt 03/04, via
    SQLAlchemy + konfigurierbarer `DATABASE_URL`) von Anfang an so abstrahiert, dass später
    PostgreSQL ohne Neuentwicklung von Datenmodell oder Geschäftslogik möglich ist.

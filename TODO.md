@@ -13,8 +13,8 @@ abgestimmt ist.
 ## Phase 1 – Technischer Kern (Prompts 01–04)
 - [x] Repository-Grundgerüst (pyproject.toml, .env.example, README.md, CLAUDE.md, Teststruktur,
       Git-Repo, FastAPI-Health-Check) – Sandbox-Smoke-Test unter Python 3.12 bestanden
-      (vorläufig, `--ignore-requires-python`); finaler Test auf Python-3.13-Zielsystem steht
-      noch aus.
+      (vorläufig, `--ignore-requires-python`). **Finaler Test auf dem Python-3.13-Zielsystem
+      (Windows, Python 3.13.15) erfolgreich bestätigt: `pytest` → 2 passed.**
 - [ ] Konfigurationssystem (Validierung, sichere Defaults, keine Secrets im Repo)
 - [ ] Datenmodell (Client, Matter, Party, Message, Document, Task, Deadline, Draft, Source,
       KnowledgeItem, WorkflowRun, AuditEvent, User/Role) + Migrationen + Tests
