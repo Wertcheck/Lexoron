@@ -17,9 +17,9 @@ abgestimmt ist.
       Python 3.13.15) erfolgreich bestätigt: `pytest` → 2 passed.
 - [x] Konfigurationssystem (pydantic-settings, sichere Defaults, Validierung
       für ungültige Werte, Secrets als SecretStr, `DATABASE_URL`-Abstraktion
-      SQLite→PostgreSQL bestätigt funktionsfähig) – Sandbox-Smoke-Test unter
-      Python 3.12 bestanden (11/11 Tests); finaler Test auf dem
-      Python-3.13-Zielsystem steht noch aus.
+      SQLite→PostgreSQL bestätigt funktionsfähig). **Finaler Test auf dem
+      Python-3.13-Zielsystem (Windows, Python 3.13.15) erfolgreich bestätigt:
+      `pytest` → 11 passed, lokaler Start mit geladener `.env` funktioniert.**
 - [ ] Datenmodell (Client, Matter, Party, Message, Document, Task, Deadline, Draft, Source,
       KnowledgeItem, WorkflowRun, AuditEvent, User/Role) + Migrationen + Tests
 
