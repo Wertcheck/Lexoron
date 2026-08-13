@@ -17,3 +17,13 @@ def test_health_returns_ok() -> None:
 
 def test_app_has_expected_title() -> None:
     assert app.title == "Kanzlei-AI-Pipeline"
+
+
+def test_settings_are_loaded_into_app_state_on_startup() -> None:
+    """Prueft, dass die Konfiguration beim Start geladen wird (Prompt 03),
+    ohne dass sich das Verhalten von /health nach aussen aendert."""
+    with TestClient(app) as startup_client:
+        response = startup_client.get("/health")
+        assert response.status_code == 200
+        assert hasattr(app.state, "settings")
+        assert app.state.app_env == "development"

@@ -7,12 +7,14 @@ requires-python = ">=3.13"
 license = { text = "Proprietary" }
 authors = [{ name = "Kanzlei AI Projekt" }]
 
-# Bewusst minimal fuer Prompt 02 (Repository-Grundgeruest).
-# Datenbank-, Konfigurations-, OCR-, Mail- und LLM-Abhaengigkeiten kommen erst
-# in den jeweils zustaendigen spaeteren Prompts (03, 04, 05, 06, 07, 17 ...) hinzu.
+# Bewusst minimal fuer Prompt 02 (Repository-Grundgeruest) + Prompt 03
+# (Konfigurationssystem). Datenmodell-, OCR-, Mail- und LLM-Abhaengigkeiten
+# kommen erst in den jeweils zustaendigen spaeteren Prompts (04, 05, 06, 07,
+# 17 ...) hinzu.
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
+    "pydantic-settings>=2.4",
 ]
 
 [project.optional-dependencies]

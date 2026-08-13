@@ -127,9 +127,20 @@ Konfigurationssystem, nicht über Codeänderungen. Ziel: mehrere Kanzlei-Profile
 5. **Such-/RAG-Layer (FTS5 vs. Vektorspeicher)** – relevant ab Prompt 11/12.
 6. **Zielumgebung für Installer-Tests** – relevant ab Prompt 36.
 
-## 11. Nächster Schritt
+## 12. Konfigurationssystem (Stand Prompt 03)
 
-Nach Bestätigung/Auswahl der offenen Punkte 1–6: **Prompt 02 – Repository-Grundgerüst**
-(minimales Python-Projektgerüst, `pyproject.toml`, `.env.example`, `README.md`, `CLAUDE.md`,
-Teststruktur, lokaler Smoke-Test). Es werden dabei weiterhin keine KI-Logik und keine echten
-Mandantendaten eingeführt.
+Implementiert als `app/config/settings.py` (`pydantic-settings`), geladen über eine gecachte
+`get_settings()`-Funktion. Wichtigste Eigenschaften:
+
+- **Sichere Defaults:** `require_human_approval_before_send=True`, `retention_days=0` (keine
+  automatische Löschung), `ocr_enabled=False`.
+- **Validierung:** negative `retention_days`, leere Ordner-/Quelleneinträge und falsche Typen
+  führen zu einem klaren `ValidationError` statt stillschweigend akzeptiert zu werden.
+- **Secrets:** `mail_password` und `anthropic_api_key` sind `SecretStr` – erscheinen nicht in
+  `str()`/`repr()` der Settings (z. B. beim versehentlichen Loggen).
+- **DB-Abstraktion bestätigt:** Wechsel SQLite → PostgreSQL erfolgt ausschließlich über
+  `DATABASE_URL`, ohne Codeänderung (per Test abgesichert).
+- **Bewusste Platzhalter ohne Festlegung:** Felder für Mail, OCR, LLM, Rechtsquellen,
+  Vorlagen und Freigaberegeln sind generisch gehalten; die eigentliche fachliche Logik/das
+  endgültige Schema entsteht erst in den jeweils zuständigen späteren Prompts.
+

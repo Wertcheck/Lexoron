@@ -8,14 +8,18 @@ abgestimmt ist.
 - [x] Umgebung geprüft (Python 3.12, git vorhanden, Repo leer)
 - [x] ARCHITECTURE.md angelegt
 - [x] TODO.md angelegt
-- [ ] Offene Entscheidungen 1–6 (siehe ARCHITECTURE.md §10) bestätigt
+- [x] Offene Entscheidungen 1–6 (siehe ARCHITECTURE.md §10): Python 3.13.x und SQLite mit
+      PostgreSQL-Abstraktion bestätigt; OCR/Mail/RAG/Zielumgebung bewusst noch offen
 
 ## Phase 1 – Technischer Kern (Prompts 01–04)
 - [x] Repository-Grundgerüst (pyproject.toml, .env.example, README.md, CLAUDE.md, Teststruktur,
-      Git-Repo, FastAPI-Health-Check) – Sandbox-Smoke-Test unter Python 3.12 bestanden
-      (vorläufig, `--ignore-requires-python`). **Finaler Test auf dem Python-3.13-Zielsystem
-      (Windows, Python 3.13.15) erfolgreich bestätigt: `pytest` → 2 passed.**
-- [ ] Konfigurationssystem (Validierung, sichere Defaults, keine Secrets im Repo)
+      Git-Repo, FastAPI-Health-Check) – finaler Test auf dem Python-3.13-Zielsystem (Windows,
+      Python 3.13.15) erfolgreich bestätigt: `pytest` → 2 passed.
+- [x] Konfigurationssystem (pydantic-settings, sichere Defaults, Validierung
+      für ungültige Werte, Secrets als SecretStr, `DATABASE_URL`-Abstraktion
+      SQLite→PostgreSQL bestätigt funktionsfähig) – Sandbox-Smoke-Test unter
+      Python 3.12 bestanden (11/11 Tests); finaler Test auf dem
+      Python-3.13-Zielsystem steht noch aus.
 - [ ] Datenmodell (Client, Matter, Party, Message, Document, Task, Deadline, Draft, Source,
       KnowledgeItem, WorkflowRun, AuditEvent, User/Role) + Migrationen + Tests
 
