@@ -107,11 +107,14 @@ Konfigurationssystem, nicht über Codeänderungen. Ziel: mehrere Kanzlei-Profile
 
 1. **Python-Version:** verbindliche Zielversion ist **3.13.x** (auf dem Windows-Entwicklungsrechner
    des Anwalts vorhanden). `pyproject.toml` setzt `requires-python = ">=3.13"`.
-   - Hinweis Entwicklungs-Sandbox: In der Claude-Sandbox ist nur Python 3.12.3 installierbar
-     (kein 3.13-Paket über apt erreichbar, keine Netzwerkfreigabe für Fremdquellen). Dort
-     wurde nur ein **vorläufiger** Kompatibilitäts-/Smoke-Test über die lokale, nicht
-     versionierte pip-Option `--ignore-requires-python` durchgeführt – `pyproject.toml` blieb
-     dabei unverändert.
+   - **Update (nach Prompt 05):** Die Claude-Sandbox verfügt inzwischen ebenfalls über echtes
+     Python 3.13.15 (offizieller `astral-sh/python-build-standalone`-Build, bezogen über
+     GitHub-Releases, keine feste URL im Repository). Ab sofort läuft der Sandbox-Testlauf mit
+     `.venv313` und damit ohne den zuvor nötigen `--ignore-requires-python`-Workaround. Frühere
+     Sandbox-Testläufe (Prompt 02–05) liefen noch mit Python 3.12 im Workaround-Modus und wurden
+     zusätzlich final auf dem Windows-Zielsystem bestätigt; ab dem nächsten Prompt gilt ein
+     Sandbox-Testlauf mit `.venv313` als vollwertiger 3.13-Test, ergänzend zur weiterhin
+     empfohlenen Verifikation auf dem Windows-Zielsystem des Anwalts.
    - **Finaler Test bestanden:** Auf dem Windows-Zielsystem des Anwalts (Python 3.13.15)
      wurden Installation (`pip install -e ".[dev]"`) und Tests (`pytest`) erfolgreich und ohne
      jeden Workaround durchgeführt: `2 passed`. Damit ist Prompt 02 vollständig

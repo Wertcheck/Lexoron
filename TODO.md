@@ -27,9 +27,10 @@ abgestimmt ist.
 
 ## Phase 2 – Eingang (Prompts 05–07)
 - [x] Scan-Ordner-Überwachung (Intake-Service, Hash, sicherer Intake-Bereich, Watchdog-basierter
-      Beobachter, Stabilitätsprüfung gegen unvollständig geschriebene Dateien) – Sandbox-Smoke-Test
-      unter Python 3.12 bestanden (31/31 Tests gesamt, inkl. echtem Dateisystem-Event-Test);
-      finaler Test auf dem Python-3.13-Zielsystem steht noch aus.
+      Beobachter, Stabilitätsprüfung gegen unvollständig geschriebene Dateien). Sandbox-Testlauf
+      erneut mit echtem Python 3.13.15 (`.venv313`) bestätigt: `31 passed`. Verifikation auf dem
+      Windows-Zielsystem des Anwalts steht optional noch aus (Sandbox läuft jetzt bereits mit
+      echtem 3.13, daher kein Blocker mehr für die weitere Entwicklung).
 - [ ] Dokumentverarbeitung/OCR (Text/OCR getrennt von Original)
 - [ ] E-Mail-Ingestion (ein Provider-Adapter, entkoppelt vom Workflow)
 
