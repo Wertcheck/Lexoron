@@ -101,20 +101,28 @@ Konfigurationssystem, nicht über Codeänderungen. Ziel: mehrere Kanzlei-Profile
 - A4: Python 3.12 wird verwendet (statt 3.13.x aus dem Konzept), sofern nicht anders gewünscht.
 - A5: Es wird zunächst **ein** E-Mail-Provider-Adapter gebaut, nicht mehrere parallel.
 
-## 10. Offene Entscheidungen (bitte vor Prompt 02 bestätigen oder auswählen)
+## 10. Entscheidungen und offene Punkte
 
-1. **Python-Version:** 3.12 (verfügbar) beibehalten oder auf 3.13.x wechseln?
-2. **OCR-Engine:** z. B. Tesseract (lokal, kostenlos) vs. Cloud-OCR-Dienst? Datenschutzaspekt
-   spricht für lokal.
-3. **Mail-Provider zuerst:** IMAP (generisch, viele Anbieter) oder Microsoft Graph (falls
-   Kanzlei M365 nutzt)?
-4. **Such-/RAG-Layer:** einfache Volltextsuche (z. B. SQLite FTS5) zum Start, oder direkt ein
-   Vektorspeicher (z. B. pgvector/Chroma)? Empfehlung: FTS5 zuerst, Vektor später ergänzen, um
-   Komplexität am Anfang gering zu halten.
-5. **Zielumgebung:** Entwicklungsrechner (macOS/Linux) oder von Anfang an Windows-Kanzlei-PC als
-   Referenzumgebung für Installer-Tests?
-6. **Datenbank Prototyp:** SQLite ausreichend für die ersten Phasen, oder direkt PostgreSQL
-   aufsetzen (mehr Setup-Aufwand, aber näher an Produktivumgebung)?
+### Bestätigt (Stand Prompt 02)
+
+1. **Python-Version:** verbindliche Zielversion ist **3.13.x** (auf dem Windows-Entwicklungsrechner
+   des Anwalts vorhanden). `pyproject.toml` setzt `requires-python = ">=3.13"`.
+   - Hinweis Entwicklungs-Sandbox: In der aktuellen Claude-Sandbox ist nur Python 3.12.3
+     installierbar (kein 3.13-Paket über apt erreichbar, keine Netzwerkfreigabe für
+     Fremdquellen). Sandbox-Tests werden dort **ausschließlich als vorläufiger
+     Kompatibilitäts-/Smoke-Test** über die lokale, nicht versionierte pip-Option
+     `--ignore-requires-python` ausgeführt – `pyproject.toml` bleibt dabei unverändert.
+     **Dies ersetzt nicht den finalen Test auf dem Python-3.13-Zielsystem.**
+2. **Datenbank:** SQLite für den Prototyp. Die Datenzugriffsschicht wird (ab Prompt 03/04, via
+   SQLAlchemy + konfigurierbarer `DATABASE_URL`) von Anfang an so abstrahiert, dass später
+   PostgreSQL ohne Neuentwicklung von Datenmodell oder Geschäftslogik möglich ist.
+
+### Weiterhin bewusst offen (werden an vorgesehener Stelle im Plan entschieden)
+
+3. **OCR-Engine** – relevant ab Prompt 06.
+4. **Mail-Provider zuerst (IMAP vs. Microsoft Graph)** – relevant ab Prompt 07.
+5. **Such-/RAG-Layer (FTS5 vs. Vektorspeicher)** – relevant ab Prompt 11/12.
+6. **Zielumgebung für Installer-Tests** – relevant ab Prompt 36.
 
 ## 11. Nächster Schritt
 
