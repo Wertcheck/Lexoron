@@ -31,7 +31,11 @@ abgestimmt ist.
       erneut mit echtem Python 3.13.15 (`.venv313`) bestätigt: `31 passed`. Verifikation auf dem
       Windows-Zielsystem des Anwalts steht optional noch aus (Sandbox läuft jetzt bereits mit
       echtem 3.13, daher kein Blocker mehr für die weitere Entwicklung).
-- [ ] Dokumentverarbeitung/OCR (Text/OCR getrennt von Original)
+- [x] Dokumentverarbeitung/OCR (Text/OCR getrennt von Original) – PDF/DOCX/TXT-Textextraktion,
+      Tesseract-OCR mit sicherem Pending-Default bei deaktiviertem OCR, Sandbox-Testlauf mit
+      echtem Python 3.13.15 bestätigt: `48 passed` (gesamt). Windows-Verifikation optional;
+      **wichtig: Tesseract muss auf dem Windows-Zielsystem separat installiert werden** (externe
+      Programmdatei, keine Python-Bibliothek) – siehe ARCHITECTURE.md §15.
 - [ ] E-Mail-Ingestion (ein Provider-Adapter, entkoppelt vom Workflow)
 
 ## Phase 3 – Aktenlogik (Prompts 08–10)

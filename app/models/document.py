@@ -35,8 +35,9 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     # Getrennt vom Original: extrahierter/Ocr-Text, erst ab Prompt 06 befuellt.
     extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # not_needed / pending / done / failed - bewusst freier String, kein
-    # DB-Enum, da die endgueltige Zustandslogik erst in Prompt 06 entsteht.
+    # not_needed / pending / done / failed / unsupported_format - bewusst
+    # freier String, kein DB-Enum, da die endgueltige Zustandslogik erst in
+    # Prompt 06 vollstaendig entstand und sich noch erweitern kann.
     ocr_status: Mapped[str] = mapped_column(
         String(32), default="not_needed", nullable=False
     )

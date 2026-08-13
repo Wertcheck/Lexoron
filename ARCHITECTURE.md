@@ -122,10 +122,11 @@ Konfigurationssystem, nicht über Codeänderungen. Ziel: mehrere Kanzlei-Profile
 2. **Datenbank:** SQLite für den Prototyp. Die Datenzugriffsschicht wird (ab Prompt 03/04, via
    SQLAlchemy + konfigurierbarer `DATABASE_URL`) von Anfang an so abstrahiert, dass später
    PostgreSQL ohne Neuentwicklung von Datenmodell oder Geschäftslogik möglich ist.
+3. **OCR-Engine:** **Tesseract** (lokal, kostenlos, datenschutzfreundlich), umgesetzt in
+   Prompt 06 über `pytesseract`.
 
 ### Weiterhin bewusst offen (werden an vorgesehener Stelle im Plan entschieden)
 
-3. **OCR-Engine** – relevant ab Prompt 06.
 4. **Mail-Provider zuerst (IMAP vs. Microsoft Graph)** – relevant ab Prompt 07.
 5. **Such-/RAG-Layer (FTS5 vs. Vektorspeicher)** – relevant ab Prompt 11/12.
 6. **Zielumgebung für Installer-Tests** – relevant ab Prompt 36.
@@ -202,3 +203,36 @@ Implementiert in `app/ingestion/`:
   Original bleibt beim Kopieren unangetastet, Namenskollisionen im Intake-Bereich werden
   vermieden, Audit-Event wird erzeugt, echter End-to-End-Test mit tatsächlichen
   Dateisystem-Events.
+
+## 15. Dokumentverarbeitung und OCR (Stand Prompt 06)
+
+Implementiert in `app/documents/`:
+
+- **`extraction.py`:** direkte Textextraktion aus PDF (PyMuPDF), DOCX (python-docx) und TXT.
+  Bilddateien (`.png/.jpg/.tif/...`) gelten immer als OCR-Kandidat. Ein konfigurierbarer
+  Schwellenwert (`MIN_EXTRACTED_TEXT_LENGTH`, Default 20 Zeichen) verhindert, dass minimale
+  Textreste (z. B. eine einzelne eingebettete Kopfzeile) fälschlich als "vollständiger Text"
+  gelten. Unbekannte Formate werden erkannt und markiert, ohne die Verarbeitung abzubrechen.
+- **`ocr.py`:** OCR über **Tesseract** (Entscheidung aus ARCHITECTURE.md §10 bestätigt), via
+  `pytesseract`. PDF-Seiten werden über PyMuPDF gerastert (kein zusätzliches Tool wie Poppler
+  nötig). Sprachen konfigurierbar (`OCR_LANGUAGES`, Default `deu+eng`). Optionaler expliziter
+  Pfad zur Tesseract-Programmdatei (`TESSERACT_CMD`) für Umgebungen, in denen Tesseract nicht
+  automatisch im PATH liegt (v. a. Windows).
+- **`service.py` (`DocumentProcessingService`):** orchestriert Extraktion + OCR und aktualisiert
+  `Document.extracted_text`/`Document.ocr_status`. **Sicherer Default:** Ist OCR global
+  deaktiviert (`OCR_ENABLED=false`, Standardeinstellung), bleibt ein Scan-Dokument im Status
+  `pending` – es gilt **nie** stillschweigend als erledigt. `file_path` (Original) wird nie
+  verändert. Jede Verarbeitung erzeugt ein begleitendes `AuditEvent`.
+- **Neuer Dokumentstatus:** `unsupported_format` ergänzt die in Prompt 04 vorgesehene Statusmenge
+  (`not_needed/pending/done/failed`) – siehe aktualisierten Kommentar in `app/models/document.py`.
+- **Bewusst nicht enthalten:** jede Form inhaltlicher/juristischer Interpretation des extrahierten
+  Texts – reine technische Extraktion. Klassifikation folgt in Prompt 08.
+- **Setup-Hinweis für den Anwalt (Windows):** Tesseract OCR ist eine externe Programmdatei, keine
+  Python-Bibliothek – muss separat installiert werden (z. B. über den offiziellen
+  Tesseract-Windows-Installer), sonst schlägt OCR mit `OcrError` fehl, auch bei
+  `OCR_ENABLED=true`. Pfad ggf. über `TESSERACT_CMD` in `.env` setzen.
+- **Getestet:** Textextraktion aus echtem PDF/DOCX-Text, Erkennung von OCR-Bedarf bei
+  gescannten/leeren PDFs und Bilddateien, echte Tesseract-Ausführung (kein Mock) gegen
+  synthetische Testbilder, sicherer Pending-Default bei deaktiviertem OCR, Format nicht
+  unterstützt wird erkannt statt abzustürzen, Original bleibt unverändert, Audit-Event wird
+  erzeugt.

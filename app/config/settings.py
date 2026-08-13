@@ -50,9 +50,24 @@ class Settings(BaseSettings):
     mail_username: str | None = None
     mail_password: SecretStr | None = None
 
-    # --- OCR (Platzhalter, echte Logik erst Prompt 06) ---
+    # --- OCR ---
+    # Standardmaessig deaktiviert (sicherer Default) - muss bewusst
+    # eingeschaltet werden. "tesseract" ist die einzige unterstuetzte
+    # Engine (siehe ARCHITECTURE.md §10, Entscheidung 3, bestaetigt in
+    # Prompt 06).
     ocr_enabled: bool = False
-    ocr_engine: str | None = None
+    ocr_engine: str = "tesseract"
+    # Optionaler expliziter Pfad zur Tesseract-Programmdatei, z. B. unter
+    # Windows "C:\\Program Files\\Tesseract-OCR\\tesseract.exe", falls
+    # Tesseract nicht automatisch im PATH gefunden wird.
+    tesseract_cmd: str | None = None
+    # Sprachen fuer die Texterkennung (Tesseract-Sprachcodes,
+    # "+"-getrennt), Default Deutsch + Englisch fuer Kanzleidokumente.
+    ocr_languages: str = "deu+eng"
+    # Ab welcher extrahierten Zeichenanzahl ein PDF als "hat bereits Text"
+    # gilt statt als OCR-bedürftig (verhindert, dass einzelne Kopfzeilen-
+    # Reste faelschlich als vollstaendiger Text gewertet werden).
+    min_extracted_text_length: int = 20
 
     # --- LLM / Claude API (Platzhalter, echte Anbindung erst Prompt 17) ---
     llm_provider: str = "anthropic"
@@ -82,6 +97,13 @@ class Settings(BaseSettings):
     def retention_days_must_not_be_negative(cls, value: int) -> int:
         if value < 0:
             raise ValueError("retention_days darf nicht negativ sein")
+        return value
+
+    @field_validator("min_extracted_text_length")
+    @classmethod
+    def min_extracted_text_length_must_not_be_negative(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("min_extracted_text_length darf nicht negativ sein")
         return value
 
     @field_validator("intake_storage_dir")

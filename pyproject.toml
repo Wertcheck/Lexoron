@@ -7,9 +7,10 @@ requires-python = ">=3.13"
 license = { text = "Proprietary" }
 authors = [{ name = "Kanzlei AI Projekt" }]
 
-# Bewusst minimal fuer Prompt 02-04. Ab Prompt 05 kommt der Intake-Service
-# (Watchdog) hinzu. OCR-, Mail- und LLM-Abhaengigkeiten kommen erst in den
-# jeweils zustaendigen spaeteren Prompts (06, 07, 17 ...) hinzu.
+# Bewusst minimal fuer Prompt 02-05. Ab Prompt 06 kommt die
+# Dokumentverarbeitung (PDF/Office-Textextraktion + OCR) hinzu. Mail- und
+# LLM-Abhaengigkeiten kommen erst in den jeweils zustaendigen spaeteren
+# Prompts (07, 17 ...) hinzu.
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
@@ -17,6 +18,10 @@ dependencies = [
     "sqlalchemy>=2.0",
     "alembic>=1.13",
     "watchdog>=4.0",
+    "pymupdf>=1.24",
+    "python-docx>=1.1",
+    "pytesseract>=0.3.10",
+    "pillow>=10.0",
 ]
 
 [project.optional-dependencies]
