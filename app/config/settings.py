@@ -36,9 +36,14 @@ class Settings(BaseSettings):
     # Geschaeftslogik zu aendern (siehe ARCHITECTURE.md §4/§10).
     database_url: str = "sqlite:///./data/kanzlei_ai.db"
 
-    # --- Eingang / Intake (Platzhalter, echte Logik erst Prompt 05) ---
+    # --- Eingang / Intake ---
     # Liste ueberwachter Ordnerpfade. Leer = noch nichts konfiguriert.
     intake_watched_folders: list[str] = Field(default_factory=list)
+    # Sicherer, konfigurierbarer Ablagebereich fuer sicher kopierte
+    # Eingangsdateien (Prompt 05). Getrennt vom Original-Quellordner, damit
+    # Bearbeitung nie direkt in einem vom Anwalt/Scanner beschriebenen
+    # Ordner stattfindet.
+    intake_storage_dir: str = "data/intake"
 
     # --- E-Mail (Platzhalter, echte Anbindung erst Prompt 07) ---
     mail_provider: str | None = None
@@ -77,6 +82,13 @@ class Settings(BaseSettings):
     def retention_days_must_not_be_negative(cls, value: int) -> int:
         if value < 0:
             raise ValueError("retention_days darf nicht negativ sein")
+        return value
+
+    @field_validator("intake_storage_dir")
+    @classmethod
+    def intake_storage_dir_must_not_be_blank(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError("intake_storage_dir darf nicht leer sein")
         return value
 
     @field_validator("intake_watched_folders", "legal_sources_allowed")

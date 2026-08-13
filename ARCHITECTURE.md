@@ -174,3 +174,28 @@ Secret/keine feste URL in `alembic.ini`).
   erlaubten Übergängen entsteht erst in Prompt 20.
 - **Migration verifiziert:** `alembic upgrade head` / `downgrade base` / erneut `upgrade head`
   erfolgreich getestet (manuell und automatisiert über `tests/test_migrations.py`).
+
+## 14. Scan-Ordner-Überwachung / Intake (Stand Prompt 05)
+
+Implementiert in `app/ingestion/`:
+
+- **`stability.py`:** `wait_until_stable()` verhindert, dass eine noch geschriebene Datei
+  (z. B. langsamer Scanner/Netzlaufwerk) vorzeitig verarbeitet wird – prüft wiederholt die
+  Dateigröße, bis sie über mehrere Prüfungen hinweg unverändert bleibt.
+- **`intake.py` (`IntakeService`):** kopiert (nicht verschiebt) eine stabile Datei in einen
+  konfigurierbaren Intake-Bereich (`INTAKE_STORAGE_DIR`, Default `data/intake`), berechnet einen
+  SHA-256-Hash, legt einen `Document`-Datensatz an (`matter_id` bewusst `None` – Aktenzuordnung
+  folgt erst in Prompt 09) und schreibt ein begleitendes `AuditEvent`. Bei Fehlern (Datei nicht
+  stabil/nicht mehr vorhanden) wird `IntakeError` geworfen; es entsteht dann weder eine Kopie
+  noch ein Datenbankeintrag.
+- **`watcher.py` (`IntakeWatcher`):** überwacht die konfigurierten `INTAKE_WATCHED_FOLDERS`
+  rekursiv über `watchdog` und übergibt neu erkannte Dateien an den `IntakeService`. Nicht
+  existierende Ordner werden übersprungen (Warnung statt Absturz); Fehler bei einzelnen Dateien
+  brechen die Überwachung der übrigen nicht ab (vollständiges Fehler-/Retry-System folgt in
+  Prompt 31).
+- **Bewusst nicht enthalten:** Textextraktion/OCR (Prompt 06), Aktenzuordnung (Prompt 09),
+  Klassifikation (Prompt 08).
+- **Getestet:** Hash-Korrektheit, Stabilitätsprüfung inkl. simuliertem langsamem Schreibvorgang,
+  Original bleibt beim Kopieren unangetastet, Namenskollisionen im Intake-Bereich werden
+  vermieden, Audit-Event wird erzeugt, echter End-to-End-Test mit tatsächlichen
+  Dateisystem-Events.

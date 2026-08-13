@@ -26,7 +26,10 @@ abgestimmt ist.
       bestätigt: `pytest` → 19 passed; `alembic upgrade head` erfolgreich angewendet.**
 
 ## Phase 2 – Eingang (Prompts 05–07)
-- [ ] Scan-Ordner-Überwachung (Intake-Service, Hash, sicherer Intake-Bereich)
+- [x] Scan-Ordner-Überwachung (Intake-Service, Hash, sicherer Intake-Bereich, Watchdog-basierter
+      Beobachter, Stabilitätsprüfung gegen unvollständig geschriebene Dateien) – Sandbox-Smoke-Test
+      unter Python 3.12 bestanden (31/31 Tests gesamt, inkl. echtem Dateisystem-Event-Test);
+      finaler Test auf dem Python-3.13-Zielsystem steht noch aus.
 - [ ] Dokumentverarbeitung/OCR (Text/OCR getrennt von Original)
 - [ ] E-Mail-Ingestion (ein Provider-Adapter, entkoppelt vom Workflow)
 

@@ -1,0 +1,112 @@
+"""IntakeWatcher – überwacht konfigurierte Ordner rekursiv auf neue Dateien.
+
+Nutzt `watchdog`, das rekursives Monitoring unterstuetzt und damit fuer den
+Scan-Eingang geeignet ist (siehe ARCHITECTURE.md §3). Jede neu erkannte
+Datei wird an den `IntakeService` uebergeben. Fehler bei einzelner Datei
+(z. B. nie stabil) duerfen die Ueberwachung der uebrigen Dateien/Ordner
+nicht abbrechen - vollstaendiges Fehler-/Retry-System folgt in Prompt 31,
+hier daher zunaechst ein bewusst einfaches try/except mit Logging.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Callable
+from pathlib import Path
+
+from watchdog.events import FileSystemEvent, FileSystemEventHandler
+from watchdog.observers import Observer
+
+from app.ingestion.intake import IntakeError, IntakeService
+from app.models import Document
+
+logger = logging.getLogger(__name__)
+
+# Callback-Typ: bekommt eine Quelldatei und liefert (bei Erfolg) das
+# erzeugte Document zurueck, oder None bei Fehler.
+SessionFactory = Callable[[], object]
+
+
+class _NewFileEventHandler(FileSystemEventHandler):
+    """Reagiert auf neu erstellte Dateien und stoesst deren Erfassung an.
+
+    Bewusst nicht auf Verzeichnis-Events oder reine Modify-Events: ein
+    "created"-Event reicht als Trigger, die eigentliche Stabilitaetspruefung
+    uebernimmt der IntakeService selbst.
+    """
+
+    def __init__(
+        self,
+        intake_service: IntakeService,
+        session_factory: SessionFactory,
+        on_ingested: Callable[[Document], None] | None = None,
+    ) -> None:
+        self._intake_service = intake_service
+        self._session_factory = session_factory
+        self._on_ingested = on_ingested
+
+    def on_created(self, event: FileSystemEvent) -> None:
+        if event.is_directory:
+            return
+        self._handle_new_file(Path(str(event.src_path)))
+
+    def _handle_new_file(self, path: Path) -> None:
+        db = self._session_factory()
+        try:
+            document = self._intake_service.ingest_file(path, db)  # type: ignore[arg-type]
+            logger.info("Datei erfolgreich erfasst: %s -> %s", path, document.id)
+            if self._on_ingested is not None:
+                self._on_ingested(document)
+        except IntakeError:
+            logger.warning("Datei konnte nicht erfasst werden: %s", path, exc_info=True)
+        except Exception:  # noqa: BLE001 - Ueberwachung darf nicht abbrechen
+            logger.exception("Unerwarteter Fehler bei der Erfassung von %s", path)
+        finally:
+            db.close()  # type: ignore[attr-defined]
+
+
+class IntakeWatcher:
+    """Ueberwacht eine Liste konfigurierter Ordner rekursiv.
+
+    Ordner, die (noch) nicht existieren, werden mit einer Warnung
+    uebersprungen statt die gesamte Ueberwachung zum Absturz zu bringen
+    (z. B. wenn ein Netzlaufwerk kurzzeitig nicht erreichbar ist).
+    """
+
+    def __init__(
+        self,
+        watched_folders: list[str],
+        intake_service: IntakeService,
+        session_factory: SessionFactory,
+        on_ingested: Callable[[Document], None] | None = None,
+    ) -> None:
+        self._watched_folders = watched_folders
+        self._observer = Observer()
+        self._handler = _NewFileEventHandler(
+            intake_service, session_factory, on_ingested
+        )
+
+    def start(self) -> None:
+        scheduled_any = False
+        for folder in self._watched_folders:
+            folder_path = Path(folder)
+            if not folder_path.is_dir():
+                logger.warning(
+                    "Überwachter Ordner existiert nicht, wird übersprungen: %s",
+                    folder,
+                )
+                continue
+            self._observer.schedule(self._handler, str(folder_path), recursive=True)
+            scheduled_any = True
+
+        if not scheduled_any:
+            logger.info(
+                "Keine gültigen überwachten Ordner konfiguriert - "
+                "IntakeWatcher startet, überwacht aber nichts."
+            )
+
+        self._observer.start()
+
+    def stop(self) -> None:
+        self._observer.stop()
+        self._observer.join()

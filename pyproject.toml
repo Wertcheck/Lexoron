@@ -7,16 +7,16 @@ requires-python = ">=3.13"
 license = { text = "Proprietary" }
 authors = [{ name = "Kanzlei AI Projekt" }]
 
-# Bewusst minimal fuer Prompt 02+03. Ab Prompt 04 kommt die Datenzugriffs-
-# schicht (SQLAlchemy + Alembic) hinzu. OCR-, Mail- und LLM-Abhaengigkeiten
-# kommen erst in den jeweils zustaendigen spaeteren Prompts (05, 06, 07,
-# 17 ...) hinzu.
+# Bewusst minimal fuer Prompt 02-04. Ab Prompt 05 kommt der Intake-Service
+# (Watchdog) hinzu. OCR-, Mail- und LLM-Abhaengigkeiten kommen erst in den
+# jeweils zustaendigen spaeteren Prompts (06, 07, 17 ...) hinzu.
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "pydantic-settings>=2.4",
     "sqlalchemy>=2.0",
     "alembic>=1.13",
+    "watchdog>=4.0",
 ]
 
 [project.optional-dependencies]
