@@ -124,10 +124,12 @@ Konfigurationssystem, nicht über Codeänderungen. Ziel: mehrere Kanzlei-Profile
    PostgreSQL ohne Neuentwicklung von Datenmodell oder Geschäftslogik möglich ist.
 3. **OCR-Engine:** **Tesseract** (lokal, kostenlos, datenschutzfreundlich), umgesetzt in
    Prompt 06 über `pytesseract`.
+4. **Mail-Provider zuerst:** **IMAP** (generisch, funktioniert mit den meisten Anbietern),
+   umgesetzt in Prompt 07 über `imaplib`. Microsoft Graph kann bei Bedarf später als weiterer
+   `MailProvider` ergänzt werden.
 
 ### Weiterhin bewusst offen (werden an vorgesehener Stelle im Plan entschieden)
 
-4. **Mail-Provider zuerst (IMAP vs. Microsoft Graph)** – relevant ab Prompt 07.
 5. **Such-/RAG-Layer (FTS5 vs. Vektorspeicher)** – relevant ab Prompt 11/12.
 6. **Zielumgebung für Installer-Tests** – relevant ab Prompt 36.
 
@@ -236,3 +238,36 @@ Implementiert in `app/documents/`:
   synthetische Testbilder, sicherer Pending-Default bei deaktiviertem OCR, Format nicht
   unterstützt wird erkannt statt abzustürzen, Original bleibt unverändert, Audit-Event wird
   erzeugt.
+
+## 16. E-Mail-Ingestion (Stand Prompt 07)
+
+Implementiert in `app/mail/`, als **Provider-Abstraktion, entkoppelt vom Workflow**
+(Konzept-Vorgabe für Prompt 07):
+
+- **`base.py`:** `MailProvider` ist ein `Protocol` mit genau einer Methode
+  (`fetch_new_messages`). Es existiert strukturell **keine Sende-Methode** – automatischer
+  Versand ist über diese Abstraktion nicht nur konfigurativ deaktiviert, sondern auf
+  Code-Ebene unmöglich (per Test abgesichert: `test_mail_provider_has_no_send_capability`,
+  `test_imap_provider_has_no_send_method`).
+- **`parsing.py`:** reines, netzwerkunabhängiges Parsing roher E-Mail-Bytes (Absender,
+  Empfänger, Betreff inkl. RFC-2047-Dekodierung für Umlaute, Message-ID, Datum, Body-Text
+  bevorzugt `text/plain`, Anhänge einzeln extrahiert).
+- **`imap_provider.py` (`ImapMailProvider`):** konkreter, erster Provider (Entscheidung aus
+  ARCHITECTURE.md §10 bestätigt: IMAP zuerst). Nutzt nur `imaplib` aus der
+  Python-Standardbibliothek, ruft ausschließlich `UNSEEN`-Nachrichten ab, markiert sie optional
+  als gelesen (`MAIL_MARK_SEEN`).
+- **`service.py` (`MailIngestionService`):** überführt abgerufene Nachrichten in `Message`-
+  Datensätze; **Anhänge werden einzeln als eigene `Document`-Einträge gespeichert**, nicht als
+  Teil des Nachrichtentexts (analog zum Scan-Intake aus Prompt 05). Deduplizierung über
+  `external_message_id`, damit dieselbe Nachricht nie doppelt als `Message` landet. `matter_id`
+  bleibt `None` (Aktenzuordnung folgt in Prompt 09). Jede Erfassung erzeugt ein `AuditEvent`.
+- **Bewusst nicht enthalten:** jede Form von automatischer Antwort oder Versand (siehe oben),
+  Aktenzuordnung (Prompt 09), inhaltliche Klassifikation (Prompt 08).
+- **Weitere Provider (z. B. Microsoft Graph):** können später als zusätzliche
+  `MailProvider`-Implementierung ergänzt werden, ohne `MailIngestionService` oder den Workflow
+  zu ändern.
+- **Getestet:** Parsing synthetischer Nachrichten (inkl. Umlaute, mehrere Anhänge, fehlende
+  Message-ID), `MailIngestionService` gegen einen Fake-Provider (kein echter Mailserver nötig),
+  Deduplizierung, Anhang-Speicherung getrennt vom Original-Nachrichtentext, `ImapMailProvider`
+  gegen eine gemockte IMAP-Verbindung (Login/Select/Search/Fetch/Mark-Seen/Logout-Ablauf sowie
+  Nur-Lese-Zugriff verifiziert).

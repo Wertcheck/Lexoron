@@ -45,10 +45,27 @@ class Settings(BaseSettings):
     # Ordner stattfindet.
     intake_storage_dir: str = "data/intake"
 
-    # --- E-Mail (Platzhalter, echte Anbindung erst Prompt 07) ---
+    # --- E-Mail ---
+    # "imap" ist der einzige aktuell implementierte Provider (Prompt 07,
+    # siehe ARCHITECTURE.md §10 Entscheidung 4). Weitere Provider (z. B.
+    # Microsoft Graph) koennen spaeter ueber dieselbe MailProvider-
+    # Abstraktion ergaenzt werden, ohne den Workflow zu aendern.
     mail_provider: str | None = None
+    mail_host: str | None = None
+    mail_port: int = 993
     mail_username: str | None = None
     mail_password: SecretStr | None = None
+    mail_mailbox: str = "INBOX"
+    mail_use_ssl: bool = True
+    # Ob abgerufene Nachrichten auf dem Server als gelesen markiert werden.
+    # Sicherer Default True, damit ein wiederholter Abruf (z. B. nach einem
+    # Neustart) nicht dieselben Nachrichten erneut als "neu" behandelt -
+    # zusaetzlich schuetzt die externe Message-ID vor Duplikaten in der DB.
+    mail_mark_seen: bool = True
+    # Getrennter Ablagebereich für E-Mail-Anhänge (analog zu
+    # intake_storage_dir für den Scan-Eingang, aber bewusst eigener
+    # Ordner, um die Herkunft nachvollziehbar zu halten).
+    mail_attachment_storage_dir: str = "data/mail_attachments"
 
     # --- OCR ---
     # Standardmaessig deaktiviert (sicherer Default) - muss bewusst

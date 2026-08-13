@@ -36,7 +36,10 @@ abgestimmt ist.
       echtem Python 3.13.15 bestätigt: `48 passed` (gesamt). Windows-Verifikation optional;
       **wichtig: Tesseract muss auf dem Windows-Zielsystem separat installiert werden** (externe
       Programmdatei, keine Python-Bibliothek) – siehe ARCHITECTURE.md §15.
-- [ ] E-Mail-Ingestion (ein Provider-Adapter, entkoppelt vom Workflow)
+- [x] E-Mail-Ingestion (ein Provider-Adapter, entkoppelt vom Workflow) – IMAP-Provider,
+      Provider-Abstraktion ohne jede Sende-Möglichkeit, Anhänge als eigene Document-Einträge,
+      Deduplizierung über Message-ID. Sandbox-Testlauf mit echtem Python 3.13.15 bestätigt:
+      `64 passed` (gesamt).
 
 ## Phase 3 – Aktenlogik (Prompts 08–10)
 - [ ] Dokumentklassifikation (strukturiertes JSON-Schema, Konfidenz)
