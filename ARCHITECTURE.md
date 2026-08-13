@@ -144,3 +144,33 @@ Implementiert als `app/config/settings.py` (`pydantic-settings`), geladen über 
   Vorlagen und Freigaberegeln sind generisch gehalten; die eigentliche fachliche Logik/das
   endgültige Schema entsteht erst in den jeweils zuständigen späteren Prompts.
 
+## 13. Datenmodell (Stand Prompt 04)
+
+Implementiert als SQLAlchemy-2.0-Modelle in `app/models/`, Migrationen über Alembic in
+`migrations/` (nutzt dieselbe `DATABASE_URL`-Abstraktion wie die Anwendung selbst – kein
+Secret/keine feste URL in `alembic.ini`).
+
+- **IDs:** UUID4 als String (nicht auto-increment), über `UUIDPrimaryKeyMixin`.
+- **Zeitstempel:** `created_at`/`updated_at` auf jeder Entität außer `AuditEvent` (siehe unten).
+- **Isolation:** `Matter` ist die zentrale Isolationseinheit; aktenbezogene Entitäten
+  (`Party, Message, Document, Task, Deadline, Draft, WorkflowRun`) referenzieren `matter_id`.
+  `Message`/`Document` erlauben `matter_id = NULL`, solange der Workflow-Zustand
+  `NEEDS_MATTER_MATCH` noch nicht aufgelöst ist. Ein erster, rudimentärer Isolationstest
+  (`test_matters_of_different_clients_stay_isolated`) ist vorhanden; die vollständige
+  Isolationsprüfung (Retrieval, KI-Kontext, Cross-Tenant-Zugriffstests) folgt planmäßig erst
+  in Prompt 41.
+- **Original vs. Metadaten:** `Document.file_path` (Original im Dateisystem) ist strikt getrennt
+  von `Document.extracted_text` (erst ab Prompt 06 befüllt) – siehe Konzept §7.
+- **Rechtsquellen strikt getrennt:** `Source` hat keine `matter_id`, keine Verbindung zu
+  Mandantendaten (siehe Konzept §6).
+- **Sichere Defaults:** `KnowledgeItem.approval_status="pending"`, `Source.approval_level=
+  "entwurf"`, `Deadline.review_status="unreviewed"` – nichts gilt automatisch als freigegeben
+  oder bestätigt.
+- **Versionierung:** `Draft.version`, `KnowledgeItem.version` als Integer, beginnend bei 1.
+- **AuditEvent bewusst ohne `updated_at`** (kein `TimestampMixin`, nur `created_at`) – append-only
+  laut Grundregel; Anwendungscode darf Einträge nicht nachträglich ändern.
+- **Workflow-Status:** `WorkflowRun.status` als freier String, beschränkt auf die in §6
+  festgelegte Zustandsmenge (`VALID_WORKFLOW_STATUSES`); die eigentliche State-Machine mit
+  erlaubten Übergängen entsteht erst in Prompt 20.
+- **Migration verifiziert:** `alembic upgrade head` / `downgrade base` / erneut `upgrade head`
+  erfolgreich getestet (manuell und automatisiert über `tests/test_migrations.py`).
