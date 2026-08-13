@@ -304,3 +304,16 @@ Diskussion zu lokalem vs. Cloud-LLM weiter unten in diesem Dokument bzw. im Chat
   niedrig, Aktenzeichen-Erkennung per Regex, Service-Verhalten bei fehlendem Text (Skip statt
   Rateergebnis), Persistierung inkl. JSON-Serialisierung, Audit-Eintrag dokumentiert
   Prüfbedarf.
+
+## 18. Notiz für spätere Prompts: API-Nutzung für Review-Engine (Prompt 18)
+
+Festgehalten am 2026-08-13, zur Umsetzung erst bei Prompt 18 relevant: Für die **Review-Engine**
+(unabhängige Prüfung KI-generierter Antwortentwürfe auf fehlende Fakten, Widersprüche, unbelegte
+Rechtsbehauptungen etc.) hat der Anwalt bestätigt, dass seine eigene **Anthropic-API** (Claude)
+genutzt werden darf – unabhängig von der noch offenen Cloud-vs.-lokal-Entscheidung für die
+eigentliche Drafting-Logik (Prompt 17/34, siehe ARCHITECTURE.md-Diskussion zu lokalen LLMs).
+
+Das ändert nichts an der aktuellen Umsetzungsreihenfolge (Prompt 09 als Nächstes) – dient nur
+als Gedächtnisstütze, damit diese Präferenz beim Erreichen von Prompt 17/18 nicht neu erfragt
+werden muss. Die konkrete Ausgestaltung (z. B. ob Review-Engine und Drafting denselben oder
+unterschiedliche Provider nutzen) wird erst dort entschieden.
