@@ -438,3 +438,38 @@ Implementiert in `app/search/` + `app/models/embedding.py`:
   wird bei fehlendem Netzwerkzugriff übersprungen statt fälschlich als Fehlschlag gewertet –
   **dieser Test sollte auf dem Windows-Zielsystem des Anwalts tatsächlich durchlaufen und ist
   dort noch final zu verifizieren.**
+
+## 22. Kanzlei-Wissensbasis (Stand Prompt 12)
+
+Implementiert in `app/knowledge/`, aufbauend auf dem `KnowledgeItem`-Modell aus Prompt 04 und der
+Suchschicht aus Prompt 11.
+
+- **Modellerweiterung:** `source` (Herkunft), `valid_from`/`valid_until` (Gültigkeitsbereich),
+  `created_by_user_id` ergänzen die Basisfelder aus Prompt 04. Migration nutzt bewusst Alembics
+  Batch-Modus (`op.batch_alter_table`), da SQLite kein direktes `ALTER` von Fremdschlüssel-
+  Constraints unterstützt – ohne Batch-Modus schlägt der Downgrade fehl.
+- **`schema.py` (`KnowledgeItemImport`):** validiert Eingaben (nicht-leerer Titel/Inhalt,
+  `valid_from` darf nicht nach `valid_until` liegen).
+- **`service.py` (`KnowledgeItemService`):** vier Kernoperationen:
+  - **Import:** immer `pending`, Version 1.
+  - **Inhaltsänderung:** Version +1, Status **zwingend zurück auf `pending`** – eine frühere
+    Freigabe gilt nie automatisch für neuen Inhalt weiter (Konzept §5 wörtlich umgesetzt).
+  - **Freigabe:** setzt `approved` und **stößt die Indizierung** in der Suchschicht aus Prompt 11
+    an (`DocumentSearchService.index_knowledge_item`), damit frisch freigegebenes Wissen sofort
+    durchsuchbar ist.
+  - **Deaktivierung:** setzt `deactivated`, verlangt eine **zwingende, nicht-leere Begründung**
+    (`reason`). Kein zusätzliches Löschen des Embedding-Eintrags nötig – `search_knowledge_base`
+    filtert ohnehin auf `approval_status == "approved"`.
+  - **`list_items`:** metadatenbasiertes Filtern/Auflisten (Kategorie, Fachgebiet, Status,
+    optional nur aktuell gültige Einträge) – für die spätere Verwaltungsoberfläche (Prompt 22),
+    unabhängig von der semantischen Suche.
+- **Rückwirkende Ergänzung an Prompt 11:** `search_knowledge_base` berücksichtigt jetzt zusätzlich
+  den Gültigkeitsbereich – ein abgelaufener oder noch nicht gültiger, aber freigegebener
+  Textbaustein wird nicht mehr zurückgegeben.
+- **Bewusst nicht enthalten:** vollständige Versions-**historie** (Diff früherer Inhalte) – analog
+  zu `Draft.version` wird nur die aktuelle Version gehalten, Änderungen sind über `AuditEvent`
+  grob (Zeitpunkt, Versionssprung), nicht als vollständiger Inhalts-Diff nachvollziehbar.
+- **Getestet:** Import-Defaults, Versionssprung + Status-Reset bei Inhaltsänderung, Freigabe löst
+  Indizierung aus (per Test-Double verifiziert), Deaktivierung verlangt Begründung, Metadatenfilter,
+  Gültigkeits-Filterung (abgelaufen / noch nicht gültig / aktuell gültig) sowohl im Service als auch
+  in der Suchschicht.

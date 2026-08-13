@@ -17,6 +17,7 @@ getrennte Methoden - Indizierung geschieht, sobald Text verfügbar ist
 from __future__ import annotations
 
 import json
+from datetime import date
 
 from sqlalchemy.orm import Session
 
@@ -116,8 +117,26 @@ class DocumentSearchService:
         self, query: str, db: Session, *, limit: int = 10
     ) -> list[SearchResult]:
         """Durchsucht AUSSCHLIESSLICH freigegebenes Kanzleiwissen
-        (`approval_status == "approved"`) - nie Mandantendokumente."""
-        items = db.query(KnowledgeItem).filter_by(approval_status="approved").all()
+        (`approval_status == "approved"`) - nie Mandantendokumente.
+
+        Erweiterung Prompt 12: berücksichtigt zusätzlich den
+        Gültigkeitsbereich (`valid_from`/`valid_until`) - ein abgelaufener
+        oder noch nicht gültiger Textbaustein wird trotz Freigabe nicht
+        zurückgegeben."""
+        today = date.today()
+        items = (
+            db.query(KnowledgeItem)
+            .filter(KnowledgeItem.approval_status == "approved")
+            .filter(
+                (KnowledgeItem.valid_from.is_(None))
+                | (KnowledgeItem.valid_from <= today)
+            )
+            .filter(
+                (KnowledgeItem.valid_until.is_(None))
+                | (KnowledgeItem.valid_until >= today)
+            )
+            .all()
+        )
         query_vector = self.embedding_provider.embed(query) if query.strip() else None
 
         results: list[SearchResult] = []

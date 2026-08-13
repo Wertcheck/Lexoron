@@ -63,7 +63,11 @@ abgestimmt ist.
       Python 3.13.15 bestätigt: `141 passed, 1 skipped` (Skip = Netzwerkblock huggingface.co,
       analog zur Python-3.13-Situation – **echter Modelltest auf dem Windows-Zielsystem noch
       ausstehend**).
-- [ ] Kanzlei-Wissensbasis (Freigabepflicht vor Nutzung)
+- [x] Kanzlei-Wissensbasis (Freigabepflicht vor Nutzung) – Import/Versionierung/Freigabe/
+      Deaktivierung, Modell um Quelle/Gültigkeitsbereich erweitert, Freigabe stößt Indizierung an,
+      Deaktivierung verlangt Begründung, Suchschicht (Prompt 11) berücksichtigt jetzt
+      Gültigkeitsbereich. Sandbox-Testlauf mit echtem Python 3.13.15 bestätigt: `159 passed,
+      1 skipped` (Skip weiterhin nur Netzwerkblock huggingface.co).
 - [ ] Feedback-Workflow des Anwalts (keine automatische Regelübernahme)
 - [ ] Rechtsquellen-Modul (Metadaten, mehrere Provider)
 - [ ] Legal-Research-Workflow ("nicht ausreichend belegt" als expliziter Zustand)

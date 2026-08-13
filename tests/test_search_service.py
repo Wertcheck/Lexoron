@@ -203,6 +203,58 @@ def test_knowledge_base_search_never_returns_documents(db_session: Session) -> N
     assert all(r.entity_type != "Document" for r in results)
 
 
+def test_knowledge_base_search_excludes_expired_items(db_session: Session) -> None:
+    """Prompt 12: ein abgelaufener Textbaustein darf trotz Freigabe nicht
+    zurückgegeben werden."""
+    from datetime import date, timedelta
+
+    expired = KnowledgeItem(
+        title="Abgelaufener Baustein",
+        content="Textbaustein zur Kündigung eines Mietvertrags",
+        approval_status="approved",
+        valid_until=date.today() - timedelta(days=1),
+    )
+    current = KnowledgeItem(
+        title="Aktueller Baustein",
+        content="Textbaustein zur Kündigung eines Mietvertrags",
+        approval_status="approved",
+    )
+    db_session.add_all([expired, current])
+    db_session.commit()
+
+    service = _service()
+    service.index_knowledge_item(expired, db_session)
+    service.index_knowledge_item(current, db_session)
+
+    results = service.search_knowledge_base("Kündigung Mietvertrag", db_session)
+    result_ids = {r.entity_id for r in results}
+
+    assert current.id in result_ids
+    assert expired.id not in result_ids
+
+
+def test_knowledge_base_search_excludes_not_yet_valid_items(
+    db_session: Session,
+) -> None:
+    from datetime import date, timedelta
+
+    future = KnowledgeItem(
+        title="Zukünftiger Baustein",
+        content="Textbaustein zur Kündigung eines Mietvertrags",
+        approval_status="approved",
+        valid_from=date.today() + timedelta(days=30),
+    )
+    db_session.add(future)
+    db_session.commit()
+
+    service = _service()
+    service.index_knowledge_item(future, db_session)
+
+    results = service.search_knowledge_base("Kündigung Mietvertrag", db_session)
+
+    assert all(r.entity_id != future.id for r in results)
+
+
 def test_no_matter_scoped_search_method_exists_without_matter_id() -> None:
     """Architektonischer Schutz: es darf keine Methode geben, die
     Dokumente ohne matter_id-Argument durchsucht (Ausnahme: die separate
