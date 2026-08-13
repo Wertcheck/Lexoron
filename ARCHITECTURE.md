@@ -349,3 +349,37 @@ Implementiert in `app/matching/`:
   Schwelle, fehlende/niedrige Klassifikationskonfidenz blockiert Auto-Zuordnung, Kaskade auf
   Dokument-Anhänge, Nachrichten ganz ohne Anhänge können weiterhin automatisch zugeordnet werden,
   Audit-Eintrag wird erzeugt.
+
+## 20. Fristen- und Aufgabenanalyse (Stand Prompt 10)
+
+Implementiert in `app/deadlines/`. Nutzt das bereits in Prompt 04 angelegte `Deadline`-Modell
+vollständig (keine Migration nötig).
+
+- **`schema.py` (`ExtractedDeadline`):** striktes Schema mit `source_text` (Textstelle),
+  `raw_date_text` (Rohtext der Datums-/Fristangabe), optionalem `due_date`, `confidence` und
+  nicht-leerer `reasoning`.
+- **`extractor.py`:** `DeadlineExtractor`-Protocol + `PlaceholderDeadlineExtractor` – erkennt
+  absolute Daten (`15.03.2027` sowie `15. März 2027`) und relative Fristangaben
+  (`binnen zwei Wochen`, `innerhalb von 14 Tagen`, ohne auflösbares `due_date` mangels
+  Bezugsdatum). **Konfidenz hängt vom Kontext ab:** ein Datum in der Nähe eines
+  Fristen-Schlüsselworts ("Frist", "bis zum", "spätestens", "binnen", "innerhalb", "Termin")
+  erhält moderate Platzhalter-Konfidenz (0.5), ein "nacktes" Datum ohne solchen Kontext (z. B.
+  ein reines Referenzdatum wie "Ihr Schreiben vom …") nur 0.15 – bewusst niedrig, da es sich
+  ebenso gut um kein Fristdatum handeln kann. Kein LLM, keine echte Fristenberechnung nach
+  Fristenrecht (Wochenend-/Feiertagsregeln, Zustellfiktionen) – das bleibt Aufgabe des Anwalts.
+- **`service.py` (`DeadlineAnalysisService`):** setzt sowohl `Document.extracted_text`
+  (Prompt 06) als auch `Document.matter_id` (Prompt 09) voraus – ohne Aktenzuordnung kann keine
+  `Deadline` erzeugt werden (`Deadline.matter_id` ist nicht nullable). Beide Fälle (kein Text /
+  keine Akte) werden übersprungen und protokolliert statt zu raten. **`review_status` wird vom
+  Service nie gesetzt** – der Modell-Default `"unreviewed"` (Prompt 04) bleibt für jede erzeugte
+  Frist bestehen, direkte Umsetzung der Konzeptvorgabe "keine Frist endgültig als verbindlich
+  markieren". Jede Analyse erzeugt ein `AuditEvent`.
+- **Bewusst nicht enthalten (Scoping-Entscheidung):** separate `Task`-Erzeugung für erkannten
+  "Handlungsbedarf" – das Konzept nennt für Prompt 10 nur konkrete Pflichtfelder für Fristen,
+  nicht für Aufgaben. `Task` existiert als Modell (Prompt 04) und kann bei Bedarf in einem
+  späteren Schritt an diese Analyse angebunden werden. Eine manuelle Prüf-Inbox für
+  `review_status="unreviewed"` (Dashboard-UI) ist Teil von Prompt 22, nicht dieses Prompts.
+- **Getestet:** Datumsformate (numerisch, Monatsname), relative Fristen ohne Datum,
+  Konfidenz-Abstufung je nach Schlüsselwort-Nähe, ungültige Daten werden nicht durchgereicht,
+  mehrere Treffer in einem Dokument, Service-Skip-Verhalten bei fehlendem Text/fehlender
+  Aktenzuordnung, `review_status` bleibt in jedem Fall `"unreviewed"`, Audit-Ereignisse.

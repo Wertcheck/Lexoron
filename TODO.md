@@ -50,7 +50,10 @@ abgestimmt ist.
       (Aktenzeichen, E-Mail, Beteiligtenname, Themen-Platzhalter), Ambiguitätsschutz, Kopplung an
       Klassifikationskonfidenz aus Prompt 08, Sandbox-Testlauf mit echtem Python 3.13.15
       bestätigt: `100 passed` (gesamt).
-- [ ] Fristen-/Aufgabenanalyse (nie verbindlich ohne Prüfung)
+- [x] Fristen-/Aufgabenanalyse (nie verbindlich ohne Prüfung) – Datums-/Keyword-Heuristik (kein
+      LLM), Konfidenz je nach Kontext, review_status bleibt immer "unreviewed", erfordert
+      bereits erfolgte Aktenzuordnung (Prompt 09). Sandbox-Testlauf mit echtem Python 3.13.15
+      bestätigt: `118 passed` (gesamt). **Phase 3 (Aktenlogik) damit vollständig abgeschlossen.**
 
 ## Phase 4 – Wissens- und Rechtslayer (Prompts 11–16)
 - [ ] Akten-Such-/Kontextschicht (strikt aktenbezogen)
