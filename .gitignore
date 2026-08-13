@@ -1,0 +1,29 @@
+# Secrets / lokale Konfiguration
+.env
+*.local.env
+
+# Mandanten-/Aktendaten (duerfen nie ins Repo)
+/data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+
+# Virtuelle Umgebungen
+.venv/
+venv/
+
+# Editor/OS
+.vscode/
+.idea/
+.DS_Store

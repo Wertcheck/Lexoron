@@ -1,0 +1,32 @@
+[project]
+name = "kanzlei-ai"
+version = "0.1.0"
+description = "Konfigurierbare KI-gestuetzte Workflow-Plattform fuer eine Anwaltskanzlei (Prototyp)"
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "Proprietary" }
+authors = [{ name = "Kanzlei AI Projekt" }]
+
+# Bewusst minimal fuer Prompt 02 (Repository-Grundgeruest).
+# Datenbank-, Konfigurations-, OCR-, Mail- und LLM-Abhaengigkeiten kommen erst
+# in den jeweils zustaendigen spaeteren Prompts (03, 04, 05, 06, 07, 17 ...) hinzu.
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
