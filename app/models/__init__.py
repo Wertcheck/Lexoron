@@ -12,6 +12,7 @@ from app.models.client import Client
 from app.models.deadline import Deadline
 from app.models.document import Document
 from app.models.draft import Draft
+from app.models.embedding import Embedding
 from app.models.knowledge_item import KnowledgeItem
 from app.models.matter import Matter
 from app.models.message import Message
@@ -32,6 +33,7 @@ __all__ = [
     "Task",
     "Deadline",
     "Draft",
+    "Embedding",
     "Source",
     "KnowledgeItem",
     "WorkflowRun",

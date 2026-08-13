@@ -127,10 +127,14 @@ Konfigurationssystem, nicht über Codeänderungen. Ziel: mehrere Kanzlei-Profile
 4. **Mail-Provider zuerst:** **IMAP** (generisch, funktioniert mit den meisten Anbietern),
    umgesetzt in Prompt 07 über `imaplib`. Microsoft Graph kann bei Bedarf später als weiterer
    `MailProvider` ergänzt werden.
+5. **Such-/RAG-Layer:** **Vektorspeicher** (nicht nur FTS5) – der Anwalt hat sich bewusst für
+   echte semantische Suche entschieden, da reine Volltextsuche für "ähnliche frühere Fälle"/
+   Wissensbausteine zu limitiert wäre. Umgesetzt in Prompt 11 über lokale Embeddings
+   (`fastembed`, großes mehrsprachiges Modell), kombiniert mit Metadatenfiltern und Volltext
+   (Hybrid-Suche) statt einer reinen Vektorlösung.
 
 ### Weiterhin bewusst offen (werden an vorgesehener Stelle im Plan entschieden)
 
-5. **Such-/RAG-Layer (FTS5 vs. Vektorspeicher)** – relevant ab Prompt 11/12.
 6. **Zielumgebung für Installer-Tests** – relevant ab Prompt 36.
 
 ## 12. Konfigurationssystem (Stand Prompt 03)
@@ -383,3 +387,54 @@ vollständig (keine Migration nötig).
   Konfidenz-Abstufung je nach Schlüsselwort-Nähe, ungültige Daten werden nicht durchgereicht,
   mehrere Treffer in einem Dokument, Service-Skip-Verhalten bei fehlendem Text/fehlender
   Aktenzuordnung, `review_status` bleibt in jedem Fall `"unreviewed"`, Audit-Ereignisse.
+
+## 21. Akten-Such-/Kontextschicht (Stand Prompt 11)
+
+**Hinweis zur Entstehung:** Ein Teil dieser Umsetzung entstand in einem Gesprächsabschnitt, der
+durch automatische Konversations-Zusammenfassung für mich zwischenzeitlich nicht mehr direkt
+einsehbar war. Ich habe den vorgefundenen Code vollständig geprüft, dokumentiert und die
+Modellwahl nachträglich mit dem Anwalt abgestimmt (siehe unten), bevor ich sie als abgeschlossen
+markiert habe.
+
+Implementiert in `app/search/` + `app/models/embedding.py`:
+
+- **Technologieentscheidung (aktualisiert):** `fastembed` (ONNX-Runtime) statt
+  `sentence-transformers` (PyTorch) – bewusst, weil `sentence-transformers` transitiv volle
+  PyTorch-/CUDA-Bibliotheken mitinstalliert (mehrere GB, GPU-Support hier nie benötigt). Modell:
+  **`sentence-transformers/paraphrase-multilingual-mpnet-base-v2`** (großes, mehrsprachiges
+  Modell, ~1 GB, bewusst statt der kleineren MiniLM-Variante gewählt – bessere Qualität war dem
+  Anwalt wichtiger als Downloadgröße). Läuft nach einmaligem Modell-Download vollständig offline,
+  reine CPU-Inferenz.
+- **`models/embedding.py` (`Embedding`):** generische Tabelle (`entity_type`/`entity_id`) statt
+  einer reinen `Document`-Bindung – funktioniert bereits jetzt für `Document` UND ist vorbereitet
+  für `KnowledgeItem` (Prompt 12), ohne spätere Schemaänderung. Vektor als JSON-Array (Text)
+  gespeichert – kein natives SQLite-Vektorformat, bewusst einfach für den Prototyp; bei starkem
+  Datenwachstum später durch dedizierten Vektorspeicher ersetzbar, ohne die Such-API zu ändern.
+- **`search/embeddings.py` (`EmbeddingProvider`/`FastEmbedProvider`):** Protocol-Abstraktion wie
+  bei `MailProvider`/`DocumentClassifier`. Modell wird lazy geladen (erst bei erstem `embed()`-
+  Aufruf), damit z. B. reine Konfigurationstests keinen Download auslösen.
+- **`search/service.py` (`DocumentSearchService`):** **Kernregel strukturell erzwungen:**
+  `search_within_matter()` verlangt zwingend `matter_id` – es gibt keine Methode für eine
+  aktenübergreifende Dokumentensuche (per Test abgesichert:
+  `test_no_matter_scoped_search_method_exists_without_matter_id`). Kombiniert Volltext-Substring-
+  Treffer mit semantischer Cosine-Similarity zu einem gemeinsamen Score (`match_type`:
+  `fulltext`/`semantic`/`hybrid`). `search_knowledge_base()` ist bewusst getrennt, liefert
+  ausschließlich freigegebene (`approval_status == "approved"`) `KnowledgeItem`s und **niemals**
+  Mandantendokumente – direkte Umsetzung der Konzeptvorgabe ("Context-Agent darf nur Dokumente
+  aus der aktuellen Akte oder ausdrücklich freigegebene globale Wissensquellen abrufen").
+- **`search/schema.py` (`SearchResult`):** jedes Ergebnis referenziert zwingend eine konkrete
+  Entität (`entity_type`/`entity_id`), keine anonymen/generischen Treffer.
+- **Getestet:** strikte Aktenisolation (auch bei identischem Text in zwei Akten), unzugeordnete
+  Dokumente (`matter_id=None`) tauchen nie in einer Aktensuche auf, Metadatenfilter, Volltext- und
+  semantische Treffer (über einen deterministischen `FakeEmbeddingProvider` in Tests – siehe
+  unten), Wissensbasis-Suche liefert nie Dokumente und nie ungeprüftes Wissen, architektonischer
+  Schutztest gegen künftige aktenübergreifende Suchmethoden.
+- **Sandbox-Einschränkung (analog zu Python 3.13):** `huggingface.co` ist aus der Claude-Sandbox
+  nicht erreichbar (`x-deny-reason: host_not_allowed`) – der echte Modell-Download konnte hier
+  nicht verifiziert werden. Alle Kernlogik-Tests laufen daher gegen einen dokumentierten
+  **Fake-Provider** (`tests/fake_embedding_provider.py`, deterministisches Bag-of-Words-Hashing,
+  klar als Test-Fixture gekennzeichnet, niemals in Produktionscode verwendet). Ein echter Test
+  (`tests/test_search_embeddings_real_model.py`) versucht das konfigurierte Modell zu laden und
+  wird bei fehlendem Netzwerkzugriff übersprungen statt fälschlich als Fehlschlag gewertet –
+  **dieser Test sollte auf dem Windows-Zielsystem des Anwalts tatsächlich durchlaufen und ist
+  dort noch final zu verifizieren.**

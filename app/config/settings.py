@@ -81,6 +81,14 @@ class Settings(BaseSettings):
     # Unterhalb dieses Scores gilt: keine Akte gefunden (kein Vorschlag).
     matching_review_threshold: float = 0.4
 
+    # --- Suche / Embeddings (Prompt 11) ---
+    # Lokales, mehrsprachiges Embedding-Modell (via "fastembed",
+    # ONNX-Runtime - bewusst statt "sentence-transformers", das transitiv
+    # volles PyTorch inkl. NVIDIA-CUDA mitinstalliert; siehe pyproject.toml)
+    # fuer semantische Suche. Laeuft komplett offline nach einmaligem
+    # Download, keine Mandantendaten verlassen dabei die Kanzlei-Umgebung.
+    embedding_model_name: str = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+
     # --- OCR ---
     # Standardmaessig deaktiviert (sicherer Default) - muss bewusst
     # eingeschaltet werden. "tesseract" ist die einzige unterstuetzte

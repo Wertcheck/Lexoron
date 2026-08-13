@@ -56,7 +56,13 @@ abgestimmt ist.
       bestätigt: `118 passed` (gesamt). **Phase 3 (Aktenlogik) damit vollständig abgeschlossen.**
 
 ## Phase 4 – Wissens- und Rechtslayer (Prompts 11–16)
-- [ ] Akten-Such-/Kontextschicht (strikt aktenbezogen)
+- [x] Akten-Such-/Kontextschicht (strikt aktenbezogen) – fastembed (ONNX, kein PyTorch/CUDA),
+      großes mehrsprachiges Modell (`paraphrase-multilingual-mpnet-base-v2`), Metadatenfilter +
+      Volltext + semantische Suche kombiniert (Hybrid), strukturell erzwungene Aktenisolation,
+      generische Embedding-Tabelle bereits für Prompt 12 vorbereitet. Sandbox-Testlauf mit echtem
+      Python 3.13.15 bestätigt: `141 passed, 1 skipped` (Skip = Netzwerkblock huggingface.co,
+      analog zur Python-3.13-Situation – **echter Modelltest auf dem Windows-Zielsystem noch
+      ausstehend**).
 - [ ] Kanzlei-Wissensbasis (Freigabepflicht vor Nutzung)
 - [ ] Feedback-Workflow des Anwalts (keine automatische Regelübernahme)
 - [ ] Rechtsquellen-Modul (Metadaten, mehrere Provider)
