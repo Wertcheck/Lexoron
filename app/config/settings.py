@@ -14,7 +14,7 @@ Grundsaetze (siehe CLAUDE.md / ARCHITECTURE.md §7):
 
 from functools import lru_cache
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -74,6 +74,13 @@ class Settings(BaseSettings):
     # Mensch pruefen - siehe Konzept Prompt 08/09.
     classification_low_confidence_threshold: float = 0.6
 
+    # --- Aktenzuordnung (Matter-Matching) ---
+    # Ab welchem Gesamt-Score (0.0-1.0) eine Akte automatisch zugeordnet
+    # werden darf. Unterhalb liegt der Vorgang zur manuellen Pruefung vor.
+    matching_auto_assign_threshold: float = 0.85
+    # Unterhalb dieses Scores gilt: keine Akte gefunden (kein Vorschlag).
+    matching_review_threshold: float = 0.4
+
     # --- OCR ---
     # Standardmaessig deaktiviert (sicherer Default) - muss bewusst
     # eingeschaltet werden. "tesseract" ist die einzige unterstuetzte
@@ -116,11 +123,27 @@ class Settings(BaseSettings):
     # 0 = keine automatische Loeschung (sicherer Default).
     retention_days: int = 0
 
+    @model_validator(mode="after")
+    def review_threshold_must_not_exceed_auto_assign_threshold(self) -> "Settings":
+        if self.matching_review_threshold > self.matching_auto_assign_threshold:
+            raise ValueError(
+                "matching_review_threshold darf matching_auto_assign_threshold "
+                "nicht überschreiten"
+            )
+        return self
+
     @field_validator("retention_days")
     @classmethod
     def retention_days_must_not_be_negative(cls, value: int) -> int:
         if value < 0:
             raise ValueError("retention_days darf nicht negativ sein")
+        return value
+
+    @field_validator("matching_auto_assign_threshold", "matching_review_threshold")
+    @classmethod
+    def matching_thresholds_must_be_a_fraction(cls, value: float) -> float:
+        if not (0.0 <= value <= 1.0):
+            raise ValueError("Matching-Schwellenwerte müssen zwischen 0.0 und 1.0 liegen")
         return value
 
     @field_validator("classification_low_confidence_threshold")

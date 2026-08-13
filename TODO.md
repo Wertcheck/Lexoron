@@ -46,7 +46,10 @@ abgestimmt ist.
       regelbasierter Platzhalter-Klassifikator (bewusst kein LLM, siehe ARCHITECTURE.md §17),
       Migration für neue Document-Spalten, Sandbox-Testlauf mit echtem Python 3.13.15 bestätigt:
       `84 passed` (gesamt). Echte LLM-Klassifikation folgt erst mit Prompt 17/34.
-- [ ] Aktenzuordnung (deterministisch + semantisch, Schwellenwerte)
+- [x] Aktenzuordnung (deterministisch + semantisch, Schwellenwerte) – vier gewichtete Signale
+      (Aktenzeichen, E-Mail, Beteiligtenname, Themen-Platzhalter), Ambiguitätsschutz, Kopplung an
+      Klassifikationskonfidenz aus Prompt 08, Sandbox-Testlauf mit echtem Python 3.13.15
+      bestätigt: `100 passed` (gesamt).
 - [ ] Fristen-/Aufgabenanalyse (nie verbindlich ohne Prüfung)
 
 ## Phase 4 – Wissens- und Rechtslayer (Prompts 11–16)

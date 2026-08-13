@@ -317,3 +317,35 @@ Das ändert nichts an der aktuellen Umsetzungsreihenfolge (Prompt 09 als Nächst
 als Gedächtnisstütze, damit diese Präferenz beim Erreichen von Prompt 17/18 nicht neu erfragt
 werden muss. Die konkrete Ausgestaltung (z. B. ob Review-Engine und Drafting denselben oder
 unterschiedliche Provider nutzen) wird erst dort entschieden.
+
+## 19. Aktenzuordnung / Matter-Matching (Stand Prompt 09)
+
+Implementiert in `app/matching/`:
+
+- **`schema.py` (`MatchResult`/`MatchCandidate`):** striktes Schema; `decision` nur aus
+  `{auto_assigned, needs_review, no_match}`.
+- **`matcher.py` (`MatterMatchingService`):** reine, DB-lesende Bewertungslogik. Kombiniert vier
+  gewichtete Signale: Aktenzeichen-Exakttreffer (0.9 – bewusst hoch, da ein eindeutiges
+  Aktenzeichen für sich allein genügen soll), bekannte E-Mail-Adresse (0.3), unscharfer
+  Beteiligten-Namens-Treffer (0.2), sowie eine **Platzhalter**-Themenähnlichkeit über `difflib`
+  (0.1 – **kein Embedding/keine echte Semantik**, bewusst konsistent mit der noch offenen
+  RAG-Layer-Entscheidung aus Prompt 11/12). Ambiguität (zwei Top-Kandidaten mit fast gleichem
+  Score) verhindert automatische Zuordnung selbst bei hohem Score.
+- **`service.py` (`MatterAssignmentService`):** wendet ein `MatchResult` tatsächlich an –
+  setzt `matter_id` auf `Message` **und kaskadiert auf alle zugehörigen `Document`-Anhänge** nur
+  bei `auto_assigned`. **Wichtige Kopplung an Prompt 08:** Hat auch nur eines der zugehörigen
+  Dokumente keine oder eine zu niedrige Klassifikationskonfidenz
+  (`CLASSIFICATION_LOW_CONFIDENCE_THRESHOLD`), wird eine automatische Zuordnung verhindert,
+  selbst bei sehr hohem Matching-Score – direkte Umsetzung der Konzeptvorgabe aus Prompt 08
+  ("Bei geringer Sicherheit darf keine automatische Aktenzuordnung erfolgen"). Jede Entscheidung
+  erzeugt ein `AuditEvent` (`matter_match_auto_assigned`/`_needs_review`/`_no_match`).
+- **Konfigurierbar:** `MATCHING_AUTO_ASSIGN_THRESHOLD` (Default 0.85), `MATCHING_REVIEW_THRESHOLD`
+  (Default 0.4, darf laut Validierung nicht über der Auto-Schwelle liegen).
+- **Bewusst nicht enthalten:** eine manuelle Zuordnungs-Inbox/UI (das ist Dashboard, Prompt 22) –
+  `needs_review`/`no_match`-Fälle sind über `AuditEvent` nachvollziehbar, aber es gibt noch keine
+  Oberfläche dafür.
+- **Getestet:** alle vier Signale einzeln und in Kombination, Auto-Zuordnung bei eindeutigem
+  Aktenzeichen, Ambiguität verhindert Auto-Zuordnung trotz (künstlich abgesenkter) überschrittener
+  Schwelle, fehlende/niedrige Klassifikationskonfidenz blockiert Auto-Zuordnung, Kaskade auf
+  Dokument-Anhänge, Nachrichten ganz ohne Anhänge können weiterhin automatisch zugeordnet werden,
+  Audit-Eintrag wird erzeugt.
