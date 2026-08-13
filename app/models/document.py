@@ -10,7 +10,7 @@ auch wenn die eigentliche OCR-/Extraktionslogik erst in Prompt 06 entsteht.
 
 from __future__ import annotations
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import Boolean, Float, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -41,6 +41,22 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     ocr_status: Mapped[str] = mapped_column(
         String(32), default="not_needed", nullable=False
     )
+
+    # --- Klassifikation (Prompt 08) ---
+    # Bewusst als eigene, nullable Spalten statt eines generischen JSON-
+    # Blobs: erlaubt einfaches Filtern/Suchen (z. B. "alle unklassifizierten
+    # Dokumente"). `classification_result_json` haelt zusaetzlich das volle
+    # strukturierte Ergebnis fuer Nachvollziehbarkeit/Audit.
+    classified_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    classification_confidence: Mapped[float | None] = mapped_column(
+        Float, nullable=True
+    )
+    classification_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    classification_topic: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    classification_action_required: Mapped[bool | None] = mapped_column(
+        Boolean, nullable=True
+    )
+    classification_result_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     matter: Mapped["Matter | None"] = relationship(back_populates="documents")
     message: Mapped["Message | None"] = relationship(back_populates="documents")

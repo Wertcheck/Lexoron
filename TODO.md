@@ -42,7 +42,10 @@ abgestimmt ist.
       `64 passed` (gesamt).
 
 ## Phase 3 – Aktenlogik (Prompts 08–10)
-- [ ] Dokumentklassifikation (strukturiertes JSON-Schema, Konfidenz)
+- [x] Dokumentklassifikation (strukturiertes JSON-Schema, Konfidenz) – striktes Pydantic-Schema,
+      regelbasierter Platzhalter-Klassifikator (bewusst kein LLM, siehe ARCHITECTURE.md §17),
+      Migration für neue Document-Spalten, Sandbox-Testlauf mit echtem Python 3.13.15 bestätigt:
+      `84 passed` (gesamt). Echte LLM-Klassifikation folgt erst mit Prompt 17/34.
 - [ ] Aktenzuordnung (deterministisch + semantisch, Schwellenwerte)
 - [ ] Fristen-/Aufgabenanalyse (nie verbindlich ohne Prüfung)
 

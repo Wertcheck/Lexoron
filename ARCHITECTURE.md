@@ -271,3 +271,36 @@ Implementiert in `app/mail/`, als **Provider-Abstraktion, entkoppelt vom Workflo
   Deduplizierung, Anhang-Speicherung getrennt vom Original-Nachrichtentext, `ImapMailProvider`
   gegen eine gemockte IMAP-Verbindung (Login/Select/Search/Fetch/Mark-Seen/Logout-Ablauf sowie
   Nur-Lese-Zugriff verifiziert).
+
+## 17. Dokumentklassifikation (Stand Prompt 08)
+
+Implementiert in `app/classification/`. **Bewusst noch ohne LLM** (Entscheidung mit dem Anwalt
+abgestimmt: Platzhalter zuerst, echte Modell-Anbindung erst mit Prompt 17/34 – siehe auch die
+Diskussion zu lokalem vs. Cloud-LLM weiter unten in diesem Dokument bzw. im Chatverlauf).
+
+- **`schema.py` (`ClassificationResult`):** striktes Pydantic-Schema – `document_type` nur aus
+  einer festen Menge (`ALLOWED_DOCUMENT_TYPES`, kein Freitext), `confidence` zwingend zwischen 0
+  und 1, `reasoning` darf nicht leer sein. `requires_manual_review(threshold)` kapselt die Logik
+  "Konfidenz unter Schwelle → keine automatische Aktenzuordnung erlaubt" (relevant ab Prompt 09).
+- **`classifier.py`:** `DocumentClassifier` ist ein `Protocol` (analog zu `MailProvider`), damit
+  eine spätere LLM-Implementierung diese Abstraktion ersetzen kann, ohne Service oder Schema zu
+  ändern. `PlaceholderDocumentClassifier` ist eine reine Keyword-/Regex-Heuristik – **kein LLM,
+  kein ML** – mit hart gedeckelter, absichtlich niedriger Konfidenz (max. 0.4), damit dieser
+  Platzhalter niemals fälschlich als "sicher genug" gilt.
+- **`service.py` (`ClassificationService`):** setzt auf `Document.extracted_text` (Prompt 06)
+  auf. Ohne extrahierten Text (z. B. OCR noch ausstehend) wird die Klassifikation übersprungen
+  und protokolliert, statt zu raten. Ergebnis wird sowohl in einzelnen Spalten (für Filterung)
+  als auch vollständig als JSON (`classification_result_json`, für Nachvollziehbarkeit) auf
+  `Document` gespeichert. Jede Klassifikation erzeugt ein `AuditEvent` inkl. Hinweis, ob manuelle
+  Prüfung erforderlich ist.
+- **Migration:** `add document classification fields` – 6 neue, nullable Spalten auf
+  `documents` (upgrade/downgrade verifiziert).
+- **Konfigurierbar:** `CLASSIFICATION_LOW_CONFIDENCE_THRESHOLD` (Default 0.6).
+- **Bewusst nicht enthalten:** echte Themenzusammenfassung, echte Namens-/Beteiligtenerkennung
+  (beides liefert der Platzhalter nicht – erst mit LLM sinnvoll möglich), jede automatische
+  Aktenzuordnung (Prompt 09).
+- **Getestet:** Schema-Validierung (unbekannter Typ/außerhalb Wertebereich/leere Begründung
+  jeweils abgelehnt), Keyword-Erkennung für alle Dokumenttypen, Konfidenz bleibt in jedem Fall
+  niedrig, Aktenzeichen-Erkennung per Regex, Service-Verhalten bei fehlendem Text (Skip statt
+  Rateergebnis), Persistierung inkl. JSON-Serialisierung, Audit-Eintrag dokumentiert
+  Prüfbedarf.

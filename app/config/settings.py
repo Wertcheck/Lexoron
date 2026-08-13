@@ -67,6 +67,13 @@ class Settings(BaseSettings):
     # Ordner, um die Herkunft nachvollziehbar zu halten).
     mail_attachment_storage_dir: str = "data/mail_attachments"
 
+    # --- Klassifikation ---
+    # Ab welchem Konfidenzwert (0.0-1.0) eine Klassifikation als
+    # ausreichend sicher gilt, um spaeter (Prompt 09) automatische
+    # Aktenzuordnung zu erlauben. Unterhalb dieser Schwelle MUSS ein
+    # Mensch pruefen - siehe Konzept Prompt 08/09.
+    classification_low_confidence_threshold: float = 0.6
+
     # --- OCR ---
     # Standardmaessig deaktiviert (sicherer Default) - muss bewusst
     # eingeschaltet werden. "tesseract" ist die einzige unterstuetzte
@@ -114,6 +121,15 @@ class Settings(BaseSettings):
     def retention_days_must_not_be_negative(cls, value: int) -> int:
         if value < 0:
             raise ValueError("retention_days darf nicht negativ sein")
+        return value
+
+    @field_validator("classification_low_confidence_threshold")
+    @classmethod
+    def classification_threshold_must_be_a_fraction(cls, value: float) -> float:
+        if not (0.0 <= value <= 1.0):
+            raise ValueError(
+                "classification_low_confidence_threshold muss zwischen 0.0 und 1.0 liegen"
+            )
         return value
 
     @field_validator("min_extracted_text_length")
