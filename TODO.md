@@ -21,9 +21,9 @@ abgestimmt ist.
       Python-3.13-Zielsystem (Windows, Python 3.13.15) erfolgreich bestätigt:
       `pytest` → 11 passed, lokaler Start mit geladener `.env` funktioniert.**
 - [x] Datenmodell (Client, Matter, Party, Message, Document, Task, Deadline, Draft, Source,
-      KnowledgeItem, WorkflowRun, AuditEvent, User/Role) + Migrationen (Alembic) + Tests –
-      Sandbox-Smoke-Test unter Python 3.12 bestanden (19/19 Tests, inkl. Migration
-      upgrade/downgrade); finaler Test auf dem Python-3.13-Zielsystem steht noch aus.
+      KnowledgeItem, WorkflowRun, AuditEvent, User/Role) + Migrationen (Alembic) + Tests.
+      **Finaler Test auf dem Python-3.13-Zielsystem (Windows, Python 3.13.15) erfolgreich
+      bestätigt: `pytest` → 19 passed; `alembic upgrade head` erfolgreich angewendet.**
 
 ## Phase 2 – Eingang (Prompts 05–07)
 - [ ] Scan-Ordner-Überwachung (Intake-Service, Hash, sicherer Intake-Bereich)
