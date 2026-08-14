@@ -602,3 +602,83 @@ Bestandstabellen nötig).
   aktive Policy wird korrekt eingebunden, fehlende Policy führt zu Platzhalter statt Absturz,
   Policy-Versionierung (Inkrementierung, Deaktivierung, unabhängige Namen, Erhalt alter
   Versionen), architektonischer Schutztest für die `matter_id`-Pflicht.
+
+## 27. Privacy-by-Design / Claude API Boundary
+
+**Status: Schritt 1 von mehreren umgesetzt.** Diese Architekturvorgabe kam vom Anwalt nach
+Abschluss von Prompt 16, vor dem eigentlichen Beginn von Prompt 17 (Drafting-Service). Sie ist
+laut Vorgabe **verbindlich für das gesamte Projekt** und darf bei künftigen Schritten nicht
+stillschweigend umgangen werden.
+
+### Grundprinzip
+
+Local-First / Privacy-by-Design: Sämtliche sensiblen/personenbezogenen Mandatsdaten bleiben
+grundsätzlich lokal. Die Claude API darf **ausschließlich für die sprachliche Textproduktion**
+verwendet werden (Formulierung/Verbesserung/Korrektur eines bereits lokal inhaltlich
+bestimmten Antwortschreibens) – niemals für Aktenanalyse, Aktenzuordnung, Rechtsrecherche,
+Fristenbestimmung, Strategieentscheidungen oder Versand.
+
+### Was bereits lokal ist (Bestandsaufnahme vor dieser Erweiterung)
+
+Praktisch die gesamte bisher gebaute Pipeline erfüllt das Prinzip bereits, weil durchgehend
+"Platzhalter/lokal zuerst" entschieden wurde: E-Mail-Ingestion (Prompt 07, IMAP), OCR
+(Prompt 06, Tesseract), Klassifikation (Prompt 08), Aktenzuordnung (Prompt 09),
+Fristenanalyse (Prompt 10), Suche/RAG (Prompt 11, fastembed), Wissensbasis (Prompt 12),
+Rechtsquellen (Prompt 14/15), Datenbank (SQLite). **Es gab bislang keine Claude-API-Anbindung
+im Projekt** – diese Vorgabe kommt also, bevor der erste API-Aufruf überhaupt gebaut wird.
+
+### Geplanter Datenfluss (Zielbild, noch nicht vollständig umgesetzt)
+
+```
+Lokale Daten → Lokale Analyse (Prompt 08-16) → Antwortinhalt lokal bestimmt (Prompt 16)
+  → ClaudePrivacyGateway
+      → PII-Erkennung
+      → Pseudonymisierung (Mapping NUR lokal)
+      → Security-Check (7-Punkte-Liste) → bei Unklarheit: KEIN API-Aufruf
+  → ClaudeWritingProvider (Allowlist-Payload)
+  → Claude API
+  → Antworttext (pseudonymisiert)
+  → Lokale Entanonymisierung → Lokale Qualitätsprüfung → Draft → Dashboard → Anwaltsprüfung
+```
+
+### Bisher umgesetzt: PII-Erkennung + Pseudonymisierung (`app/privacy/`)
+
+- **`detectors.py`:** Regex-basierte Erkennung für strukturierte Formate – E-Mail, Telefon
+  (Format-Erkennung, nicht erschöpfend), IBAN (variable Länge, deutsche und andere
+  EU-Formate), Steuer-ID (Formaterkennung, **kein** Prüfziffern-Algorithmus), Aktenzeichen,
+  Kundennummer, Vertragsnummer, Datum (numerisch + Monatsname), Betrag, Adresse
+  (Straße+Hausnummer, PLZ+Ort getrennt erkannt).
+- **Namen werden NICHT per Regex geraten** (unzuverlässig ohne echtes NER-Modell) – stattdessen
+  über `known_entities`: der Aufrufer übergibt bereits bekannte Werte aus strukturierten Daten
+  (`Party.name`, `Client.name`), die dann exakt gesucht werden. Das ist zuverlässiger als
+  generisches Namens-Raten, weil wir die relevanten Namen im Aktenkontext ohnehin bereits
+  kennen.
+- **Überlappungsauflösung:** bei sich überschneidenden Treffern gewinnt der längere/
+  spezifischere Treffer.
+- **`pseudonymizer.py` (`Pseudonymizer`):** ersetzt erkannte PII durch Platzhalter
+  (`[MANDANT_01]`, `[GEGNER_01]`, `[IBAN_01]` usw.), gleicher Originalwert erhält innerhalb
+  eines Aufrufs immer denselben Platzhalter. `reconstruct()` macht die Ersetzung rückgängig.
+  **Reine, seiteneffektfreie Funktion** – kein DB-Zugriff, kein Netzwerkaufruf, keine
+  Persistierung des Mappings an dieser Stelle.
+- **Zwei echte Bugs gefunden und behoben** (manuelle Verifikation vor den formalen Tests):
+  Betrag-Regex scheiterte an einer Wortgrenze nach "€" (kein Wortzeichen), IBAN-Regex verlangte
+  fälschlich vierstellige Gruppen durchgehend und verlor dadurch die letzte, kürzere Restgruppe.
+- **Getestet (deckt Vorgabe-Punkt 12 vollständig ab):** alle Kategorien einzeln, mehrere
+  Personen in einem Text, verschachtelte PII in einem Satz, PII in Zitaten, PII in
+  dateinamenartigem Text, absichtlich manipulierter Text/Prompt-Injection-Versuch (Detektor
+  erkennt PII trotzdem korrekt, interpretiert aber nie den Text selbst), keine Falsch-Positive
+  bei PII-freiem Text, Überlappungsauflösung, exakte Roundtrip-Rekonstruktion.
+
+### Noch NICHT umgesetzt (bewusst als separate, spätere Schritte)
+
+1. **Security-Check** (7-Punkte-Prüfung vor jedem API-Aufruf, Vorgabe-Punkt 6)
+2. **`ClaudePrivacyGateway`**-Orchestrierung (verbindet Pseudonymisierung + Security-Check +
+   Allowlist-Payload zu einem einzigen, einzig erlaubten Weg zur Claude API)
+3. **Lokale Persistierung des Pseudonym-Mappings** (aktuell nur In-Memory-Rückgabewert) – wird
+   erst benötigt, sobald tatsächlich ein API-Aufruf mit Anfrage/Antwort-Zyklus existiert
+4. **`LocalAIProvider`/`ClaudeWritingProvider`**-Schnittstellen (Vorgabe-Punkt 11)
+5. **API-Protokollierung ohne personenbezogene Inhalte** (Vorgabe-Punkt 10)
+6. **Der tatsächliche Claude-API-Aufruf selbst** (verschmilzt mit Prompt 17)
+
+Diese Reihenfolge folgt demselben Prinzip wie der gesamte bisherige Entwicklungsplan: jeder
+Baustein einzeln, isoliert getestet, bevor der nächste darauf aufbaut.

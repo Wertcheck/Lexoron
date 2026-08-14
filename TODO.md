@@ -91,6 +91,42 @@ abgestimmt ist.
       3.13.15 bestätigt: `230 passed, 1 skipped` (gesamt). **Phase 4 (Wissens- und Rechtslayer)
       damit vollständig abgeschlossen.**
 
+## Phase 4b – Privacy-by-Design / Claude API Boundary (zusätzlicher Schritt)
+
+**Begründung für diesen zusätzlichen Schritt** (Konzept erlaubt das ausdrücklich: "Falls du
+feststellst, dass ein zusätzlicher Schritt erforderlich ist, füge ihn logisch in den
+Entwicklungsplan ein"): Der Anwalt hat nach Abschluss von Phase 4 eine verbindliche
+Local-First-/Privacy-by-Design-Architekturvorgabe erteilt, die vor dem ersten Claude-API-Aufruf
+(ursprünglich Prompt 17) umgesetzt werden muss. Siehe ARCHITECTURE.md §27 für das vollständige
+Zielbild.
+
+- [x] **Schritt 1: PII-Erkennung + Pseudonymisierung** (`app/privacy/`) – Regex-Detektoren für
+      E-Mail/Telefon/IBAN/Steuer-ID/Aktenzeichen/Kundennummer/Vertragsnummer/Datum/Betrag/Adresse,
+      `known_entities`-Mechanismus für Namen (zuverlässiger als Regex-Raten), Überlappungsauflösung,
+      `Pseudonymizer` mit exakter Roundtrip-Rekonstruktion. Zwei echte Regex-Bugs gefunden und
+      behoben (Betrag-Wortgrenze, IBAN-Restgruppe). Sandbox-Testlauf mit echtem Python 3.13.15
+      bestätigt: `255 passed, 1 skipped` (gesamt).
+- [ ] **Schritt 2: Security-Check** (7-Punkte-Prüfung vor jedem geplanten API-Aufruf; bei
+      Unklarheit KEIN Aufruf, Vorgang zur manuellen Prüfung)
+- [ ] **Schritt 3: `ClaudePrivacyGateway`-Orchestrierung** (verbindet Pseudonymisierung +
+      Security-Check + Allowlist-Payload-Schema zum einzigen erlaubten Weg zur Claude API;
+      lokale Persistierung des Pseudonym-Mappings)
+- [ ] **Schritt 4: `LocalAIProvider`/`ClaudeWritingProvider`-Schnittstellen** (Workflow hängt nur
+      von der Abstraktion ab, nicht direkt von Claude)
+- [ ] **Schritt 5: Privacy-sichere API-Protokollierung** (keine personenbezogenen Inhalte in Logs)
+
+### Offene Entscheidungen zu diesem Thema (noch mit dem Anwalt zu klären)
+
+1. **Speicherort des Pseudonym-Mappings:** eigene DB-Tabelle (dauerhaft, auditierbar) oder rein
+   In-Memory pro Anfrage-Zyklus (einfacher, aber keine Nachvollziehbarkeit nach Prozess-Neustart)?
+2. **Schwellenwert für den Security-Check:** wie genau wird "nicht eindeutiges Ergebnis" (Punkt 6
+   der Vorgabe) definiert – z. B. bei wie vielen/welcher Art nicht erkannter Muster wird blockiert?
+3. **Umgang mit Telefonnummern-Formaten:** aktuelle Regex ist bewusst nicht erschöpfend (siehe
+   ARCHITECTURE.md §27) – reicht das für den Security-Check, oder soll zusätzlich eine
+   spezialisierte Bibliothek (z. B. `phonenumbers`) ergänzt werden?
+4. **Anzeige/Bearbeitung nicht erkannter PII im Dashboard** (Prompt 22 kommt erst später) – wie
+   soll die manuelle Prüfung bei blockierten Vorgängen konkret aussehen?
+
 ## Phase 5 – Antwort und Kontrolle (Prompts 17–20)
 - [ ] Drafting-Service (kein Versand-Trigger)
 - [ ] unabhängige Review-Engine
