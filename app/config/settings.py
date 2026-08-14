@@ -81,6 +81,11 @@ class Settings(BaseSettings):
     # Unterhalb dieses Scores gilt: keine Akte gefunden (kein Vorschlag).
     matching_review_threshold: float = 0.4
 
+    # --- Legal Research ---
+    # Ab welchem Score ein einzelner Treffer als "ausreichend belegend"
+    # gilt (siehe app/research/service.py).
+    research_min_score_for_sufficient: float = 0.5
+
     # --- Suche / Embeddings (Prompt 11) ---
     # Lokales, mehrsprachiges Embedding-Modell (via "fastembed",
     # ONNX-Runtime - bewusst statt "sentence-transformers", das transitiv
@@ -147,11 +152,15 @@ class Settings(BaseSettings):
             raise ValueError("retention_days darf nicht negativ sein")
         return value
 
-    @field_validator("matching_auto_assign_threshold", "matching_review_threshold")
+    @field_validator(
+        "matching_auto_assign_threshold",
+        "matching_review_threshold",
+        "research_min_score_for_sufficient",
+    )
     @classmethod
     def matching_thresholds_must_be_a_fraction(cls, value: float) -> float:
         if not (0.0 <= value <= 1.0):
-            raise ValueError("Matching-Schwellenwerte müssen zwischen 0.0 und 1.0 liegen")
+            raise ValueError("Schwellenwerte müssen zwischen 0.0 und 1.0 liegen")
         return value
 
     @field_validator("classification_low_confidence_threshold")

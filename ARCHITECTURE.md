@@ -530,3 +530,38 @@ Implementiert in `app/sources/`, aufbauend auf dem `Source`-Modell aus Prompt 04
 - **Getestet:** Import mit Default-Status, Audit-Ereignisse, Freigabe, Als-veraltet-Markierung
   (inkl. Begründungspflicht und Erhalt in der DB), Filterung, striktes Schema (unbekannter Typ
   abgelehnt, `Verwaltungsanweisung` als gültiger Typ bestätigt), Provider erfindet nichts.
+
+## 25. Legal-Research-Workflow (Stand Prompt 15)
+
+Implementiert in `app/research/`, aufbauend auf Prompt 11 (Suchschicht) und Prompt 14
+(Rechtsquellen).
+
+- **Rückwirkende Erweiterung der Suchschicht:** `DocumentSearchService` um `index_source`/
+  `search_sources` ergänzt (analog zu `index_knowledge_item`/`search_knowledge_base`) –
+  durchsucht ausschließlich `approval_level == "freigegeben"`-Quellen, berücksichtigt
+  Gültigkeitsbereich, unterstützt Filterung nach `source_type`. `SourceService.approve_source`
+  stößt jetzt die Indizierung an (analog zu `KnowledgeItemService.approve`).
+- **Bug gefunden und behoben:** `SearchResult.entity_type` validierte nur gegen
+  `{Document, KnowledgeItem}` – `Source`-Treffer wurden dadurch mit einem `ValidationError`
+  abgelehnt. Ergänzt, 7 zuvor fehlschlagende Tests danach grün.
+- **Architektur-Schutztest angepasst:** Der Test, der sicherstellt, dass jede `search_`-Methode
+  `matter_id` verlangt, hatte `search_sources` fälschlich als Verstoß gewertet – Ausnahmeliste um
+  `search_sources` ergänzt (Rechtsquellen sind wie Kanzleiwissen bewusst global, nicht
+  aktenbezogen).
+- **`LegalResearchService.generate_queries_from_matter`:** deterministische Ableitung von
+  Suchfragen aus `Matter.title`/`practice_area` – bewusst kein LLM (Konsistenz mit
+  Prompt 08/09/10).
+- **`LegalResearchService.research`:** fragt `search_sources` ab, reichert **jeden** Treffer mit
+  dem vollständigen Quellenbeleg an (Titel, Fundstelle, URL, Dokumentdatum – nicht nur
+  Score/Snippet). Verwaiste Embedding-Einträge (Quelle zwischenzeitlich gelöscht) werden
+  übersprungen statt ein Ergebnis ohne echten Beleg zu liefern.
+- **"Nicht ausreichend belegt" explizit:** `sufficiently_supported: bool` + `reasoning`-Text
+  nennen das wörtlich, wenn kein Treffer die konfigurierte Schwelle
+  (`RESEARCH_MIN_SCORE_FOR_SUFFICIENT`, Default 0.5) erreicht – auch wenn schwache Treffer
+  vorhanden sind, aber nicht ausreichen.
+- **`research_for_matter`:** führt alle generierten Suchfragen aus, protokolliert Ergebnis
+  zusammenfassend als `AuditEvent` (Anzahl Anfragen, wie viele ausreichend belegt).
+- **Getestet:** Query-Generierung inkl. Deduplizierung, vollständiger Quellenbeleg pro Treffer,
+  kein Finding ohne tatsächlich existierende `Source`-Zeile, explizite "nicht ausreichend
+  belegt"-Meldung bei fehlenden Treffern, "ausreichend belegt" bei starkem Treffer,
+  Quellentyp-Filterung, `research_for_matter` mit Audit-Protokollierung.

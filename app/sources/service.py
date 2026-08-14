@@ -25,8 +25,13 @@ from app.sources.schema import SourceImport
 
 
 class SourceService:
-    def __init__(self, provider: SourceProvider | None = None) -> None:
+    def __init__(
+        self, provider: SourceProvider | None = None, search_service=None
+    ) -> None:
         self.provider = provider or ManualSourceProvider()
+        # Optional wie bei KnowledgeItemService - vermeidet harte
+        # Abhaengigkeit von app.search auf Modulebene.
+        self.search_service = search_service
 
     def import_source(
         self, data: SourceImport, db: Session, *, actor: str
@@ -77,6 +82,10 @@ class SourceService:
         )
         db.commit()
         db.refresh(source)
+
+        if self.search_service is not None:
+            self.search_service.index_source(source, db)
+
         return source
 
     def mark_outdated(

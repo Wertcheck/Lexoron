@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field, field_validator
 
-ALLOWED_ENTITY_TYPES = frozenset({"Document", "KnowledgeItem"})
+ALLOWED_ENTITY_TYPES = frozenset({"Document", "KnowledgeItem", "Source"})
 ALLOWED_MATCH_TYPES = frozenset({"metadata", "fulltext", "semantic", "hybrid"})
 
 

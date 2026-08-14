@@ -78,7 +78,12 @@ abgestimmt ist.
       Kontext erweitert, veraltete Quellen bleiben in der DB erhalten. Sandbox-Testlauf mit echtem
       Python 3.13.15 bestätigt: `191 passed, 1 skipped` (gesamt, Skip weiterhin nur
       Netzwerkblock).
-- [ ] Legal-Research-Workflow ("nicht ausreichend belegt" als expliziter Zustand)
+- [x] Legal-Research-Workflow ("nicht ausreichend belegt" als expliziter Zustand) – deterministische
+      Query-Generierung aus Aktenmetadaten, vollständiger Quellenbeleg pro Treffer, kein Finding
+      ohne echte Source-Zeile, "nicht ausreichend belegt" explizit als bool+Text. Dabei einen
+      echten Bug in der Suchschicht (Prompt 11) gefunden und behoben:
+      `SearchResult.entity_type` erlaubte "Source" nicht. Sandbox-Testlauf mit echtem Python
+      3.13.15 bestätigt: `205 passed, 1 skipped` (gesamt).
 - [ ] Prompt-/Policy-Layer (Trennung System/Kanzlei/Fall/Quellen/Nutzeranweisung)
 
 ## Phase 5 – Antwort und Kontrolle (Prompts 17–20)

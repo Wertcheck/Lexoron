@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.models import Client, Document, KnowledgeItem, Matter
+from app.models import Client, Document, KnowledgeItem, Matter, Source
 from app.models.base import Base
 from app.search.service import DocumentSearchService
 from tests.fake_embedding_provider import FakeEmbeddingProvider
@@ -269,11 +269,98 @@ def test_no_matter_scoped_search_method_exists_without_matter_id() -> None:
         for name in dir(DocumentSearchService)
         if not name.startswith("_") and callable(getattr(DocumentSearchService, name))
     ]
-    # Alle "search_"-Methoden ausser der Wissensbasis-Suche muessen
-    # matter_id verlangen.
+    # Alle "search_"-Methoden ausser der Wissensbasis- und Rechtsquellen-
+    # Suche muessen matter_id verlangen (Kanzleiwissen und Rechtsquellen
+    # sind bewusst global, nicht aktenbezogen - siehe Prompt 12/14/15).
+    exempt_methods = {"search_knowledge_base", "search_sources"}
     for method_name in public_methods:
-        if method_name.startswith("search_") and method_name != "search_knowledge_base":
+        if method_name.startswith("search_") and method_name not in exempt_methods:
             sig = inspect.signature(getattr(DocumentSearchService, method_name))
             assert "matter_id" in sig.parameters, (
                 f"{method_name} erlaubt Dokumentensuche ohne matter_id!"
             )
+
+
+def test_source_search_only_returns_approved_sources(db_session: Session) -> None:
+    approved = Source(
+        title="§ 42 AO", source_type="Gesetz", approval_level="freigegeben"
+    )
+    draft = Source(title="§ 43 AO", source_type="Gesetz", approval_level="entwurf")
+    db_session.add_all([approved, draft])
+    db_session.commit()
+
+    service = _service()
+    service.index_source(approved, db_session)
+    service.index_source(draft, db_session)  # sollte No-Op sein (nicht freigegeben)
+
+    results = service.search_sources("AO", db_session)
+    result_ids = {r.entity_id for r in results}
+
+    assert approved.id in result_ids
+    assert draft.id not in result_ids
+
+
+def test_source_search_never_returns_documents_or_knowledge_items(
+    db_session: Session,
+) -> None:
+    matter = _matter(db_session)
+    document = Document(
+        file_path="/tmp/x.pdf", matter_id=matter.id, extracted_text="Steuerbescheid"
+    )
+    knowledge_item = KnowledgeItem(
+        title="Baustein", content="Steuerbescheid Textbaustein", approval_status="approved"
+    )
+    db_session.add_all([document, knowledge_item])
+    db_session.commit()
+
+    service = _service()
+    service.index_knowledge_item(knowledge_item, db_session)
+
+    results = service.search_sources("Steuerbescheid", db_session)
+
+    assert all(r.entity_type == "Source" for r in results)
+
+
+def test_source_search_excludes_expired_sources(db_session: Session) -> None:
+    from datetime import date, timedelta
+
+    expired = Source(
+        title="Alte Verwaltungsanweisung",
+        source_type="Verwaltungsanweisung",
+        approval_level="freigegeben",
+        valid_until=date.today() - timedelta(days=1),
+    )
+    db_session.add(expired)
+    db_session.commit()
+
+    service = _service()
+    service.index_source(expired, db_session)
+
+    results = service.search_sources("Verwaltungsanweisung", db_session)
+
+    assert all(r.entity_id != expired.id for r in results)
+
+
+def test_source_search_filters_by_source_type(db_session: Session) -> None:
+    law = Source(
+        title="Einkommensteuergesetz Regelung",
+        source_type="Gesetz",
+        approval_level="freigegeben",
+    )
+    admin_guidance = Source(
+        title="BMF-Schreiben Regelung",
+        source_type="Verwaltungsanweisung",
+        approval_level="freigegeben",
+    )
+    db_session.add_all([law, admin_guidance])
+    db_session.commit()
+
+    service = _service()
+    service.index_source(law, db_session)
+    service.index_source(admin_guidance, db_session)
+
+    results = service.search_sources("Regelung", db_session, source_type="Gesetz")
+    result_ids = {r.entity_id for r in results}
+
+    assert law.id in result_ids
+    assert admin_guidance.id not in result_ids
