@@ -39,8 +39,13 @@ Versand ohne menschliche Freigabe.
 
 ## 4. Technologieentscheidungen
 
-- **Sprache/Framework:** Python 3.12 (verfügbar) statt der im Konzept genannten 3.13.x – siehe
-  offene Entscheidung 1. FastAPI + Pydantic + SQLAlchemy.
+- **Sprache/Framework:** Python 3.13.x. FastAPI + Pydantic + SQLAlchemy.
+- **Frontend (Entscheidung Prompt 22, 15.08.):** Jinja2-Templates + HTMX, serverseitig
+  gerendert über denselben FastAPI-Prozess. Bewusst KEINE separate SPA (React/Vue): der Anwalt
+  ist nicht technisch versiert, ein zusätzlicher Node.js-Build-Schritt und ein getrenntes
+  Frontend-Deployment wären eine dauerhafte, unnötige Fehlerquelle. HTMX erlaubt trotzdem
+  interaktive Elemente (Freigeben-Button, Live-Filter, Split-Pane-Aktionen) ohne vollstaendige
+  SPA-Architektur. Ein Build-Schritt/Node.js ist nirgends im Projekt erforderlich.
 - **DB:** SQLite für lokale Entwicklung/Prototyp, PostgreSQL als produktive Option (per Config
   austauschbar, kein hartes Vendor-Lock-in im Code).
 - **Dateiüberwachung:** `watchdog` (rekursives Monitoring, geeignet für Scan-Eingang).
@@ -1057,3 +1062,48 @@ Deckt alle acht vom Konzept geforderten Bereiche ab: Inbox, Akten, Dokumente, En
 - **Manuell verifiziert:** App-Start mit echter Alembic-Migration, `/health` → 200,
   `/api/matters` → 200 (leer), `/docs` (OpenAPI) → 200, `/api/settings`-Response enthält
   nachweislich weder `mail_password` noch `anthropic_api_key`.
+
+## 34. Dashboard-Inbox (Stand Prompt 22)
+
+Erster Baustein des serverseitig gerenderten Dashboards, implementiert in `app/web/`
+(Jinja2-Templates + HTMX, siehe Technologieentscheidung §4). Eingebunden über
+`app.include_router(web_router)` plus `app.mount("/dashboard/static", ...)` in `app/main.py`.
+
+- **Bewusst getrennt von `app/api/`:** `app/web/router.py` liefert HTML fuer Menschen im
+  Browser, `app/api/` liefert JSON. Beide teilen `get_db` und die SQLAlchemy-Modelle, aber
+  eigene Query-Logik (die Web-Views brauchen andere Joins, z. B. `Message.matter` fuer die
+  Akten-Tab-Badges, als die schlanken API-Listen).
+- **HTMX wird lokal ausgeliefert** (`app/web/static/js/htmx.min.js`, Version 2.0.10, Lizenz
+  Zero-Clause BSD, Herkunftsnachweis in `app/web/static/js/VENDORED.md`), NICHT per CDN.
+  Grund: konsistent mit dem Offline-first-Grundsatz des Projekts (lokale OCR, lokale
+  Embeddings) - die Anwendung funktioniert damit auch ohne Internetzugang zur Laufzeit.
+  Google Fonts werden aktuell noch per CDN geladen (`app/web/static/css/app.css`) - bewusst
+  belassene, dokumentierte Ausnahme; Selbst-Hosting der Schriftarten ist eine mögliche
+  spätere Verbesserung, aber kein Blocker (CSS-Fallback-Stacks sind gesetzt).
+- **Split-Pane-Layout** (Liste links, Detail rechts) - Vorlage fuer das spaetere
+  Entwurfspruefungs-Layout (Original/Entwurf, Prompt 24).
+- **Akten-Tab-Badge als durchgaengiges Signatur-Designelement**
+  (`app/web/templates/partials/_macros.html`): gruen mit Aktenzeichen bei Zuordnung, amber
+  "nicht zugeordnet" sonst - wird ab Prompt 23/24 fuer Dokumente/Entwuerfe wiederverwendet.
+- **Filter (Alle/Nicht zugeordnet/Eingehend/Ausgehend)** aktualisieren nur die Liste per
+  HTMX-Partial (`GET /dashboard/inbox/list`), inkl. `hx-push-url` fuer echte, verlinkbare
+  URLs. Ein unbekannter/manipulierter `filter`-Query-Parameter faellt sicher auf "alle
+  Nachrichten" zurueck statt einen Serverfehler zu werfen.
+- **Sidebar zeigt ehrlich den Entwicklungsstand:** alle 8 Bereiche aus der Design-Referenz
+  des Anwalts sind sichtbar, aber nur "Posteingang" ist ein echter Link - der Rest traegt ein
+  "bald"-Badge statt toter Links, die 404 werfen wuerden.
+- **Zwei client-seitige Kleinigkeiten per Vanilla-JS geloest** (kein Framework noetig):
+  aktive Nachrichten-Zeile und aktiver Filter-Tab werden direkt beim Klick markiert
+  (`base.html`), statt sich auf interne HTMX-Event-Detailfelder zu verlassen, die sich bei
+  `outerHTML`-Swaps als nicht robust erwiesen haben (siehe naechster Punkt).
+- **Bug gefunden und behoben:** die Detail-Partials (`message_detail.html`,
+  `message_detail_empty.html`) bringen ihr eigenes `id="detail-pane"`-Wrapper-Div mit. Mit
+  dem HTMX-Standard-Swap (`innerHTML`) fuehrte das zu einem verschachtelten
+  `<div id="detail-pane"><div id="detail-pane">...`. Behoben durch `hx-swap="outerHTML"` auf
+  dem ausloesenden Link. Wichtig fuer alle kuenftigen HTMX-Partials mit eigenem Wrapper-Element.
+- **Allowlist-Grundsatz aus Prompt 21 gilt auch hier:** `Document.file_path` (interner
+  Ablagepfad) erscheint nicht im gerenderten HTML - per Test abgesichert.
+- **Getestet:** 19 neue Tests (`tests/test_web_inbox.py`), gleiches In-Memory-SQLite-Muster
+  wie `test_api.py`. Zusaetzlich per Playwright-Screenshots (Desktop- und Mobil-Viewport)
+  visuell verifiziert: Listenansicht, Detailansicht nach Klick, Filterwechsel, aktive
+  Zeilen-/Tab-Markierung.

@@ -1,0 +1,75 @@
+{# Basis-Layout (Prompt 22). Sidebar zeigt alle acht Bereiche aus der
+   Design-Referenz des Anwalts, aber nur tatsaechlich gebaute Bereiche sind
+   klickbar - der Rest ist ehrlich als "bald verfuegbar" markiert statt toter
+   Links, die 404 werfen wuerden. #}
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Kanzlei-AI{% endblock %} · Kanzlei-AI</title>
+  <link rel="stylesheet" href="/dashboard/static/css/app.css" />
+  <script src="/dashboard/static/js/htmx.min.js"></script>
+  <script>
+    // Markiert die angeklickte Zeile sofort als aktiv (noch bevor die
+    // Detailantwort eintrifft - fuehlt sich reaktionsschneller an und ist
+    // robuster als sich auf interne HTMX-Event-Detailfelder zu verlassen).
+    document.addEventListener("click", function (evt) {
+      var row = evt.target.closest(".message-row");
+      if (row) {
+        document.querySelectorAll(".message-row--active").forEach(function (el) {
+          el.classList.remove("message-row--active");
+        });
+        row.classList.add("message-row--active");
+        return;
+      }
+      var tab = evt.target.closest(".filter-tab");
+      if (tab) {
+        document.querySelectorAll(".filter-tab--active").forEach(function (el) {
+          el.classList.remove("filter-tab--active");
+        });
+        tab.classList.add("filter-tab--active");
+      }
+    });
+  </script>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="sidebar">
+      <div class="sidebar__brand">Kanzlei&nbsp;AI</div>
+      <div class="sidebar__brand-sub">Steuerrecht&nbsp;· Prototyp</div>
+      <div class="sidebar__nav">
+        {% set nav_items = [
+          ("Dashboard", None, false),
+          ("Posteingang", "/dashboard/inbox", true),
+          ("Akten", None, false),
+          ("Entwürfe zur Prüfung", None, false),
+          ("Rechtsquellen", None, false),
+          ("Kanzlei-Wissen", None, false),
+          ("Postausgang", None, false),
+          ("Einstellungen", None, false),
+        ] %}
+        {% for label, href, available in nav_items %}
+          {% if available %}
+            <a class="sidebar__link{% if active_nav == label %} sidebar__link--active{% endif %}"
+               href="{{ href }}">
+              <span>{{ label }}</span>
+            </a>
+          {% else %}
+            <span class="sidebar__link sidebar__link--disabled">
+              <span>{{ label }}</span>
+              <span class="sidebar__soon">bald</span>
+            </span>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <div class="sidebar__footer">
+        Interner Prototyp &middot; keine Produktionsauthentifizierung
+      </div>
+    </nav>
+    <div class="main">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</body>
+</html>

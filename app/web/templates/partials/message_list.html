@@ -1,0 +1,9 @@
+<div id="message-list" class="message-list">
+  {% if messages %}
+    {% for message in messages %}
+      {% include "partials/message_row.html" %}
+    {% endfor %}
+  {% else %}
+    <div class="empty-state">Keine Nachrichten in dieser Ansicht.</div>
+  {% endif %}
+</div>

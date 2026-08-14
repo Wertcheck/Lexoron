@@ -4,6 +4,16 @@ Reihenfolge und Prompts entsprechen dem Konzeptdokument (Abschnitt 18). Jede Pha
 begonnen, wenn die vorherige abgeschlossen und (bei fachlichen Fragen) mit dem Anwalt/Auftraggeber
 abgestimmt ist.
 
+**Hinweis zum Produktziel (15.08., vom Anwalt mitgeteilt):** Das Programm soll nach erfolgreichem
+Test in dieser ersten Kanzlei auch anderen Kanzleien angeboten werden. Aktuelle Architektur- und
+Datenmodell-Entscheidungen gehen weiterhin von EINER Kanzlei pro Installation/Deployment aus
+(kein `tenant_id`/Kanzlei-Entität im Datenmodell) - das ist bewusst so belassen, um die erste
+Kanzlei nicht durch verfrühte Multi-Tenancy-Komplexität zu verzögern. **Offene Entscheidung für
+eine spätere Phase (voraussichtlich vor Prompt 36, Phase 8 "Kanzlei-Produkt"):** Mandantentrennung
+zwischen mehreren Kanzleien (separate Datenbank pro Kanzlei vs. gemeinsame DB mit `tenant_id`),
+Konfigurierbarkeit pro Kanzlei (Klassifikationsschlüsselwörter, Policies, Branding), Lizenz-/
+Auslieferungsmodell. Wird rechtzeitig vor Phase 8 explizit mit dem Anwalt abgestimmt.
+
 ## Phase 0 – Projektstart (dieser Schritt)
 - [x] Umgebung geprüft (Python 3.12, git vorhanden, Repo leer)
 - [x] ARCHITECTURE.md angelegt
@@ -225,7 +235,12 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       (`app/api/schemas.py`), bewusst nur lesend (GET), keine Authentifizierung (folgt Prompt 26).
       `/api/settings` per Test abgesichert: keine Secrets im Response. Sandbox-Testlauf mit echtem
       Python 3.13.15 bestätigt: `406 passed, 1 skipped` (gesamt), davon 23 neue API-Tests.
-- [ ] Dashboard-Inbox
+- [x] Dashboard-Inbox – Prompt 22, 15.08. Serverseitig gerendert (Jinja2 + lokal ausgeliefertes
+      HTMX, kein CDN/kein Node.js-Build), Split-Pane (Liste links/Detail rechts), Filter
+      (Alle/Nicht zugeordnet/Eingehend/Ausgehend) per HTMX-Partial ohne vollen Seiten-Reload.
+      Akten-Tab-Badge (Signatur-Designelement) zeigt Aktenzeichen bzw. "nicht zugeordnet".
+      Sidebar zeigt ehrlich alle 8 Bereiche, nur "Posteingang" tatsaechlich klickbar. Per
+      Playwright-Screenshots visuell verifiziert. 19 neue Tests, 425/425 gesamt gruen.
 - [ ] Akte-Ansicht
 - [ ] Entwurfsprüfung (Original/Entwurf, Quellen, Findings, Versionsvergleich)
 - [ ] Postausgang (kein automatischer Versand)

@@ -27,7 +27,9 @@ cp .env.example .env
 uvicorn app.main:app --reload
 ```
 
-Danach ist ein Health-Check unter `GET /health` erreichbar.
+Danach ist ein Health-Check unter `GET /health` erreichbar, die JSON-API unter `/api/...`
+(siehe `/docs` fuer die interaktive OpenAPI-Dokumentation) und das Dashboard unter
+`GET /dashboard` (aktuell nur der Posteingang, `/dashboard/inbox`).
 
 ## Tests
 

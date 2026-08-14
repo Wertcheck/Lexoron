@@ -1,0 +1,437 @@
+/* ==========================================================================
+   Kanzlei-AI Dashboard – Design-System (Prompt 22)
+
+   Token-Konzept bewusst NICHT an typischen KI-generierten Defaults orientiert
+   (warmes Creme+Terracotta, Near-Black+Neon, Broadsheet-Raster). Stattdessen
+   an der Bildsprache amtlicher Schriftsaetze/Akten: Tinte, Papier, Siegel.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  /* --- Farben --- */
+  --ink-900: #1b2a3d;
+  --ink-700: #2c4157;
+  --ink-500: #5c6b73;
+  --ink-300: #9aa5ab;
+
+  --paper-100: #f3f4f0;
+  --paper-000: #fbfbf9;
+  --paper-line: #dcd9d0;
+
+  --seal-green: #2f6f62;
+  --seal-green-dark: #215046;
+  --seal-green-tint: #e5efec;
+
+  --wax-red: #a23b2e;
+  --wax-red-tint: #f6e9e7;
+
+  --amber: #b8863b;
+  --amber-tint: #f5ecda;
+
+  /* --- Typografie --- */
+  --font-display: 'Source Serif 4', 'Georgia', serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SFMono-Regular', monospace;
+
+  /* --- Radien/Abstaende --- */
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --sidebar-width: 248px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--paper-100);
+  color: var(--ink-900);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+}
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* --- Sidebar --- */
+
+.sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  background: var(--ink-900);
+  color: var(--paper-100);
+  display: flex;
+  flex-direction: column;
+  padding: 28px 0 20px;
+}
+
+.sidebar__brand {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 0 24px 4px;
+  color: var(--paper-000);
+}
+
+.sidebar__brand-sub {
+  padding: 0 24px 28px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-300);
+}
+
+.sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar__link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 24px;
+  text-decoration: none;
+  color: rgba(243, 244, 240, 0.72);
+  font-size: 13.5px;
+  border-left: 2px solid transparent;
+  transition: background-color 0.12s ease;
+}
+
+.sidebar__link:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.sidebar__link--active {
+  color: var(--paper-000);
+  background: rgba(255, 255, 255, 0.06);
+  border-left-color: var(--seal-green);
+  font-weight: 500;
+}
+
+.sidebar__link--disabled {
+  color: rgba(243, 244, 240, 0.32);
+  cursor: default;
+  pointer-events: none;
+}
+
+.sidebar__soon {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid rgba(243, 244, 240, 0.22);
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+  color: rgba(243, 244, 240, 0.45);
+}
+
+.sidebar__footer {
+  margin-top: auto;
+  padding: 16px 24px 0;
+  font-size: 11px;
+  color: var(--ink-300);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* --- Hauptbereich --- */
+
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  padding: 26px 32px 18px;
+  border-bottom: 1px solid var(--paper-line);
+  background: var(--paper-000);
+}
+
+.topbar__title {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.topbar__meta {
+  font-size: 12.5px;
+  color: var(--ink-500);
+}
+
+.topbar__meta strong {
+  color: var(--ink-900);
+  font-weight: 600;
+}
+
+.filters {
+  display: flex;
+  gap: 4px;
+  margin-top: 18px;
+}
+
+.filter-tab {
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 500;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 7px 4px 9px;
+  margin-right: 18px;
+  color: var(--ink-500);
+  cursor: pointer;
+}
+
+.filter-tab--active {
+  color: var(--ink-900);
+  border-bottom-color: var(--seal-green);
+}
+
+.filter-tab:hover:not(.filter-tab--active) {
+  color: var(--ink-700);
+}
+
+/* --- Split-Pane --- */
+
+.split {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.message-list {
+  width: 420px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--paper-line);
+  background: var(--paper-000);
+}
+
+.detail-pane {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px 40px;
+}
+
+/* --- Nachrichten-Zeile --- */
+
+.message-row {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--paper-line);
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.message-row:hover {
+  background: var(--paper-100);
+}
+
+.message-row--active {
+  background: var(--seal-green-tint);
+  border-left: 3px solid var(--seal-green);
+  padding-left: 19px;
+}
+
+.message-row__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.message-row__sender {
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-row__time {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-500);
+  flex-shrink: 0;
+}
+
+.message-row__subject {
+  font-family: var(--font-display);
+  font-size: 14px;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-row__snippet {
+  font-size: 12px;
+  color: var(--ink-500);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 8px;
+}
+
+/* --- Akten-Tab-Badge (Signatur-Element) --- */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  line-height: 1.6;
+}
+
+.tag--matched {
+  background: var(--seal-green-tint);
+  border-color: rgba(47, 111, 98, 0.35);
+  color: var(--seal-green-dark);
+}
+
+.tag--unmatched {
+  background: var(--amber-tint);
+  border-color: rgba(184, 134, 59, 0.4);
+  color: #7a5b28;
+}
+
+.tag--outbound {
+  background: #eef0ef;
+  border-color: var(--paper-line);
+  color: var(--ink-500);
+}
+
+.tag__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* --- Detailansicht --- */
+
+.detail-empty {
+  color: var(--ink-500);
+  font-size: 13px;
+  padding-top: 60px;
+  text-align: center;
+}
+
+.detail-header {
+  margin-bottom: 22px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--paper-line);
+}
+
+.detail-header__subject {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 600;
+  margin: 6px 0 12px;
+}
+
+.detail-header__meta {
+  font-size: 12.5px;
+  color: var(--ink-500);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.detail-body {
+  font-size: 13.5px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  color: var(--ink-700);
+}
+
+.detail-section-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+  margin: 26px 0 10px;
+}
+
+.doc-chip {
+  display: inline-block;
+  font-size: 12px;
+  padding: 5px 10px;
+  border: 1px solid var(--paper-line);
+  border-radius: var(--radius-sm);
+  margin: 0 6px 6px 0;
+  background: var(--paper-100);
+}
+
+/* --- Leerzustand --- */
+
+.empty-state {
+  padding: 60px 24px;
+  text-align: center;
+  color: var(--ink-500);
+  font-size: 13px;
+}
+
+/* --- Responsiv (Tablet/Mobil) --- */
+
+@media (max-width: 900px) {
+  .sidebar {
+    display: none;
+  }
+  .split {
+    flex-direction: column;
+  }
+  .message-list {
+    width: 100%;
+    max-height: 45vh;
+    border-right: none;
+    border-bottom: 1px solid var(--paper-line);
+  }
+}
+
+/* --- Fokus-Sichtbarkeit (Barrierefreiheit) --- */
+
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--seal-green);
+  outline-offset: 2px;
+}
+
+/* --- Reduzierte Bewegung respektieren --- */
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}

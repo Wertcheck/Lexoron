@@ -1,0 +1,20 @@
+{# Akten-Tab-Badge: das Signatur-Element des Dashboards (Prompt 22).
+   Wird ab Prompt 23/24 auch fuer Dokumente/Entwuerfe wiederverwendet. #}
+
+{% macro matter_tag(message) -%}
+  {% if message.matter %}
+    <span class="tag tag--matched" title="{{ message.matter.title }}">
+      <span class="tag__dot"></span>{{ message.matter.reference_number or message.matter.id[:8] }}
+    </span>
+  {% else %}
+    <span class="tag tag--unmatched">
+      <span class="tag__dot"></span>nicht zugeordnet
+    </span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro direction_tag(message) -%}
+  {% if message.direction == "outbound" %}
+    <span class="tag tag--outbound">ausgehend</span>
+  {% endif %}
+{%- endmacro %}

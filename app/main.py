@@ -1,5 +1,6 @@
 """App-Einstiegspunkt (Prompt 02 – Repository-Grundgeruest, erweitert um
-Prompt 03 – Konfigurationssystem, und Prompt 21 – FastAPI-Backend).
+Prompt 03 – Konfigurationssystem, Prompt 21 – FastAPI-Backend und
+Prompt 22 – Dashboard-Inbox).
 
 Bindet ab Prompt 21 das lesende REST-Backend (`app/api/`) ein, das alle
 acht im Konzept geforderten Dashboard-Bereiche abdeckt: Inbox, Akten,
@@ -7,15 +8,21 @@ Dokumente, Entwuerfe, Quellen (+ Kanzlei-Wissen), Aufgaben, Einstellungen,
 Audit. Siehe app/api/schemas.py fuer die uebergreifenden Grundsaetze
 (Allowlist-Schemas, bewusst keine Authentifizierung/Autorisierung -
 folgt erst in Prompt 26).
+
+Ab Prompt 22 zusaetzlich das serverseitig gerenderte Dashboard
+(`app/web/`, Jinja2 + HTMX) unter `/dashboard`, plus dessen statische
+Assets unter `/dashboard/static`.
 """
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.api import api_router
 from app.config import get_settings
+from app.web.router import router as web_router
 
 
 @asynccontextmanager
@@ -50,5 +57,11 @@ def health() -> dict[str, str]:
 
 
 app.include_router(api_router)
+app.include_router(web_router)
+app.mount(
+    "/dashboard/static",
+    StaticFiles(directory="app/web/static"),
+    name="dashboard-static",
+)
 
 

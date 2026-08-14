@@ -1,0 +1,27 @@
+{% from "partials/_macros.html" import matter_tag, direction_tag %}
+<div id="detail-pane" class="detail-pane">
+  <div class="detail-header">
+    {{ matter_tag(message) }} {{ direction_tag(message) }}
+    <div class="detail-header__subject">{{ message.subject or "(kein Betreff)" }}</div>
+    <div class="detail-header__meta">
+      <span>Von: {{ message.sender or "unbekannt" }}</span>
+      {% if message.recipient %}<span>An: {{ message.recipient }}</span>{% endif %}
+      <span>{{ message.created_at.strftime("%d.%m.%Y, %H:%M") }} Uhr</span>
+      {% if message.matter %}<span>Akte: {{ message.matter.title }}</span>{% endif %}
+    </div>
+  </div>
+
+  <div class="detail-body">{{ message.body_text or "(kein Inhalt extrahiert)" }}</div>
+
+  {% if documents %}
+    <div class="detail-section-label">Anhänge / zugehörige Dokumente ({{ documents|length }})</div>
+    <div>
+      {% for document in documents %}
+        <span class="doc-chip">
+          {{ document.original_filename or "Dokument" }}
+          {% if document.classified_type %} · {{ document.classified_type }}{% endif %}
+        </span>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>

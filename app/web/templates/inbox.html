@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Posteingang{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">Posteingang</h1>
+    <div class="topbar__meta">
+      <strong>{{ total_count }}</strong> Nachrichten insgesamt
+      &middot; <strong>{{ unmatched_count }}</strong> ohne Aktenzuordnung
+    </div>
+    <div class="filters">
+      {% for key, label in filter_options %}
+        <a
+          class="filter-tab{% if active_filter == key %} filter-tab--active{% endif %}"
+          href="/dashboard/inbox?filter={{ key }}"
+          hx-get="/dashboard/inbox/list?filter={{ key }}"
+          hx-target="#message-list"
+          hx-swap="outerHTML"
+          hx-push-url="/dashboard/inbox?filter={{ key }}"
+        >{{ label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="split">
+    {% include "partials/message_list.html" %}
+    {% if message %}
+      {% include "partials/message_detail.html" %}
+    {% else %}
+      {% include "partials/message_detail_empty.html" %}
+    {% endif %}
+  </div>
+{% endblock %}
