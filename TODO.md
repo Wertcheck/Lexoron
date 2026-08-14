@@ -121,8 +121,12 @@ Zielbild.
       Fehlalarm der Namens-Heuristik gefunden und behoben (nummerierte Argumentationspunkte wie
       "Erster Punkt"). Sandbox-Testlauf mit echtem Python 3.13.15 bestätigt: `281 passed,
       1 skipped` (gesamt).
-- [ ] **Schritt 4: `LocalAIProvider`/`ClaudeWritingProvider`-Schnittstellen** (Workflow hängt nur
-      von der Abstraktion ab, nicht direkt von Claude)
+- [x] **Schritt 4: `LocalAIProvider`/`ClaudeWritingProvider`-Schnittstellen** (`app/ai_providers/`)
+      – `RuleBasedLocalAIProvider` bündelt bestehende Services (Prompt 06/10/11/12) zu einer
+      Draft-Vorbereitungsmethode, `ClaudeWritingProvider`-Protocol bewusst ohne konkrete
+      Implementierung, `DraftGenerationOrchestrator` verbindet alles zum vollständigen Ablauf und
+      hängt architektonisch geprüft ausschließlich von Protocols ab (kein SDK-Import). Sandbox-
+      Testlauf mit echtem Python 3.13.15 bestätigt: `298 passed, 1 skipped` (gesamt).
 - [ ] **Schritt 5: Privacy-sichere API-Protokollierung** (keine personenbezogenen Inhalte in Logs)
 
 ### Offene Entscheidungen zu diesem Thema (noch mit dem Anwalt zu klären)

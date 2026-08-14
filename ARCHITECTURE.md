@@ -729,13 +729,39 @@ Lokale Daten → Lokale Analyse (Prompt 08-16) → Antwortinhalt lokal bestimmt 
   Argumente/Quellen, leere Listen korrekt behandelt, fehlende/vorhandene Vorlage, Struktur-
   Injection-Abwehr.
 
+### Schritt 4: `LocalAIProvider`/`ClaudeWritingProvider` (`app/ai_providers/`)
+
+- **`LocalAIProvider`-Protocol + `RuleBasedLocalAIProvider`:** bündelt bereits bestehende,
+  getestete Bausteine (Document.extracted_text aus Prompt 06, Deadline aus Prompt 10,
+  `search_knowledge_base` aus Prompt 11/12, Party-Rollen aus Prompt 04) zu **einer** Methode
+  (`prepare_draft_context`), die direkt die von `ClaudePrivacyGateway.prepare_request`
+  (Schritt 3) erwarteten Parameter liefert (Sachverhalt, Argumentationspunkte,
+  Quellenverweise, bekannte Entitäten nach Kategorie). Keine neue Analyselogik – reine
+  Bündelung. Party-Rollen werden tolerant zugeordnet (Gegner/Gericht/Anwalt/generisch
+  Beteiligter), da `Party.role` in Prompt 04 bewusst Freitext ist. Strikte Aktenisolation wie
+  überall im Projekt.
+- **`ClaudeWritingProvider`-Protocol:** bewusst **ohne konkrete Implementierung**. Nimmt
+  ausschließlich eine `ClaudeRequestPayload` entgegen – keine Methode für freien Text oder
+  beliebige Daten. Der tatsächliche Claude-API-Aufruf bleibt der letzte, separate Schritt.
+- **`DraftGenerationOrchestrator`:** verbindet `LocalAIProvider` → `ClaudePrivacyGateway` →
+  `ClaudeWritingProvider` → Rekonstruktion zu einem vollständigen Ablauf – exakt das
+  Pipeline-Diagramm aus der Vorgabe ("Local AI → ... → Draft Preparation → Privacy Gateway →
+  ClaudeWritingProvider → Local Postprocessing"). Hängt **ausschließlich** von den drei
+  Protocols ab, importiert kein konkretes SDK – per architektonischem Test abgesichert (prüft
+  den Quellcode direkt auf verbotene Imports wie `anthropic`/`requests`/`httpx`).
+- **Getestet:** Aggregation aus allen Quellen, Aktenisolation (identisches Muster wie
+  `PromptContextBuilder`), Rollen-Zuordnung, Protocol-Form von `ClaudeWritingProvider`,
+  vollständiger Orchestrator-Ablauf im Erfolgsfall (inkl. korrekter Rekonstruktion), Blockierung
+  verhindert JEDEN Aufruf des Writing-Providers (weder bei unbekannter PII noch bei unerlaubtem
+  Zweck wird er je erreicht), Architektur-Schutztest gegen SDK-Importe.
+
 ### Noch NICHT umgesetzt (bewusst als separate, spätere Schritte)
 
 1. ~~Security-Check~~ ✅ oben (Schritt 2, abgeschlossen)
 2. ~~`ClaudePrivacyGateway`-Orchestrierung~~ ✅ oben (Schritt 3, abgeschlossen)
 3. **Lokale Persistierung des Pseudonym-Mappings** (aktuell nur In-Memory-Rückgabewert) – wird
    erst benötigt, sobald tatsächlich ein API-Aufruf mit Anfrage/Antwort-Zyklus existiert
-4. **`LocalAIProvider`/`ClaudeWritingProvider`**-Schnittstellen (Vorgabe-Punkt 11)
+4. ~~`LocalAIProvider`/`ClaudeWritingProvider`-Schnittstellen~~ ✅ oben (Schritt 4, abgeschlossen)
 5. **API-Protokollierung ohne personenbezogene Inhalte** (Vorgabe-Punkt 10)
 6. **Der tatsächliche Claude-API-Aufruf selbst** (verschmilzt mit Prompt 17)
 
