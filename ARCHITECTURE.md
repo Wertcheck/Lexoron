@@ -1011,3 +1011,49 @@ State-Machine-Logik fehlte komplett. Prompt 20 liefert sie nach, implementiert i
   Start bei `RECEIVED`, gültiger Übergang aktualisiert Status + protokolliert, ungültiger
   Übergang wird abgelehnt und ändert nichts, unbekannter Zielzustand abgelehnt, kompletter
   Happy-Path bis `ARCHIVED`, `ERROR`-Wiederherstellung, `LEGAL_REVIEW → DRAFTED`-Rückweg.
+
+## 33. FastAPI-Backend (Stand Prompt 21)
+
+Implementiert in `app/api/`, eingebunden über `app.include_router(api_router)` in `app/main.py`.
+Deckt alle acht vom Konzept geforderten Bereiche ab: Inbox, Akten, Dokumente, Entwürfe, Quellen
+(+ Kanzlei-Wissen), Aufgaben (+ Fristen), Einstellungen, Audit.
+
+- **Bewusst nur lesende (GET) Endpunkte.** Konzept, wörtlich: "Noch keine Produktions-
+  authentifizierung vortäuschen." Es gibt in diesem gesamten Modul keine Authentifizierungs-
+  /Autorisierungsprüfung – jeder mit Zugriff auf den laufenden Server kann alle Endpunkte
+  aufrufen. Mutationen (Freigabe/Ablehnung eines Entwurfs etc.) bleiben bewusst den bestehenden
+  Service-Methoden vorbehalten, bis eine echte Zugriffskontrolle existiert (Prompt 26).
+- **Response-Schemas als Allowlist** (`app/api/schemas.py`): jedes Schema listet explizit die
+  nach außen gehenden Felder – kein SQLAlchemy-Modell wird direkt serialisiert. Verhindert, dass
+  ein später am Modell ergänztes sensibles Feld automatisch über die API sichtbar würde.
+  Dasselbe Prinzip wie beim Privacy-Gateway-Payload, hier auf die Backend-API angewendet.
+  `DocumentOut` lässt z. B. bewusst `file_path` (interner Ablagepfad) und `extracted_text`
+  (potenziell großer Mandanteninhalt) aus.
+- **`/api/settings` reicht nur explizit freigegebene, garantiert sekretfreie Felder durch**
+  (`SettingsOut`) – die SecretStr-Felder (`anthropic_api_key`, `mail_password`) werden im Router-
+  Code nie referenziert und können dadurch strukturell nicht versehentlich exponiert werden.
+  Auch `database_url` wird nie im vollen Wortlaut zurückgegeben (kann bei PostgreSQL
+  Zugangsdaten enthalten), sondern nur als reduzierte `database_url_kind`
+  ("sqlite"/"postgresql"). Per Test abgesichert (`test_settings_endpoint_does_not_leak_mail_password`).
+- **Neun Router** unter `app/api/routers/` (inbox, matters, documents, drafts, sources,
+  knowledge, tasks – inkl. Deadlines, settings, audit), zu einem gemeinsamen `api_router`
+  gebündelt (`app/api/__init__.py`).
+- **`app/api/deps.py`:** gemeinsame Hilfsmittel – `get_or_404` (einheitliche 404-Behandlung) und
+  begrenzte Pagination-Parameter (`limit` max. 200, `offset` ≥ 0), damit kein Client
+  versehentlich die gesamte Datenbank in einer Antwort abfragt.
+- **Audit-Router nutzt ausschließlich den bestehenden `AuditLogService`** (Prompt 19) – keine
+  eigene Query-Logik, um dessen Aktenisolations-Garantie nicht zu duplizieren.
+- **Inbox-Endpunkt unterstützt `unmatched_only`:** zeigt gezielt Nachrichten ohne Aktenzuordnung
+  (Workflow-Zustand `NEEDS_MATTER_MATCH`), damit ein Dashboard eine echte "neu eingegangen,
+  noch nicht zugeordnet"-Ansicht bauen kann.
+- **Fristen (`/api/deadlines`) geben `review_status` unverändert durch** – nie implizit als
+  "confirmed" dargestellt (Grundregel Prompt 10), per Test abgesichert.
+- **Getestet:** 23 neue Tests (`tests/test_api.py`) mit geteilter In-Memory-SQLite-Datenbank über
+  `app.dependency_overrides`. Dabei ein echter Bug gefunden und behoben: FastAPI führt
+  synchrone Endpunkte in einem Thread-Pool aus – eine SQLite-In-Memory-Datenbank ist ohne
+  `poolclass=StaticPool` nur innerhalb einer einzigen Connection sichtbar, jeder Worker-Thread
+  bekäme sonst eine eigene, leere Datenbank ("no such table"). Wichtig für alle künftigen
+  FastAPI+SQLite-Tests im Projekt.
+- **Manuell verifiziert:** App-Start mit echter Alembic-Migration, `/health` → 200,
+  `/api/matters` → 200 (leer), `/docs` (OpenAPI) → 200, `/api/settings`-Response enthält
+  nachweislich weder `mail_password` noch `anthropic_api_key`.

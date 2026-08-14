@@ -220,7 +220,11 @@ strukturell deckungsgleich mit Konzept §4:
 
 Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
 
-- [ ] FastAPI-Backend (Inbox, Akten, Dokumente, Entwürfe, Quellen, Aufgaben, Einstellungen, Audit)
+- [x] FastAPI-Backend (Inbox, Akten, Dokumente, Entwürfe, Quellen, Aufgaben, Einstellungen, Audit) –
+      Prompt 21, 14.08. Neun Router unter `app/api/routers/`, Response-Schemas als Allowlist
+      (`app/api/schemas.py`), bewusst nur lesend (GET), keine Authentifizierung (folgt Prompt 26).
+      `/api/settings` per Test abgesichert: keine Secrets im Response. Sandbox-Testlauf mit echtem
+      Python 3.13.15 bestätigt: `406 passed, 1 skipped` (gesamt), davon 23 neue API-Tests.
 - [ ] Dashboard-Inbox
 - [ ] Akte-Ansicht
 - [ ] Entwurfsprüfung (Original/Entwurf, Quellen, Findings, Versionsvergleich)

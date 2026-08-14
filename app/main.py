@@ -1,10 +1,12 @@
 """App-Einstiegspunkt (Prompt 02 – Repository-Grundgeruest, erweitert um
-Prompt 03 – Konfigurationssystem).
+Prompt 03 – Konfigurationssystem, und Prompt 21 – FastAPI-Backend).
 
-Enthaelt bewusst nur ein Minimalgeruest mit einem Health-Check-Endpunkt und
-dem Laden der zentralen Konfiguration. Kein Datenmodell, keine Ingestion,
-keine KI-Logik, keine Mandanten-/Aktenlogik. Diese werden in den dafuer
-vorgesehenen spaeteren Prompts (04 ff., siehe TODO.md) hinzugefuegt.
+Bindet ab Prompt 21 das lesende REST-Backend (`app/api/`) ein, das alle
+acht im Konzept geforderten Dashboard-Bereiche abdeckt: Inbox, Akten,
+Dokumente, Entwuerfe, Quellen (+ Kanzlei-Wissen), Aufgaben, Einstellungen,
+Audit. Siehe app/api/schemas.py fuer die uebergreifenden Grundsaetze
+(Allowlist-Schemas, bewusst keine Authentifizierung/Autorisierung -
+folgt erst in Prompt 26).
 """
 
 from collections.abc import AsyncIterator
@@ -12,6 +14,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api import api_router
 from app.config import get_settings
 
 
@@ -44,5 +47,8 @@ app = FastAPI(
 def health() -> dict[str, str]:
     """Einfacher Smoke-Test-Endpunkt: bestaetigt nur, dass die App laeuft."""
     return {"status": "ok"}
+
+
+app.include_router(api_router)
 
 
