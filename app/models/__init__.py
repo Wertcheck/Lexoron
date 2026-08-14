@@ -18,6 +18,7 @@ from app.models.knowledge_item import KnowledgeItem
 from app.models.matter import Matter
 from app.models.message import Message
 from app.models.party import Party
+from app.models.policy import Policy
 from app.models.role import Role
 from app.models.source import Source
 from app.models.task import Task
@@ -29,6 +30,7 @@ __all__ = [
     "Client",
     "Matter",
     "Party",
+    "Policy",
     "Message",
     "Document",
     "Task",

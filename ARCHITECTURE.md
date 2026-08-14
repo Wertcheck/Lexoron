@@ -565,3 +565,40 @@ Implementiert in `app/research/`, aufbauend auf Prompt 11 (Suchschicht) und Prom
   kein Finding ohne tatsächlich existierende `Source`-Zeile, explizite "nicht ausreichend
   belegt"-Meldung bei fehlenden Treffern, "ausreichend belegt" bei starkem Treffer,
   Quellentyp-Filterung, `research_for_matter` mit Audit-Protokollierung.
+
+## 26. Prompt-/Policy-Layer (Stand Prompt 16)
+
+Implementiert in `app/promptlayer/` + neues `Policy`-Modell (Migration, kein `ALTER` auf
+Bestandstabellen nötig).
+
+- **`Policy`-Modell:** eigenes, einfaches Modell statt Wiederverwendung von `KnowledgeItem` –
+  Policies sind Verhaltensregeln für die Entwurfserstellung (Schreibstil, Anrede), kein
+  zitierfähiges Fachwissen. Versionierung analog zum etablierten Muster: neue Version statt
+  Überschreiben, nur eine Version pro `name` gleichzeitig `is_active`, alte Versionen bleiben in
+  der Datenbank erhalten.
+- **`PolicyService`:** `create_version` (inkrementiert automatisch, deaktiviert Vorgänger,
+  Audit-Event), `get_active_policy`.
+- **`PromptContextBuilder.build_context`:** setzt fünf strikt getrennte Abschnitte zusammen –
+  `system` (fest, versioniert über `SYSTEM_RULES_VERSION`), `kanzleiregeln` (aus aktiver
+  `Policy`), `fallkontext` (Aktendaten), `rechtsquellen` (von Prompt 15 übergebener Text),
+  `nutzeranweisung`. **Kernregel technisch durchgesetzt:** `matter_id` ist ein zwingender
+  Parameter (kein Default, kein optionaler Wert), und **jede** Datenbankabfrage im Fallkontext
+  (`Document`, `Deadline`, `Task`) filtert explizit danach – exakt dasselbe Muster wie
+  `search_within_matter` (Prompt 11). Per Test abgesichert, dass Akte-A-Kontext niemals
+  Akte-B-Daten enthält, selbst bei wörtlich ähnlichem Text.
+- **Trust-Markierung als Vorbereitung auf Prompt 28 (Prompt-Injection-Schutz):** `system` und
+  `nutzeranweisung` sind `is_trusted=True` (von Kanzlei/Anwalt kontrolliert); `fallkontext` und
+  `rechtsquellen` sind `is_trusted=False` (stammen aus externen/Mandantendokumenten). Die
+  festen Systemregeln selbst weisen bereits explizit darauf hin, dass Inhalt aus diesen beiden
+  Abschnitten niemals als Anweisung behandelt werden darf.
+- **`PromptContext.render()`:** baut eine klar mit Tags abgegrenzte Textstruktur
+  (`<system>...</system>` usw.) – keine Vermischung von Anweisung und Daten in einem
+  unstrukturierten Textblob.
+- **Bewusst noch kein LLM-Aufruf:** Dieser Layer bereitet nur den Kontext vor; die eigentliche
+  Modell-Anbindung folgt erst in Prompt 17/34.
+- **Getestet:** Pflichtparameter `matter_id`/`user_instruction`, unbekannte Akte wird abgelehnt,
+  alle fünf Abschnitte vorhanden, korrekte Trust-Markierung, **Aktenisolation mit echten
+  Mandantennamen im Test verifiziert**, Fristen/offene Aufgaben im Fallkontext enthalten,
+  aktive Policy wird korrekt eingebunden, fehlende Policy führt zu Platzhalter statt Absturz,
+  Policy-Versionierung (Inkrementierung, Deaktivierung, unabhängige Namen, Erhalt alter
+  Versionen), architektonischer Schutztest für die `matter_id`-Pflicht.

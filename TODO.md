@@ -84,7 +84,12 @@ abgestimmt ist.
       echten Bug in der Suchschicht (Prompt 11) gefunden und behoben:
       `SearchResult.entity_type` erlaubte "Source" nicht. Sandbox-Testlauf mit echtem Python
       3.13.15 bestätigt: `205 passed, 1 skipped` (gesamt).
-- [ ] Prompt-/Policy-Layer (Trennung System/Kanzlei/Fall/Quellen/Nutzeranweisung)
+- [x] Prompt-/Policy-Layer (Trennung System/Kanzlei/Fall/Quellen/Nutzeranweisung) – fünf strikt
+      getrennte, klar getaggte Abschnitte, matter_id als zwingender Parameter, Aktenisolation mit
+      echten Testnamen verifiziert, Trust-Markierung als Vorbereitung auf Prompt 28, versionierte
+      Kanzleiregeln (Policy-Modell). Noch kein LLM-Aufruf. Sandbox-Testlauf mit echtem Python
+      3.13.15 bestätigt: `230 passed, 1 skipped` (gesamt). **Phase 4 (Wissens- und Rechtslayer)
+      damit vollständig abgeschlossen.**
 
 ## Phase 5 – Antwort und Kontrolle (Prompts 17–20)
 - [ ] Drafting-Service (kein Versand-Trigger)
