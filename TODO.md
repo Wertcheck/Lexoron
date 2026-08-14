@@ -199,6 +199,22 @@ sondern dort aufgegriffen.
 - [ ] Workflow-State-Machine (definierte Übergänge)
 
 ## Phase 6 – Dashboard (Prompts 21–25)
+
+**Design-Referenz vom Anwalt erhalten** (Screenshot, 14.08.): Zeigt eine sehr passende Umsetzung,
+strukturell deckungsgleich mit Konzept §4:
+- **Seitenleiste** mit Dashboard/Inbox/Akten/Entwürfe zur Prüfung/Rechtsquellen/Kanzlei-Wissen/
+  Postausgang/Einstellungen – bildet direkt auf unsere bereits gebauten Module ab (Prompt 07-19).
+- **Split-Pane-Entwurfsansicht:** Originaldokument links, KI-Entwurf rechts – exakt wie im
+  Konzept gefordert ("Originaleingang links / Entwurf rechts").
+- **Separates Review-Findings-Panel** (passt zu Prompt 18, inkl. Schweregrad-Kennzeichnung).
+- **Audit-Log-Panel** direkt in der Entwurfsansicht sichtbar (passt zu Prompt 19).
+- **Aktionsleiste unten:** "Freigeben & Postausgang übergeben" / "Bearbeiten" / "Neu generieren" /
+  "Zurückweisen" – exakt die im Konzept geforderten vier Aktionen.
+- **Verwendete Rechtsquellen** als eigener Bereich unter dem Entwurf (passt zu Prompt 17,
+  `source_list`).
+
+Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
+
 - [ ] FastAPI-Backend (Inbox, Akten, Dokumente, Entwürfe, Quellen, Aufgaben, Einstellungen, Audit)
 - [ ] Dashboard-Inbox
 - [ ] Akte-Ansicht
