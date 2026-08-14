@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.ai_providers.claude_writing_provider import ClaudeWritingResult
 from app.ai_providers.local_ai_provider import RuleBasedLocalAIProvider
 from app.ai_providers.orchestrator import DraftGenerationOrchestrator
 from app.models import Client, Document, Matter
@@ -25,9 +26,9 @@ class FakeClaudeWritingProvider:
         self.response_text = response_text
         self.received_payloads: list[ClaudeRequestPayload] = []
 
-    def write(self, payload: ClaudeRequestPayload) -> str:
+    def write(self, payload: ClaudeRequestPayload) -> ClaudeWritingResult:
         self.received_payloads.append(payload)
-        return self.response_text
+        return ClaudeWritingResult(text=self.response_text, token_count=42)
 
 
 @pytest.fixture()

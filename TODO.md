@@ -133,9 +133,18 @@ Zielbild.
       Kategorien übersetzt (wichtiger während der Entwicklung vermiedener Fehler: die Gründe
       selbst enthalten teils die erkannte PII im Klartext), in Orchestrator verankert inkl.
       kontrolliertem Fehlerabfang. Sandbox-Testlauf mit echtem Python 3.13.15 bestätigt:
-      `311 passed, 1 skipped` (gesamt). **Alle 5 Schritte der Privacy-Architektur damit
-      abgeschlossen** – verbleibend nur noch der tatsächliche Claude-API-Aufruf (wartet auf
-      Freigabe, verschmilzt mit Prompt 17).
+      `311 passed, 1 skipped` (gesamt). Alle 5 Schritte der Privacy-Architektur damit
+      abgeschlossen.
+- [x] **Schritt 6: Echte Claude-API-Anbindung** (`app/ai_providers/anthropic_writing_provider.py`)
+      – nach ausdrücklicher Freigabe durch den Anwalt umgesetzt ("API soll aus DSGVO-Gründen nur
+      ohne Übermittlung von persönlichen Daten laufen"). `AnthropicClaudeWritingProvider` hat
+      strukturell keinen Zugriff auf Mandantendaten-Modelle – bekommt ausschließlich die bereits
+      pseudonymisierte Allowlist-Payload. `ClaudeWritingProvider`-Protocol um Token-Zählung
+      erweitert. Getestet ausschließlich gegen gemockten Anthropic-Client (kein API-Key in der
+      Sandbox vorhanden, echter API-Aufruf in einer Testsuite unpassend). Sandbox-Testlauf mit
+      echtem Python 3.13.15 bestätigt: `317 passed, 1 skipped` (gesamt). **Echter
+      End-to-End-Test mit echtem `ANTHROPIC_API_KEY` steht auf dem Zielsystem des Anwalts noch
+      aus.**
 
 ### Offene Entscheidungen zu diesem Thema (noch mit dem Anwalt zu klären)
 

@@ -120,6 +120,7 @@ class Settings(BaseSettings):
     # (Schritt 5 der Privacy-Architektur) - keine echte API-Anbindung an
     # dieser Stelle, siehe app/ai_providers/claude_writing_provider.py.
     claude_model_name: str = "claude-sonnet-5"
+    claude_max_tokens: int = 2000
 
     # --- Rechtsquellen (Platzhalter, echte Logik erst Prompt 14/15) ---
     # Generische Liste erlaubter Quellen-Identifier; keine architektonische

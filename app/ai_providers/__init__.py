@@ -20,7 +20,8 @@ echten Claude-Aufruf lauffähigen Ablauf - demonstriert die Kernanforderung
 "Der Workflow darf nicht direkt von Claude abhängig sein" (Vorgabe Punkt 11).
 """
 
-from app.ai_providers.claude_writing_provider import ClaudeWritingProvider
+from app.ai_providers.anthropic_writing_provider import AnthropicClaudeWritingProvider
+from app.ai_providers.claude_writing_provider import ClaudeWritingProvider, ClaudeWritingResult
 from app.ai_providers.local_ai_provider import (
     DraftPreparationResult,
     LocalAIProvider,
@@ -33,6 +34,8 @@ __all__ = [
     "RuleBasedLocalAIProvider",
     "DraftPreparationResult",
     "ClaudeWritingProvider",
+    "ClaudeWritingResult",
+    "AnthropicClaudeWritingProvider",
     "DraftGenerationOrchestrator",
     "DraftGenerationResult",
 ]

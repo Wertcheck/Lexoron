@@ -7,15 +7,10 @@ requires-python = ">=3.13"
 license = { text = "Proprietary" }
 authors = [{ name = "Kanzlei AI Projekt" }]
 
-# Bewusst minimal fuer Prompt 02-10. Ab Prompt 11 kommt lokale semantische
-# Suche hinzu. "fastembed" (ONNX-Runtime-basiert) statt
-# "sentence-transformers", da letzteres transitiv volles PyTorch inkl.
-# NVIDIA-CUDA-Bibliotheken mitinstalliert (mehrere GB, GPU-Support wird
-# hier nie gebraucht - reine CPU-Inferenz reicht für Embeddings). fastembed
-# nutzt das groessere Modell paraphrase-multilingual-mpnet-base-v2 (bessere
-# Qualitaet, ~1 GB), nur als schlankes ONNX-Modell ohne
-# Trainings-Framework-Overhead. Mail- und LLM-Abhaengigkeiten kommen erst
-# in den jeweils zustaendigen spaeteren Prompts (17 ...) hinzu.
+# Bewusst minimal fuer Prompt 02-16 + Privacy-Architektur Schritt 1-4.
+# Ab Schritt 5 (Claude-API-Anbindung) kommt das offizielle Anthropic-SDK
+# hinzu - ausschliesslich fuer die Textproduktions-Schicht
+# (ClaudeWritingProvider), niemals fuer lokale Analyse.
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
@@ -28,6 +23,7 @@ dependencies = [
     "pytesseract>=0.3.10",
     "pillow>=10.0",
     "fastembed>=0.4",
+    "anthropic>=0.40",
 ]
 
 [project.optional-dependencies]

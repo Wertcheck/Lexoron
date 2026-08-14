@@ -85,7 +85,7 @@ class DraftGenerationOrchestrator:
             )
 
         try:
-            pseudonymized_response = self.writing_provider.write(gateway_result.payload)
+            writing_result = self.writing_provider.write(gateway_result.payload)
         except Exception:
             self.api_logger.log_error(
                 db,
@@ -106,10 +106,11 @@ class DraftGenerationOrchestrator:
             model=self.model_name,
             purpose=purpose,
             payload=gateway_result.payload,
+            token_count=writing_result.token_count,
         )
 
         reconstructed_text = self.gateway.reconstruct_response(
-            pseudonymized_response, gateway_result.mappings
+            writing_result.text, gateway_result.mappings
         )
 
         return DraftGenerationResult(success=True, text=reconstructed_text)

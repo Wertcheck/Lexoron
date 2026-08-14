@@ -790,13 +790,11 @@ Lokale Daten → Lokale Analyse (Prompt 08-16) → Antwortinhalt lokal bestimmt 
 
 ## Gesamtstatus: Privacy-by-Design/Claude-API-Boundary
 
-**Alle 5 Schritte der vom Anwalt vorgegebenen Architekturerweiterung sind abgeschlossen.** Die
-komplette Kette (`RuleBasedLocalAIProvider` → `ClaudePrivacyGateway` [Pseudonymisierung +
-Security-Check] → `ClaudeWritingProvider`-Protocol → Protokollierung → lokale Rekonstruktion) ist
-end-zu-Ende lauffähig und getestet – **weiterhin bewusst ohne echten Claude-API-Aufruf.** Dieser
-letzte Baustein (konkrete `ClaudeWritingProvider`-Implementierung mit echtem API-Aufruf) wartet
-auf die ursprünglich zurückgestellte Prompt-17-Entscheidung und wird erst nach ausdrücklicher
-Freigabe gebaut.
+**Alle 5 Schritte der vom Anwalt vorgegebenen Architekturerweiterung sind abgeschlossen, inklusive
+der echten Claude-API-Anbindung** (siehe §28 am Ende dieses Dokuments für Details zur konkreten
+Implementierung). Die komplette Kette (`RuleBasedLocalAIProvider` → `ClaudePrivacyGateway`
+[Pseudonymisierung + Security-Check] → `AnthropicClaudeWritingProvider` → Protokollierung →
+lokale Rekonstruktion) ist end-zu-Ende lauffähig und getestet.
 
 ### Noch NICHT umgesetzt (bewusst als separate, spätere Schritte)
 
@@ -827,3 +825,40 @@ erreichen, bevor überhaupt etwas an Claude geht. Genannt: Hardware-Abhängigkei
 Überarbeitung der bestehenden Platzhalter-Module (Prompt 08–10). Wird dort aufgegriffen, sobald
 Schritt 4 ansteht – siehe TODO.md für den vollständigen Vermerk und die daraus resultierenden
 offenen Entscheidungen (Hardware, Modellwahl).
+
+## 28. Echte Claude-API-Anbindung (Stand: nach Freigabe durch den Anwalt)
+
+Nach Abschluss aller 5 Privacy-Schritte hat der Anwalt die konkrete Umsetzung freigegeben, mit
+der expliziten Vorgabe: **"Die API soll aus DSGVO-Gründen nur ohne die Übermittlung von
+persönlichen Daten laufen."** Das war exakt das Ziel der gesamten vorherigen Architektur – dieser
+Schritt setzt nur noch die letzte, bislang fehlende Verbindung um.
+
+- **`AnthropicClaudeWritingProvider`** (`app/ai_providers/anthropic_writing_provider.py`): erste
+  konkrete Implementierung von `ClaudeWritingProvider`, über das offizielle `anthropic`-SDK.
+  **Struktureller (nicht nur konventioneller) Datenschutz:** Diese Klasse hat keinen Codepfad, der
+  auf `Document`, `Matter`, `Message` oder andere Mandantendaten-Modelle zugreifen könnte – sie
+  bekommt ausschließlich die bereits pseudonymisierte, durch den Security-Check geprüfte
+  `ClaudeRequestPayload`. Der Datenfluss zu Mandantendaten endet bereits beim
+  `ClaudePrivacyGateway` (Schritt 3), lange bevor dieser Provider überhaupt aufgerufen wird.
+- **`build_writing_prompt()`:** baut den tatsächlich gesendeten Text ausschließlich aus den sechs
+  Allowlist-Feldern der Payload – strukturell unmöglich, hier versehentlich weitere Daten
+  einzuschleusen, da `ClaudeRequestPayload` keine weiteren Felder besitzt.
+- **`WRITING_SYSTEM_PROMPT`:** weist Claude explizit an, Platzhalter wie `[MANDANT_01]`
+  unverändert zu übernehmen (nicht zu "erraten" oder durch erfundene Namen zu ersetzen), keine
+  Fundstellen/Fakten zu erfinden, und nur den fertigen Text ohne Meta-Kommentare zurückzugeben.
+- **`ClaudeWritingProvider`-Protocol erweitert:** `write()` gibt jetzt `ClaudeWritingResult`
+  (Text + optionale Token-Anzahl) statt nur `str` zurück – ermöglicht die in Schritt 5 vorgesehene
+  Token-Protokollierung (`ApiCallLog.token_count`) mit echten Werten aus der API-Antwort.
+- **API-Key-Handling:** wird ausschließlich zur Laufzeit aus `SecretStr.get_secret_value()`
+  gelesen, nie geloggt. Per Test abgesichert, dass der Schlüssel nicht im gesendeten Prompt
+  oder anderswo auftaucht.
+- **Neue Konfiguration:** `CLAUDE_MAX_TOKENS` (Default 2000).
+- **Getestet (ausschließlich gegen einen gemockten Anthropic-Client – kein echter API-Aufruf in
+  der Sandbox, siehe unten):** Prompt-Aufbau enthält nur Allowlist-Felder, leere optionale Felder
+  werden weggelassen, Token-Zählung aus der Antwort korrekt summiert, fehlende Nutzungsdaten
+  führen nicht zum Absturz, API-Key erscheint nachweislich nicht im gesendeten Aufruf, leerer
+  API-Key wird beim Erstellen sofort abgelehnt.
+- **Wichtig – noch zu verifizieren:** Ein echter End-to-End-Test mit echtem `ANTHROPIC_API_KEY`
+  konnte in dieser Sandbox nicht durchgeführt werden (kein Schlüssel vorhanden, und ein Testlauf
+  gegen die echte API mit echten Kosten wäre in einer automatisierten Testsuite unpassend). Muss
+  auf dem Zielsystem des Anwalts mit echtem Schlüssel final verifiziert werden.
