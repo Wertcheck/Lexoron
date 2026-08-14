@@ -196,7 +196,12 @@ sondern dort aufgegriffen.
       Änderungs-/Löschversuch), automatische Längenbegrenzung, AuditLogService für aktenweise
       Abfrage. Ehrliche Lücke dokumentiert: "Ablage" noch nicht abgedeckt (kommt mit Prompt 35).
       Sandbox-Testlauf mit echtem Python 3.13.15 bestätigt: `368 passed, 1 skipped` (gesamt).
-- [ ] Workflow-State-Machine (definierte Übergänge)
+- [x] Workflow-State-Machine (definierte Übergänge) – WorkflowRun existierte seit Prompt 04, wurde
+      aber nie tatsächlich verwendet; jetzt fester Übergangsgraph (ALLOWED_TRANSITIONS) +
+      WorkflowStateMachine-Service, der jeden Übergang prüft und protokolliert. ARCHIVED terminal,
+      ERROR von überall erreichbar, ungültige Übergänge ändern nichts. Sandbox-Testlauf mit echtem
+      Python 3.13.15 bestätigt: `383 passed, 1 skipped` (gesamt). **Phase 5 (Antwort und
+      Kontrolle) damit vollständig abgeschlossen.**
 
 ## Phase 6 – Dashboard (Prompts 21–25)
 

@@ -978,3 +978,36 @@ Durchsetzung, eine automatische Inhalts-Längenbegrenzung, und eine lesende Abfr
   Akten-Abfrage liefern korrekte/vollständige Ergebnisse, strikte Aktenisolation, chronologische
   Sortierung, kanzleiweite Ressourcen werden korrekt ausgeschlossen, leere Akte liefert leere
   Liste statt Fehler.
+
+## 32. Workflow-State-Machine (Stand Prompt 20)
+
+`WorkflowRun` existiert als Modell bereits seit Prompt 04 (inkl. der bereits in §6 festgelegten
+Zustandsliste), wurde bislang aber von **keinem** Service tatsächlich verwendet – die eigentliche
+State-Machine-Logik fehlte komplett. Prompt 20 liefert sie nach, implementiert in
+`app/workflow/`.
+
+- **`transitions.py` (`ALLOWED_TRANSITIONS`):** fester Übergangsgraph, abgeleitet aus dem
+  End-to-End-Workflow im Konzept (Abschnitt 3). Getroffene Designentscheidungen, die das Konzept
+  nicht bis ins Detail spezifiziert (dokumentiert im Modul selbst):
+  - `NEEDS_CLASSIFICATION`/`NEEDS_MATTER_MATCH` sind Wartezustände, die nach Auflösung zurück zu
+    `PROCESSING` oder direkt weiter zu `READY_FOR_REVIEW` führen können.
+  - `LEGAL_REVIEW → DRAFTED` erlaubt (entspricht "Zurückweisen/Neu analysieren" in der
+    Entwurfsansicht, Prompt 24).
+  - `APPROVED` kann sowohl zu `OUTBOX_READY` als auch direkt zu `ARCHIVED` führen (unabhängige
+    Schritte laut Konzept).
+  - **`ARCHIVED` ist terminal** – keine ausgehenden Übergänge (passend zum
+    "Rechtsaktualität"-Prinzip: spätere Updates überschreiben nie eine historische Beurteilung).
+  - **`ERROR` von jedem nicht-terminalen Zustand aus erreichbar** (ARCHITECTURE.md §6, wörtlich),
+    mit einem einfachen Rückweg nach `PROCESSING` (vollständiges Retry-System folgt erst in
+    Prompt 31).
+  - Absicherung durch `assert` beim Modul-Import: der Graph muss exakt `VALID_WORKFLOW_STATUSES`
+    abdecken – verhindert, dass ein künftig neu hinzugefügter Zustand versehentlich vergessen
+    wird.
+- **`WorkflowStateMachine`:** `create_workflow_run` (Start immer bei `RECEIVED`) und
+  `transition` – **jeder** Übergang wird gegen den Graphen geprüft; ein nicht erlaubter Übergang
+  wirft `InvalidTransitionError` und lässt den Datensatz **unverändert**. Jeder tatsächliche
+  Übergang erzeugt ein `AuditEvent` mit `"ALT -> NEU"` im Klartext (Prompt 19).
+- **Getestet:** Graph deckt alle Zustände ab, `ARCHIVED` terminal, `ERROR` von überall erreichbar,
+  Start bei `RECEIVED`, gültiger Übergang aktualisiert Status + protokolliert, ungültiger
+  Übergang wird abgelehnt und ändert nichts, unbekannter Zielzustand abgelehnt, kompletter
+  Happy-Path bis `ARCHIVED`, `ERROR`-Wiederherstellung, `LEGAL_REVIEW → DRAFTED`-Rückweg.
