@@ -24,5 +24,15 @@ das bleibt bewusst ein separater, nachgelagerter Schritt.
 
 from app.privacy.detectors import DetectedSpan, detect_all
 from app.privacy.pseudonymizer import PseudonymMapping, Pseudonymizer
+from app.privacy.security_check import ALLOWED_PURPOSES, SecurityCheckService
+from app.privacy.security_check_schema import SecurityCheckResult
 
-__all__ = ["DetectedSpan", "detect_all", "PseudonymMapping", "Pseudonymizer"]
+__all__ = [
+    "DetectedSpan",
+    "detect_all",
+    "PseudonymMapping",
+    "Pseudonymizer",
+    "SecurityCheckService",
+    "SecurityCheckResult",
+    "ALLOWED_PURPOSES",
+]

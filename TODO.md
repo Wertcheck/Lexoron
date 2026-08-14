@@ -106,8 +106,14 @@ Zielbild.
       `Pseudonymizer` mit exakter Roundtrip-Rekonstruktion. Zwei echte Regex-Bugs gefunden und
       behoben (Betrag-Wortgrenze, IBAN-Restgruppe). Sandbox-Testlauf mit echtem Python 3.13.15
       bestätigt: `255 passed, 1 skipped` (gesamt).
-- [ ] **Schritt 2: Security-Check** (7-Punkte-Prüfung vor jedem geplanten API-Aufruf; bei
-      Unklarheit KEIN Aufruf, Vorgang zur manuellen Prüfung)
+- [x] **Schritt 2: Security-Check** (`app/privacy/security_check.py`) – alle 7 Prüfpunkte der
+      Vorgabe abgedeckt, Zweck-Allowlist (nur Textproduktion), erneute PII-Prüfung nach
+      Pseudonymisierung, Mapping-Text-Konsistenzprüfung, Heuristik für unbekannte Namen. **Echten
+      Bug während der Entwicklung gefunden:** ursprüngliche Namens-Heuristik hätte praktisch jeden
+      normalen deutschen Kanzleibrief blockiert (alle Substantive + Höflichkeitsform werden im
+      Deutschen großgeschrieben, nicht nur Namen) – durch Stoppwortliste + wortbasiertes Scannen
+      behoben. Sandbox-Testlauf mit echtem Python 3.13.15 bestätigt: `264 passed, 1 skipped`
+      (gesamt).
 - [ ] **Schritt 3: `ClaudePrivacyGateway`-Orchestrierung** (verbindet Pseudonymisierung +
       Security-Check + Allowlist-Payload-Schema zum einzigen erlaubten Weg zur Claude API;
       lokale Persistierung des Pseudonym-Mappings)
@@ -126,6 +132,27 @@ Zielbild.
    spezialisierte Bibliothek (z. B. `phonenumbers`) ergänzt werden?
 4. **Anzeige/Bearbeitung nicht erkannter PII im Dashboard** (Prompt 22 kommt erst später) – wie
    soll die manuelle Prüfung bei blockierten Vorgängen konkret aussehen?
+
+### Zweite Vorgabe (empfangen): Ollama für lokale KI-Aufgaben
+
+Der Anwalt hat eine ergänzende Architekturvorgabe geliefert: **Ollama** mit lokalem
+Open-Source-Modell soll perspektivisch die "lokale KI"-Aufgaben übernehmen (Dokumentenverständnis,
+Zusammenfassung, Informationsextraktion, Aktenzuordnung, Kanzleiwissen-Abruf, Fristenerkennung) –
+mit deutlich höherer inhaltlicher Qualität als die aktuellen Platzhalter-Heuristiken (Prompt
+08–10). Details siehe ARCHITECTURE.md §27 (Abschnitt "Ergänzende Vorgabe: Ollama").
+
+**Betrifft in erster Linie Schritt 4 (`LocalAIProvider`) dieser Phase.** Nicht sofort umgesetzt,
+sondern dort aufgegriffen.
+
+**Zusätzliche offene Entscheidungen daraus:**
+5. **Hardware der Kanzlei:** CPU-only, wie viel RAM (16 GB vs. 32 GB), vorhandene NVIDIA-GPU? Das
+   bestimmt direkt, welches Ollama-Modell überhaupt sinnvoll nutzbar ist.
+6. **Welches konkrete Ollama-Modell** (z. B. je nach Hardware ein kleineres 7-8B-Modell oder ein
+   größeres, falls Hardware es zulässt) – abhängig von Entscheidung 5.
+7. **Umfang der Migration:** sollen die bestehenden Platzhalter-Module (Klassifikation Prompt 08,
+   Matching Prompt 09, Fristenanalyse Prompt 10) komplett auf Ollama umgestellt werden, oder bleibt
+   die deterministische Logik als schneller "erster Filter" bestehen und Ollama ergänzt nur dort,
+   wo die Konfidenz aktuell niedrig ist (Hybrid-Ansatz)?
 
 ## Phase 5 – Antwort und Kontrolle (Prompts 17–20)
 - [ ] Drafting-Service (kein Versand-Trigger)

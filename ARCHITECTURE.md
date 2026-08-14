@@ -669,9 +669,36 @@ Lokale Daten → Lokale Analyse (Prompt 08-16) → Antwortinhalt lokal bestimmt 
   erkennt PII trotzdem korrekt, interpretiert aber nie den Text selbst), keine Falsch-Positive
   bei PII-freiem Text, Überlappungsauflösung, exakte Roundtrip-Rekonstruktion.
 
+### Schritt 2: Security-Check (`app/privacy/security_check.py`)
+
+- **`SecurityCheckService.check()`** deckt alle 7 Punkte der Vorgabe ab: Zweck-Allowlist
+  (`ALLOWED_PURPOSES` – ausschließlich Textproduktions-Aufgaben wie `formulate_draft`,
+  `improve_draft`, `optimize_style`, nie Analyse/Zuordnung/Recherche/Versand), erneute
+  PII-Prüfung **auf dem bereits pseudonymisierten Text** (deckt unvollständige Pseudonymisierung
+  auf), Abgleich Mapping↔Text (jeder Platzhalter muss tatsächlich im Text vorkommen), sowie eine
+  Heuristik für möglicherweise nicht erkannte Namen.
+- **Kernregel technisch durchgesetzt:** jeder gefundene Grund führt zu `passed=False` – es gibt
+  keinen Modus, der Warnungen ignoriert und trotzdem grünes Licht gibt ("Bei einem nicht
+  eindeutigen Ergebnis: KEIN API-AUFRUF").
+- **Wichtiger, während der Entwicklung gefundener Bug:** Die ursprüngliche "zwei
+  großgeschriebene Wörter"-Heuristik für Punkt 6 hätte in der Praxis fast **jeden** normalen
+  deutschen Kanzleibrief blockiert – im Deutschen werden alle Substantive UND die
+  Höflichkeitsform "Sie/Ihr" großgeschrieben, nicht nur Namen (anders als im Englischen). Ein
+  Test mit einem realistischen, PII-freien Musterbrief deckte das auf. Behoben durch eine
+  kuratierte Stoppwortliste häufiger Kanzlei-/Steuerrecht-Vokabeln, kombiniert mit
+  wortbasiertem (statt regex-konsumierendem) Scannen, damit z. B. "Herrn Peter Müller" nicht
+  durch den verbrauchten Titel "Herrn" das eigentliche Namenspaar "Peter Müller" verdeckt.
+  **Ehrlich benannte Grenze:** Das bleibt eine Heuristik, keine echte NER-Erkennung – weder
+  false positives noch false negatives sind ausgeschlossen. Eine zuverlässigere Lösung braucht
+  ein echtes lokales Sprachmodell (siehe Ollama-Diskussion, TODO.md Schritt 4).
+- **Getestet:** jeder der 7 Punkte einzeln (sauberer Fall besteht, unerlaubter Zweck blockiert,
+  Rest-PII nach Pseudonymisierung blockiert, fehlender Platzhalter blockiert, unbekannter Name
+  blockiert), Regressionstest gegen die gefundene Fehlalarm-Klasse, mehrere gleichzeitige
+  Probleme werden alle gemeldet, Integrationstest mit echtem `Pseudonymizer`-Output.
+
 ### Noch NICHT umgesetzt (bewusst als separate, spätere Schritte)
 
-1. **Security-Check** (7-Punkte-Prüfung vor jedem API-Aufruf, Vorgabe-Punkt 6)
+1. ~~Security-Check~~ ✅ oben (Schritt 2, abgeschlossen)
 2. **`ClaudePrivacyGateway`**-Orchestrierung (verbindet Pseudonymisierung + Security-Check +
    Allowlist-Payload zu einem einzigen, einzig erlaubten Weg zur Claude API)
 3. **Lokale Persistierung des Pseudonym-Mappings** (aktuell nur In-Memory-Rückgabewert) – wird
@@ -682,3 +709,19 @@ Lokale Daten → Lokale Analyse (Prompt 08-16) → Antwortinhalt lokal bestimmt 
 
 Diese Reihenfolge folgt demselben Prinzip wie der gesamte bisherige Entwicklungsplan: jeder
 Baustein einzeln, isoliert getestet, bevor der nächste darauf aufbaut.
+
+### Ergänzende Vorgabe: Ollama für lokale KI-Aufgaben (empfangen, noch nicht umgesetzt)
+
+Der Anwalt hat eine zweite Architekturvorgabe geliefert, die die "lokale KI"-Seite der Pipeline
+konkretisiert: **Ollama** mit einem lokalen Open-Source-Modell soll perspektivisch die Aufgaben
+übernehmen, die aktuell noch als einfache Platzhalter-Heuristiken laufen (Dokumentenverständnis,
+Zusammenfassung, Informationsextraktion, Aktenzuordnung, Kanzleiwissen-Abruf,
+Fristen-/Handlungsbedarf-Erkennung) – mit dem Ziel, echte inhaltliche Qualität lokal zu
+erreichen, bevor überhaupt etwas an Claude geht. Genannt: Hardware-Abhängigkeit
+(CPU/16 GB/32 GB/NVIDIA-GPU), Modellwahl passend zur vorhandenen Hardware.
+
+**Einordnung:** Das betrifft in erster Linie den noch ausstehenden **Schritt 4
+(`LocalAIProvider`/`ClaudeWritingProvider`)** dieser Phase sowie perspektivisch eine
+Überarbeitung der bestehenden Platzhalter-Module (Prompt 08–10). Wird dort aufgegriffen, sobald
+Schritt 4 ansteht – siehe TODO.md für den vollständigen Vermerk und die daraus resultierenden
+offenen Entscheidungen (Hardware, Modellwahl).
