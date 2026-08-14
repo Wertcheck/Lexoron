@@ -755,6 +755,49 @@ Lokale Daten → Lokale Analyse (Prompt 08-16) → Antwortinhalt lokal bestimmt 
   verhindert JEDEN Aufruf des Writing-Providers (weder bei unbekannter PII noch bei unerlaubtem
   Zweck wird er je erreicht), Architektur-Schutztest gegen SDK-Importe.
 
+### Schritt 5: Privacy-sichere API-Protokollierung (`app/privacy/api_logger.py`, `app/models/api_call_log.py`)
+
+- **`ApiCallLog`-Modell:** bewusst ein **eigenes, schlankes** Modell statt Wiederverwendung von
+  `AuditEvent` – enthält ausschließlich die von der Vorgabe genannten sicheren Felder
+  (`workflow_id`, `model`, `purpose`, `token_count`, `anonymized_prompt_id`, `result_status`,
+  `error_status`) und **kein** generisches Freitextfeld, in dem sich Mandatsdaten verstecken
+  könnten – per architektonischem Test abgesichert (`content`/`text`/`prompt`/`response`/
+  `details`/`message` als Spaltennamen sind ausgeschlossen).
+- **`compute_anonymized_prompt_id()`:** nicht umkehrbarer SHA-256-Hash der Payload – erlaubt
+  Nachvollziehbarkeit ("war das derselbe Aufruf"), ohne den Inhalt zu speichern.
+- **Wichtiger, während der Entwicklung bewusst vermiedener Fehler:** Die `reasons`-Texte aus dem
+  Security-Check (Schritt 2) enthalten teils die tatsächlich erkannte PII im Klartext (z. B.
+  *"Möglicherweise nicht erkannte Namen/Entitäten gefunden: ['Peter Müller']"* – der Name steht
+  direkt im Grund!). Hätte man diese Gründe direkt geloggt, wäre über die Fehlerbehandlung genau
+  die Information durchgesickert, die der Security-Check verhindern soll. Stattdessen übersetzt
+  `categorize_block_reasons()` die Gründe **vor jeder Speicherung** in ein festes,
+  inhaltsfreies Kategorie-Vokabular (`purpose_not_allowed`, `residual_pii_detected`,
+  `mapping_inconsistency`, `unrecognized_entity_suspected`) – nie den Originaltext.
+  `blocked_reasons` im `DraftGenerationResult` (für die Anzeige im späteren Dashboard) bleibt
+  davon unberührt und weiterhin im Klartext – nur der **Log-Eintrag** ist bereinigt.
+- **In `DraftGenerationOrchestrator` verankert:** jeder Aufruf (Erfolg/Blockierung/Fehler bei der
+  Textproduktion) wird protokolliert. Ein Fehler im `ClaudeWritingProvider` wird abgefangen,
+  protokolliert (ohne die Exception-Nachricht zu speichern – auch diese könnte Inhalte
+  enthalten) und führt zu einem kontrollierten `DraftGenerationResult(success=False)` statt
+  eines Absturzes.
+- **Neue Konfiguration:** `CLAUDE_MODEL_NAME` (Default `claude-sonnet-5`) – nur für
+  Protokollierungs-/Konfigurationszwecke, noch keine echte API-Anbindung.
+- **Getestet:** Kategorisierung enthält nie den Originaltext (auch bei mehreren gleichzeitigen
+  Gründen), deterministischer/kollisionsarmer Hash, alle drei Log-Pfade (Erfolg/Blockierung/
+  Fehler) persistieren korrekt und ausschließlich sichere Felder, eine absichtlich Namen
+  enthaltende Exception-Nachricht landet nachweislich nicht im Log, architektonischer Schutztest
+  gegen Freitextfelder im Modell.
+
+## Gesamtstatus: Privacy-by-Design/Claude-API-Boundary
+
+**Alle 5 Schritte der vom Anwalt vorgegebenen Architekturerweiterung sind abgeschlossen.** Die
+komplette Kette (`RuleBasedLocalAIProvider` → `ClaudePrivacyGateway` [Pseudonymisierung +
+Security-Check] → `ClaudeWritingProvider`-Protocol → Protokollierung → lokale Rekonstruktion) ist
+end-zu-Ende lauffähig und getestet – **weiterhin bewusst ohne echten Claude-API-Aufruf.** Dieser
+letzte Baustein (konkrete `ClaudeWritingProvider`-Implementierung mit echtem API-Aufruf) wartet
+auf die ursprünglich zurückgestellte Prompt-17-Entscheidung und wird erst nach ausdrücklicher
+Freigabe gebaut.
+
 ### Noch NICHT umgesetzt (bewusst als separate, spätere Schritte)
 
 1. ~~Security-Check~~ ✅ oben (Schritt 2, abgeschlossen)
@@ -762,8 +805,9 @@ Lokale Daten → Lokale Analyse (Prompt 08-16) → Antwortinhalt lokal bestimmt 
 3. **Lokale Persistierung des Pseudonym-Mappings** (aktuell nur In-Memory-Rückgabewert) – wird
    erst benötigt, sobald tatsächlich ein API-Aufruf mit Anfrage/Antwort-Zyklus existiert
 4. ~~`LocalAIProvider`/`ClaudeWritingProvider`-Schnittstellen~~ ✅ oben (Schritt 4, abgeschlossen)
-5. **API-Protokollierung ohne personenbezogene Inhalte** (Vorgabe-Punkt 10)
-6. **Der tatsächliche Claude-API-Aufruf selbst** (verschmilzt mit Prompt 17)
+5. ~~API-Protokollierung ohne personenbezogene Inhalte~~ ✅ oben (Schritt 5, abgeschlossen)
+6. **Der tatsächliche Claude-API-Aufruf selbst** (verschmilzt mit Prompt 17, wartet auf
+   ausdrückliche Freigabe)
 
 Diese Reihenfolge folgt demselben Prinzip wie der gesamte bisherige Entwicklungsplan: jeder
 Baustein einzeln, isoliert getestet, bevor der nächste darauf aufbaut.

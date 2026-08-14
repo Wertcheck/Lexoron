@@ -155,3 +155,72 @@ def test_orchestrator_module_does_not_import_any_claude_sdk() -> None:
     assert not (imported_names & forbidden), (
         f"orchestrator.py importiert verbotene Module: {imported_names & forbidden}"
     )
+
+
+def test_successful_call_is_logged(db_session: Session) -> None:
+    from app.models import ApiCallLog
+
+    matter = _matter(db_session, client_name="Max Mustermann", title="Testakte")
+    orchestrator = DraftGenerationOrchestrator(
+        RuleBasedLocalAIProvider(),
+        ClaudePrivacyGateway(),
+        FakeClaudeWritingProvider(),
+        model_name="claude-sonnet-5",
+    )
+
+    orchestrator.generate_draft_text(matter.id, "formulate_draft", db_session)
+
+    logs = db_session.query(ApiCallLog).all()
+    assert len(logs) == 1
+    assert logs[0].result_status == "success"
+    assert logs[0].model == "claude-sonnet-5"
+    assert logs[0].workflow_id == matter.id
+
+
+def test_blocked_call_is_logged_without_pii(db_session: Session) -> None:
+    from app.models import ApiCallLog
+
+    matter = _matter(db_session, title="Testakte")
+    document = Document(
+        matter=matter,
+        file_path="/tmp/x.pdf",
+        extracted_text="Bitte informieren Sie auch Herrn Peter Müller.",
+    )
+    db_session.add(document)
+    db_session.commit()
+
+    orchestrator = DraftGenerationOrchestrator(
+        RuleBasedLocalAIProvider(), ClaudePrivacyGateway(), FakeClaudeWritingProvider()
+    )
+
+    orchestrator.generate_draft_text(matter.id, "formulate_draft", db_session)
+
+    logs = db_session.query(ApiCallLog).filter_by(result_status="blocked").all()
+    assert len(logs) == 1
+    assert logs[0].error_status is not None
+    assert "Peter" not in logs[0].error_status
+    assert "Müller" not in logs[0].error_status
+
+
+def test_writing_provider_exception_is_logged_and_handled_gracefully(
+    db_session: Session,
+) -> None:
+    from app.models import ApiCallLog
+
+    class FailingWritingProvider:
+        def write(self, payload):
+            raise RuntimeError("Simulierter Fehler mit vertraulichem Text: Max Mustermann")
+
+    matter = _matter(db_session, title="Testakte")
+    orchestrator = DraftGenerationOrchestrator(
+        RuleBasedLocalAIProvider(), ClaudePrivacyGateway(), FailingWritingProvider()
+    )
+
+    result = orchestrator.generate_draft_text(matter.id, "formulate_draft", db_session)
+
+    assert result.success is False
+    logs = db_session.query(ApiCallLog).filter_by(result_status="error").all()
+    assert len(logs) == 1
+    # Die Exception-Nachricht (die hier absichtlich einen Namen enthaelt)
+    # darf NIRGENDS im Log auftauchen.
+    assert "Max Mustermann" not in (logs[0].error_status or "")

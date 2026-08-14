@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.ai_providers.claude_writing_provider import ClaudeWritingProvider
 from app.ai_providers.local_ai_provider import LocalAIProvider
+from app.privacy.api_logger import ApiCallLogger
 from app.privacy.gateway import ClaudePrivacyGateway
 
 
@@ -38,10 +39,17 @@ class DraftGenerationOrchestrator:
         local_ai: LocalAIProvider,
         gateway: ClaudePrivacyGateway,
         writing_provider: ClaudeWritingProvider,
+        *,
+        api_logger: ApiCallLogger | None = None,
+        model_name: str = "unknown",
     ) -> None:
         self.local_ai = local_ai
         self.gateway = gateway
         self.writing_provider = writing_provider
+        # Schritt 5: Protokollierung ist standardmaessig aktiv (sicherer
+        # Default) - kann fuer isolierte Tests explizit deaktiviert werden.
+        self.api_logger = api_logger if api_logger is not None else ApiCallLogger()
+        self.model_name = model_name
 
     def generate_draft_text(
         self,
@@ -65,11 +73,41 @@ class DraftGenerationOrchestrator:
         )
 
         if not gateway_result.allowed:
+            self.api_logger.log_blocked(
+                db,
+                workflow_id=matter_id,
+                model=self.model_name,
+                purpose=purpose,
+                reasons=gateway_result.reasons,
+            )
             return DraftGenerationResult(
                 success=False, text=None, blocked_reasons=gateway_result.reasons
             )
 
-        pseudonymized_response = self.writing_provider.write(gateway_result.payload)
+        try:
+            pseudonymized_response = self.writing_provider.write(gateway_result.payload)
+        except Exception:
+            self.api_logger.log_error(
+                db,
+                workflow_id=matter_id,
+                model=self.model_name,
+                purpose=purpose,
+                payload=gateway_result.payload,
+            )
+            return DraftGenerationResult(
+                success=False,
+                text=None,
+                blocked_reasons=["Interner Fehler bei der Textproduktion"],
+            )
+
+        self.api_logger.log_success(
+            db,
+            workflow_id=matter_id,
+            model=self.model_name,
+            purpose=purpose,
+            payload=gateway_result.payload,
+        )
+
         reconstructed_text = self.gateway.reconstruct_response(
             pseudonymized_response, gateway_result.mappings
         )

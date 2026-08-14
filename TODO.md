@@ -127,7 +127,15 @@ Zielbild.
       Implementierung, `DraftGenerationOrchestrator` verbindet alles zum vollständigen Ablauf und
       hängt architektonisch geprüft ausschließlich von Protocols ab (kein SDK-Import). Sandbox-
       Testlauf mit echtem Python 3.13.15 bestätigt: `298 passed, 1 skipped` (gesamt).
-- [ ] **Schritt 5: Privacy-sichere API-Protokollierung** (keine personenbezogenen Inhalte in Logs)
+- [x] **Schritt 5: Privacy-sichere API-Protokollierung** (`app/privacy/api_logger.py`,
+      `app/models/api_call_log.py`) – eigenes schlankes Modell ohne Freitextfeld, nicht
+      umkehrbarer Prompt-Hash, Security-Check-Gründe werden vor dem Loggen in inhaltsfreie
+      Kategorien übersetzt (wichtiger während der Entwicklung vermiedener Fehler: die Gründe
+      selbst enthalten teils die erkannte PII im Klartext), in Orchestrator verankert inkl.
+      kontrolliertem Fehlerabfang. Sandbox-Testlauf mit echtem Python 3.13.15 bestätigt:
+      `311 passed, 1 skipped` (gesamt). **Alle 5 Schritte der Privacy-Architektur damit
+      abgeschlossen** – verbleibend nur noch der tatsächliche Claude-API-Aufruf (wartet auf
+      Freigabe, verschmilzt mit Prompt 17).
 
 ### Offene Entscheidungen zu diesem Thema (noch mit dem Anwalt zu klären)
 

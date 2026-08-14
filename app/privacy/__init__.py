@@ -22,6 +22,7 @@ Security-Check ("nicht erkannte/unklare Daten" als eigener Prüfpunkt) -
 das bleibt bewusst ein separater, nachgelagerter Schritt.
 """
 
+from app.privacy.api_logger import ApiCallLogger, categorize_block_reasons, compute_anonymized_prompt_id
 from app.privacy.detectors import DetectedSpan, detect_all
 from app.privacy.gateway import ClaudePrivacyGateway
 from app.privacy.gateway_schema import ClaudeRequestPayload, GatewayResult
@@ -40,4 +41,7 @@ __all__ = [
     "ClaudePrivacyGateway",
     "ClaudeRequestPayload",
     "GatewayResult",
+    "ApiCallLogger",
+    "categorize_block_reasons",
+    "compute_anonymized_prompt_id",
 ]

@@ -6,6 +6,7 @@ in Tests). Reihenfolge der Importe spielt dank SQLAlchemys
 String-Foreign-Key-Aufloesung keine Rolle.
 """
 
+from app.models.api_call_log import ApiCallLog
 from app.models.audit_event import AuditEvent
 from app.models.base import Base
 from app.models.client import Client
@@ -43,6 +44,7 @@ __all__ = [
     "WorkflowRun",
     "VALID_WORKFLOW_STATUSES",
     "AuditEvent",
+    "ApiCallLog",
     "User",
     "Role",
 ]
