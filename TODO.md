@@ -114,9 +114,13 @@ Zielbild.
       Deutschen großgeschrieben, nicht nur Namen) – durch Stoppwortliste + wortbasiertes Scannen
       behoben. Sandbox-Testlauf mit echtem Python 3.13.15 bestätigt: `264 passed, 1 skipped`
       (gesamt).
-- [ ] **Schritt 3: `ClaudePrivacyGateway`-Orchestrierung** (verbindet Pseudonymisierung +
-      Security-Check + Allowlist-Payload-Schema zum einzigen erlaubten Weg zur Claude API;
-      lokale Persistierung des Pseudonym-Mappings)
+- [x] **Schritt 3: `ClaudePrivacyGateway`-Orchestrierung** (`app/privacy/gateway.py`) –
+      Allowlist-Payload-Schema (genau die 6 Vorgabe-Felder), alle Felder gemeinsam in einem
+      Pseudonymizer-Durchgang für konsistente Platzhalter über Feldgrenzen hinweg, Blockierung
+      erzeugt keine Payload, Struktur-Injection-Abwehr, lokale Rekonstruktion. Weiteren
+      Fehlalarm der Namens-Heuristik gefunden und behoben (nummerierte Argumentationspunkte wie
+      "Erster Punkt"). Sandbox-Testlauf mit echtem Python 3.13.15 bestätigt: `281 passed,
+      1 skipped` (gesamt).
 - [ ] **Schritt 4: `LocalAIProvider`/`ClaudeWritingProvider`-Schnittstellen** (Workflow hängt nur
       von der Abstraktion ab, nicht direkt von Claude)
 - [ ] **Schritt 5: Privacy-sichere API-Protokollierung** (keine personenbezogenen Inhalte in Logs)

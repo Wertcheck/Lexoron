@@ -85,6 +85,10 @@ _COMMON_GERMAN_FORMAL_WORDS = frozenset(
         "rückfragen", "kenntnisnahme", "prüfung", "übersendung",
         # Anredetitel - kein Namensbestandteil im Sinne dieser Heuristik.
         "herr", "herrn", "frau",
+        # Nummerierte Argumentationspunkte (typisch in Schriftsätzen).
+        "punkt", "punkte", "erster", "erstens", "zweiter", "zweitens",
+        "dritter", "drittens", "vierter", "viertens", "fünfter",
+        "fünftens", "letzter", "nächster", "folgender", "obiger",
     }
 )
 

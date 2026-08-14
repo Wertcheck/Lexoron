@@ -23,6 +23,8 @@ das bleibt bewusst ein separater, nachgelagerter Schritt.
 """
 
 from app.privacy.detectors import DetectedSpan, detect_all
+from app.privacy.gateway import ClaudePrivacyGateway
+from app.privacy.gateway_schema import ClaudeRequestPayload, GatewayResult
 from app.privacy.pseudonymizer import PseudonymMapping, Pseudonymizer
 from app.privacy.security_check import ALLOWED_PURPOSES, SecurityCheckService
 from app.privacy.security_check_schema import SecurityCheckResult
@@ -35,4 +37,7 @@ __all__ = [
     "SecurityCheckService",
     "SecurityCheckResult",
     "ALLOWED_PURPOSES",
+    "ClaudePrivacyGateway",
+    "ClaudeRequestPayload",
+    "GatewayResult",
 ]

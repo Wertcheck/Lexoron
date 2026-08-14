@@ -696,11 +696,43 @@ Lokale Daten → Lokale Analyse (Prompt 08-16) → Antwortinhalt lokal bestimmt 
   blockiert), Regressionstest gegen die gefundene Fehlalarm-Klasse, mehrere gleichzeitige
   Probleme werden alle gemeldet, Integrationstest mit echtem `Pseudonymizer`-Output.
 
+### Schritt 3: `ClaudePrivacyGateway`-Orchestrierung (`app/privacy/gateway.py`)
+
+- **`ClaudePrivacyGateway.prepare_request()`** ist der einzige vorgesehene Weg, aus lokalen Daten
+  eine sendefertige `ClaudeRequestPayload` (Schritt-Allowlist-Schema, Vorgabe-Punkt 7) zu bauen:
+  `schreibauftrag`, `gewuenschter_stil`, `anonymisierter_sachverhalt`,
+  `anonymisierte_argumentationspunkte`, `anonymisierte_quellenverweise`, `schreibvorlage` – exakt
+  die sechs von der Vorgabe genannten Felder, kein Freitext-Escape-Hatch für "sonstige Daten".
+- **Wichtigste Design-Entscheidung:** Alle Felder werden **in einem einzigen
+  Pseudonymizer-Aufruf gemeinsam** verarbeitet (über interne, kollisionsarme Trennmarkierungen
+  zusammengeführt, danach wieder aufgeteilt) – nicht Feld für Feld separat. Grund: Der
+  `Pseudonymizer` vergibt Platzhalter-Nummern pro Aufruf neu; bei getrennten Aufrufen hätte
+  derselbe Name in zwei Feldern zwei unterschiedliche Platzhalter bekommen können. Per Test
+  abgesichert, dass z. B. "Max Mustermann" im Sachverhalt UND in einem Argumentationspunkt
+  denselben Platzhalter erhält.
+- **Bei Blockierung (Security-Check aus Schritt 2 nicht bestanden) entsteht keine Payload** –
+  `GatewayResult.payload` bleibt `None`, nur `reasons` ist gefüllt.
+- **Verteidigung gegen Struktur-Injection:** Ein Text, der zufällig/absichtlich die internen
+  Trennmarkierungen enthält, wird vor der Verarbeitung bereinigt (`[ENTFERNT]`) – verhindert,
+  dass die Feldaufteilung durcheinandergebracht werden kann.
+- **`reconstruct_response()`:** rein lokale Rückführung der Platzhalter in der (künftigen)
+  Claude-Antwort.
+- **Weiterer, während der Entwicklung gefundener Fehlalarm der Namens-Heuristik (Schritt 2)
+  behoben:** nummerierte Argumentationspunkte ("Erster Punkt", "Zweiter Punkt" – typisch in
+  Schriftsätzen) wurden fälschlich als mögliche Namen gewertet. Stoppliste um Ordnungswörter
+  ergänzt.
+- **Noch immer bewusst kein tatsächlicher Claude-API-Aufruf** – dieser Baustein bereitet nur vor
+  und verarbeitet nach; der Versand selbst folgt erst mit `ClaudeWritingProvider` (Schritt 4).
+- **Getestet:** Platzhalter-Konsistenz über Feldgrenzen hinweg (Kernanforderung), unterschiedliche
+  Entitäten erhalten unterschiedliche Platzhalter, Blockierung bei unbekannter PII/unerlaubtem
+  Zweck erzeugt keine Payload, exakte Rekonstruktion, korrekte Aufteilung mehrerer
+  Argumente/Quellen, leere Listen korrekt behandelt, fehlende/vorhandene Vorlage, Struktur-
+  Injection-Abwehr.
+
 ### Noch NICHT umgesetzt (bewusst als separate, spätere Schritte)
 
 1. ~~Security-Check~~ ✅ oben (Schritt 2, abgeschlossen)
-2. **`ClaudePrivacyGateway`**-Orchestrierung (verbindet Pseudonymisierung + Security-Check +
-   Allowlist-Payload zu einem einzigen, einzig erlaubten Weg zur Claude API)
+2. ~~`ClaudePrivacyGateway`-Orchestrierung~~ ✅ oben (Schritt 3, abgeschlossen)
 3. **Lokale Persistierung des Pseudonym-Mappings** (aktuell nur In-Memory-Rückgabewert) – wird
    erst benötigt, sobald tatsächlich ein API-Aufruf mit Anfrage/Antwort-Zyklus existiert
 4. **`LocalAIProvider`/`ClaudeWritingProvider`**-Schnittstellen (Vorgabe-Punkt 11)
