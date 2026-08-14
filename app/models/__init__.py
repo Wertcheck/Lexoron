@@ -20,6 +20,7 @@ from app.models.matter import Matter
 from app.models.message import Message
 from app.models.party import Party
 from app.models.policy import Policy
+from app.models.review_finding import ReviewFinding
 from app.models.role import Role
 from app.models.source import Source
 from app.models.task import Task
@@ -32,6 +33,7 @@ __all__ = [
     "Matter",
     "Party",
     "Policy",
+    "ReviewFinding",
     "Message",
     "Document",
     "Task",

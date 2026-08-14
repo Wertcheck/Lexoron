@@ -892,3 +892,41 @@ gezielte Orchestrierung.
   unzureichend belegte Recherche wird zu offenem Prüfpunkt, unbestätigte Frist wird zu
   Unsicherheit, Blockierung erzeugt weder Entwurf noch Leck im Log, Token-Anzahl wird korrekt
   protokolliert, Aktenisolation (identisches Muster wie im gesamten Projekt).
+
+## 30. Review-Engine (Stand Prompt 18)
+
+Implementiert in `app/review/`, neues `ReviewFinding`-Modell (Migration, keine Anpassung
+bestehender Tabellen nötig).
+
+- **Wichtigste Design-Entscheidung, die erst bei der Umsetzung sichtbar wurde:** `Draft.content`
+  enthält zum Zeitpunkt der Prüfung bereits **rekonstruierte, echte Mandantendaten** (der
+  `DraftingService` rekonstruiert vor dem Speichern, siehe §29). Für den Review-Aufruf an Claude
+  wird der Entwurf deshalb wie neuer, ungeprüfter Text behandelt: **erneute** Pseudonymisierung
+  über denselben `ClaudePrivacyGateway` – kein Sonderweg, keine Abkürzung, die Mandantendaten am
+  Gateway vorbeischleusen könnte. Per Test verifiziert (der Fake-Provider prüft aktiv, dass der
+  echte Name nicht im gesendeten Text steht).
+- **Unabhängigkeits-Anforderung technisch umgesetzt** (Konzept, wörtlich: "Die Review-Engine soll
+  nicht einfach den Drafting-Agent bestätigen"): eigenes `ClaudeReviewProvider`-Protocol (nicht
+  `ClaudeWritingProvider` wiederverwendet), eigener kritischer System-Prompt, strukturierte
+  JSON-Ausgabe statt Fließtext.
+- **`Finding`-Schema:** exakt die sieben Kategorien aus dem Konzept (`fehlende_fakten`,
+  `widerspruch`, `unbelegte_rechtsbehauptung`, `fehlende_quelle`, `frist`, `platzhalter`,
+  `formaler_fehler`) plus Schweregrad (`hoch`/`mittel`/`niedrig`), strikt validiert.
+- **`platzhalter` als eigene Kategorie ist besonders passend für dieses System:** die Review-
+  Engine kann konkret prüfen, ob Pseudonymisierungs-Platzhalter wie `[MANDANT_01]` korrekt und
+  vollständig verwendet wurden – ein Check, der aus der eigenen Architektur entsteht, nicht nur
+  aus der allgemeinen Konzeptvorgabe.
+- **`AnthropicClaudeReviewProvider`:** parst die Claude-Antwort als JSON; ein Parsing-Fehler wird
+  NICHT verschluckt, sondern als Fehler an die Engine weitergereicht (dort kontrolliert
+  behandelt, protokolliert, nie ein stillschweigend falsches/leeres Ergebnis vorgetäuscht).
+- **Findings werden nach Erhalt lokal rekonstruiert** (Platzhalter → echte Werte) und als
+  `ReviewFinding`-Zeilen persistiert; `Draft.status` wechselt zu `legal_review`.
+- **Verfügbare Quellen für den Belegabgleich** werden erneut über `LegalResearchService`
+  ermittelt (nicht aus einem beim Drafting gespeicherten Snapshot) – bewusst einfache,
+  konsistente Wiederverwendung statt einer neuen Persistenzschicht für "Quellen zum
+  Erstellungszeitpunkt".
+- **Getestet:** Pflichtparameter, unbekannter Entwurf abgelehnt, **erneute Pseudonymisierung vor
+  dem Versand verifiziert**, Findings korrekt rekonstruiert, Persistierung, Status-Übergang,
+  Audit-Event, Blockierung ändert weder Status noch erzeugt Findings, Blockierung/Fehler werden
+  ohne PII protokolliert, Aktenisolation, JSON-Parsing (gültig/ungültig), korrekter
+  System-Prompt (getrennt vom Writing-Prompt).

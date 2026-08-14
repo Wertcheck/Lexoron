@@ -45,6 +45,10 @@ ALLOWED_PURPOSES = frozenset(
         "improve_clarity",
         "apply_house_style",
         "transform_content_to_letter",
+        # Review-Engine (Prompt 18): unabhaengige Pruefung eines bereits
+        # erstellten Entwurfs - weiterhin reine Textproduktions-/
+        # Textanalyse-Aufgabe, keine Rechtsentscheidung.
+        "review_draft",
     }
 )
 

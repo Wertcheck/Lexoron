@@ -185,7 +185,12 @@ sondern dort aufgegriffen.
       (Entwurf/Quellenliste/offene Prüfungen/Unsicherheiten/verwendete Wissenselemente), Entwurf
       wird als Draft-Zeile persistiert, Blockierung erzeugt keinen Entwurf. Sandbox-Testlauf mit
       echtem Python 3.13.15 bestätigt: `332 passed, 1 skipped` (gesamt).
-- [ ] unabhängige Review-Engine
+- [x] unabhängige Review-Engine – eigenes ClaudeReviewProvider-Protocol, kritischer System-Prompt,
+      strukturierte Findings (7 Konzept-Kategorien + Schweregrad), erneute Pseudonymisierung des
+      bereits rekonstruierten Draft.content vor jedem Review-Aufruf (wichtige, erst bei der
+      Umsetzung sichtbar gewordene Erkenntnis), Findings persistiert, Draft-Status-Übergang zu
+      legal_review. Sandbox-Testlauf mit echtem Python 3.13.15 bestätigt: `353 passed, 1 skipped`
+      (gesamt).
 - [ ] Audit-Log (append-only)
 - [ ] Workflow-State-Machine (definierte Übergänge)
 
