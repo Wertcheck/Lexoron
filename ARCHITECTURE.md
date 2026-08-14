@@ -930,3 +930,51 @@ bestehender Tabellen nötig).
   Audit-Event, Blockierung ändert weder Status noch erzeugt Findings, Blockierung/Fehler werden
   ohne PII protokolliert, Aktenisolation, JSON-Parsing (gültig/ungültig), korrekter
   System-Prompt (getrennt vom Writing-Prompt).
+
+## 31. Audit-Log (Stand Prompt 19)
+
+`AuditEvent` existiert bereits seit Prompt 04 und wird seither von praktisch jedem Modul
+mitgeschrieben. Prompt 19 ergänzt die noch fehlenden Teile: **technische** append-only-
+Durchsetzung, eine automatische Inhalts-Längenbegrenzung, und eine lesende Abfrageschicht.
+
+### Technische Erweiterungen (`app/models/audit_event.py`)
+
+- **Append-only jetzt technisch erzwungen, nicht nur Konvention:** SQLAlchemy-Mapper-Events
+  (`before_update`/`before_delete`) werfen `AuditLogImmutableError`, sobald versucht wird, ein
+  bereits gespeichertes `AuditEvent` über die ORM-Session zu ändern oder zu löschen. **Ehrlich
+  benannte Grenze:** schützt nicht vor rohem SQL außerhalb der ORM-Session – für den Prototyp
+  ausreichend, aber keine Festplatten-/DB-Ebenen-Garantie.
+- **`details`-Längenbegrenzung (`MAX_DETAILS_LENGTH = 1000`):** automatische Kürzung statt Fehler
+  bei Überschreitung – technischer Rückhalt gegen versehentlich große/sensible Textblöcke im Log,
+  ergänzend zur bestehenden Disziplin (kurze, inhaltsfreie Zusammenfassungen statt Rohinhalte).
+
+### `AuditLogService` (`app/audit/service.py`)
+
+- **`list_events_for_entity`:** einfache Abfrage für eine konkrete Entität.
+- **`list_events_for_matter`:** da `AuditEvent` generisch über `entity_type`/`entity_id`
+  funktioniert (nicht direkt über `matter_id`), ermittelt diese Methode zunächst alle zu einer
+  Akte gehörenden Entitäten (`Document`, `Message`, `Deadline`, `Draft`, `Task`, `WorkflowRun` –
+  jeweils über deren `matter_id` gefiltert) und führt deren Ereignisse zusammen, chronologisch
+  sortiert. **Bewusst ausgeschlossen:** `KnowledgeItem`, `Source`, `Policy` – kanzleiweite, nicht
+  aktenbezogene Ressourcen (Konzept §5/§6), deren Events gehören nicht in eine Akten-Historie.
+  Aktenisolation nach demselben Muster wie überall im Projekt per Test abgesichert.
+- Rein lesend – erzeugt selbst nie neue Events.
+
+### Ehrliche Abdeckungsübersicht (Konzept-Kategorien vs. tatsächlich vorhandene Events)
+
+| Konzept-Kategorie | Abgedeckt durch (`event_type`) |
+|---|---|
+| Intake | `intake_created`, `mail_ingested` |
+| Klassifikation | `document_classified`, `document_classification_skipped`, `document_text_extracted`, `document_ocr_completed`/`_pending`/`_failed`, `document_format_unsupported` |
+| Zuordnung | `matter_match_auto_assigned`/`_needs_review`/`_no_match` |
+| Recherche | `legal_research_performed` |
+| Entwurf | `draft_created`, `draft_reviewed` |
+| Änderungen | `draft_feedback_recorded`, `knowledge_item_content_updated`, `policy_version_created` |
+| Freigaben | `draft_feedback_promoted_to_knowledge`, `knowledge_item_approved`, `source_approved` |
+| **Ablage** | **Noch nicht abgedeckt** – es gibt aktuell keine Ablage-/Archivierungsfunktion im Projekt (kommt erst mit Export/Backup, Prompt 35, oder der Aktenablage-Struktur aus Konzept §7). Wird dort nachgezogen, hier bewusst transparent als Lücke benannt statt stillschweigend übergangen. |
+
+- **Getestet:** Änderungs-/Löschversuch wird zuverlässig blockiert, normales Neuanlegen bleibt
+  unbeeinträchtigt, Längenbegrenzung greift korrekt (inkl. `None`-Fall), Entitäts- und
+  Akten-Abfrage liefern korrekte/vollständige Ergebnisse, strikte Aktenisolation, chronologische
+  Sortierung, kanzleiweite Ressourcen werden korrekt ausgeschlossen, leere Akte liefert leere
+  Liste statt Fehler.

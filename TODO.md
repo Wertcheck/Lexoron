@@ -191,7 +191,11 @@ sondern dort aufgegriffen.
       Umsetzung sichtbar gewordene Erkenntnis), Findings persistiert, Draft-Status-Übergang zu
       legal_review. Sandbox-Testlauf mit echtem Python 3.13.15 bestätigt: `353 passed, 1 skipped`
       (gesamt).
-- [ ] Audit-Log (append-only)
+- [x] Audit-Log (append-only) – AuditEvent existierte bereits seit Prompt 04 (durchgehend
+      mitgeschrieben); jetzt append-only technisch erzwungen (AuditLogImmutableError bei
+      Änderungs-/Löschversuch), automatische Längenbegrenzung, AuditLogService für aktenweise
+      Abfrage. Ehrliche Lücke dokumentiert: "Ablage" noch nicht abgedeckt (kommt mit Prompt 35).
+      Sandbox-Testlauf mit echtem Python 3.13.15 bestätigt: `368 passed, 1 skipped` (gesamt).
 - [ ] Workflow-State-Machine (definierte Übergänge)
 
 ## Phase 6 – Dashboard (Prompts 21–25)
