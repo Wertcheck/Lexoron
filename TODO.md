@@ -68,8 +68,16 @@ abgestimmt ist.
       Deaktivierung verlangt Begründung, Suchschicht (Prompt 11) berücksichtigt jetzt
       Gültigkeitsbereich. Sandbox-Testlauf mit echtem Python 3.13.15 bestätigt: `159 passed,
       1 skipped` (Skip weiterhin nur Netzwerkblock huggingface.co).
-- [ ] Feedback-Workflow des Anwalts (keine automatische Regelübernahme)
-- [ ] Rechtsquellen-Modul (Metadaten, mehrere Provider)
+- [x] Feedback-Workflow des Anwalts (keine automatische Regelübernahme) – DraftFeedback-Modell mit
+      Original-Schnappschuss, `record_feedback`/`promote_to_knowledge` bewusst getrennt, Feedback
+      allein erzeugt nie Kanzleiwissen, explizite Übernahme bleibt `pending`. Sandbox-Testlauf mit
+      echtem Python 3.13.15 bestätigt.
+- [x] Rechtsquellen-Modul (Metadaten, mehrere Provider) – SourceProvider-Protocol +
+      ManualSourceProvider (automatisierte Datenbank-Anbindung bewusst offen gelassen, siehe
+      Konzept), Quellenklassen um "Verwaltungsanweisung" (BMF-Schreiben) für den steuerrechtlichen
+      Kontext erweitert, veraltete Quellen bleiben in der DB erhalten. Sandbox-Testlauf mit echtem
+      Python 3.13.15 bestätigt: `191 passed, 1 skipped` (gesamt, Skip weiterhin nur
+      Netzwerkblock).
 - [ ] Legal-Research-Workflow ("nicht ausreichend belegt" als expliziter Zustand)
 - [ ] Prompt-/Policy-Layer (Trennung System/Kanzlei/Fall/Quellen/Nutzeranweisung)
 

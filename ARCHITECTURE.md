@@ -473,3 +473,60 @@ Suchschicht aus Prompt 11.
   Indizierung aus (per Test-Double verifiziert), Deaktivierung verlangt Begründung, Metadatenfilter,
   Gültigkeits-Filterung (abgelaufen / noch nicht gültig / aktuell gültig) sowohl im Service als auch
   in der Suchschicht.
+
+## 23. Feedback des Anwalts (Stand Prompt 13)
+
+Implementiert in `app/feedback/`, neues `DraftFeedback`-Modell (Migration mit Batch-Modus, da FK
+auf `drafts`).
+
+- **`DraftFeedback`:** speichert pro Feedback-Runde einen Schnappschuss (`original_content` vor
+  der Aktion), optional `edited_content`, `comment` und `approval_status`
+  (`approved`/`approved_with_edits`/`rejected`). Mehrere Feedback-Runden zu einem Draft bleiben
+  als getrennte Einträge erhalten (keine Überschreibung), sodass die Änderungshistorie über
+  mehrere Runden nachvollziehbar ist.
+- **`DraftFeedbackService.record_feedback`:** aktualisiert bei `approved_with_edits` zusätzlich
+  den `Draft` selbst (Version +1, wie im etablierten Versionierungsmuster), übernimmt den Status
+  (`approved`/`rejected`) auf `Draft.status`. Rein protokollierend – **erzeugt niemals von sich
+  aus Kanzleiwissen.**
+- **`DraftFeedbackService.promote_to_knowledge`:** der laut Konzept geforderte **separate,
+  explizite** Workflow "als Kanzleiwissen freigeben". Nutzt `KnowledgeItemService.import_item`
+  (Prompt 12) – das Ergebnis ist immer ein neuer, weiterhin `pending` Wissenseintrag; auch eine
+  bewusste Übernahme durchläuft die normale Freigabepflicht erneut.
+- **Schema (`DraftFeedbackInput`):** `approved_with_edits` erfordert nicht-leeren
+  `edited_content`; `rejected` erfordert einen nicht-leeren `comment` (Begründungspflicht).
+- **Getestet:** einfache Freigabe ohne Inhaltsänderung, Freigabe mit Änderung (Versionssprung +
+  Inhaltsübernahme), Ablehnung, Audit-Ereignisse, **Feedback allein erzeugt nie ein
+  `KnowledgeItem`**, explizite Übernahme erzeugt `pending`-Eintrag mit Herkunftsverweis,
+  Fallback auf Originalinhalt ohne Änderung, mehrere Feedback-Runden bleiben als getrennte
+  Einträge mit korrektem Original-Schnappschuss erhalten.
+
+## 24. Rechtsquellen-Modul (Stand Prompt 14)
+
+**Hinweis zur Entstehung:** Wie bei Prompt 11 entstand auch dieser Teil in einem Abschnitt, der
+durch Konversations-Zusammenfassung zwischenzeitlich für mich nicht einsehbar war. Vollständig
+geprüft (Code, Migration, Tests) und für gut befunden, bevor ich ihn als abgeschlossen markiere.
+
+Implementiert in `app/sources/`, aufbauend auf dem `Source`-Modell aus Prompt 04 (erweitert um
+`document_date` und `provider_name`).
+
+- **`SourceProvider`-Protocol + `ManualSourceProvider`:** Provider-Abstraktion analog zu
+  `MailProvider`/`DocumentClassifier`, erlaubt wie im Konzept gefordert mehrere Provider. Aktuell
+  einziger Provider: manuelle Eingabe durch den Anwalt – **automatisierte Anbindungen an
+  juristische Datenbanken sind bewusst nicht Teil dieses Prompts**, da das Konzept selbst festhält,
+  dass vorher geklärt werden muss, welche Datenbanken/Portale die Kanzlei nutzen darf (Lizenzen,
+  API-Zugänge) – eine Geschäftsentscheidung, die noch nicht getroffen wurde.
+- **Kernregel technisch durchgesetzt:** `ManualSourceProvider.resolve()` reichert nichts an,
+  gibt exakt zurück, was eingegeben wurde – "Die KI darf keine Quelle erfinden" (Konzept §6)
+  gilt auch für Provider, per Test abgesichert (`test_manual_provider_never_invents_fields`).
+- **Quellenklassen erweitert um Steuerrecht-Spezifikum:** `"Verwaltungsanweisung"` als eigener
+  Typ (nicht unter "Sonstiges") – BMF-Schreiben und vergleichbare Verwaltungsanweisungen sind in
+  der steuerrechtlichen Praxis von zentraler Bedeutung (siehe Kanzlei-Kontext).
+- **`SourceService`:** Import immer `entwurf`; `approve_source` → `freigegeben`; `mark_outdated`
+  → `veraltet`, verlangt zwingende Begründung. **Wichtig:** eine als veraltet markierte Quelle
+  bleibt in der Datenbank erhalten (nicht gelöscht) – "ein späteres Update darf nicht die
+  historische Beurteilung eines alten Vorgangs überschreiben" (Konzept §6, Rechtsaktualität).
+  `list_sources` filtert nach Typ/Freigabestatus/aktueller Gültigkeit, analog zu
+  `KnowledgeItemService.list_items`.
+- **Getestet:** Import mit Default-Status, Audit-Ereignisse, Freigabe, Als-veraltet-Markierung
+  (inkl. Begründungspflicht und Erhalt in der DB), Filterung, striktes Schema (unbekannter Typ
+  abgelehnt, `Verwaltungsanweisung` als gültiger Typ bestätigt), Provider erfindet nichts.
