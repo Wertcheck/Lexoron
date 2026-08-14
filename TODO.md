@@ -180,7 +180,11 @@ sondern dort aufgegriffen.
    wo die Konfidenz aktuell niedrig ist (Hybrid-Ansatz)?
 
 ## Phase 5 – Antwort und Kontrolle (Prompts 17–20)
-- [ ] Drafting-Service (kein Versand-Trigger)
+- [x] Drafting-Service (kein Versand-Trigger) – kombiniert LocalAIProvider, LegalResearchService,
+      Kanzleiwissen-Suche und die vollständige Privacy-Kette zu strukturierter Ausgabe
+      (Entwurf/Quellenliste/offene Prüfungen/Unsicherheiten/verwendete Wissenselemente), Entwurf
+      wird als Draft-Zeile persistiert, Blockierung erzeugt keinen Entwurf. Sandbox-Testlauf mit
+      echtem Python 3.13.15 bestätigt: `332 passed, 1 skipped` (gesamt).
 - [ ] unabhängige Review-Engine
 - [ ] Audit-Log (append-only)
 - [ ] Workflow-State-Machine (definierte Übergänge)

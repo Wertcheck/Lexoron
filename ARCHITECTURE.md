@@ -862,3 +862,33 @@ Schritt setzt nur noch die letzte, bislang fehlende Verbindung um.
   konnte in dieser Sandbox nicht durchgeführt werden (kein Schlüssel vorhanden, und ein Testlauf
   gegen die echte API mit echten Kosten wäre in einer automatisierten Testsuite unpassend). Muss
   auf dem Zielsystem des Anwalts mit echtem Schlüssel final verifiziert werden.
+
+## 29. Antwortentwurf / Drafting-Service (Stand Prompt 17)
+
+Implementiert in `app/drafting/`. Setzt die vom Konzept geforderten Ein-/Ausgaben vollständig um,
+indem er bereits bestehende, getestete Bausteine kombiniert – keine neue Kernlogik, sondern
+gezielte Orchestrierung.
+
+- **Eingaben (Konzept, wörtlich):** aktueller Vorgang (`Matter`), relevante Akteninhalte
+  (`RuleBasedLocalAIProvider`, Privacy-Schritt 4), freigegebenes Kanzleiwissen
+  (`search_knowledge_base`, Prompt 11/12), zugelassene Rechtsquellen (`LegalResearchService`,
+  Prompt 15), Kanzleivorlage (`vorlage`-Parameter, wie bereits im Gateway vorgesehen).
+- **Ausgaben (Konzept, wörtlich) – `DraftingResult`:** Entwurf (`draft_text`, zusätzlich als
+  `Draft`-Zeile persistiert, Status `draft`), Quellenliste (`source_list`, verweist auf
+  tatsächliche `Source`-Zeilen mit Fundstelle/URL – nie erfunden), offene Prüfungen
+  (`open_review_points`, z. B. wenn `LegalResearchService` "nicht ausreichend belegt" meldet),
+  Unsicherheiten (`uncertainties`, z. B. unbestätigte Fristen in der Akte), verwendete
+  Wissenselemente (`knowledge_items_used`, verweist auf tatsächliche `KnowledgeItem`-Zeilen).
+- **Vollständige Privacy-Kette eingebunden:** nutzt `ClaudePrivacyGateway`
+  (Pseudonymisierung + Security-Check), `ClaudeWritingProvider`, `ApiCallLogger` – identisch zum
+  bereits getesteten `DraftGenerationOrchestrator`, nur mit strukturierter statt reiner
+  Text-Ausgabe. Bei Blockierung entsteht **kein** `Draft`-Eintrag.
+- **KEINE Versand-Fähigkeit:** kein Codepfad in diesem Modul verschickt irgendetwas – der
+  Entwurf landet als `Draft`-Zeile in der Datenbank, mehr nicht. Postausgang/Versand folgt erst
+  in Prompt 25, weiterhin mit anwaltlicher Freigabe als Vorbedingung.
+- **Getestet:** Pflichtparameter, unbekannte Akte abgelehnt, erfolgreicher Entwurf wird
+  persistiert + auditiert, Quellenliste enthält passende freigegebene Quelle mit korrekter
+  Fundstelle, verwendete Wissenselemente enthalten passenden freigegebenen Eintrag,
+  unzureichend belegte Recherche wird zu offenem Prüfpunkt, unbestätigte Frist wird zu
+  Unsicherheit, Blockierung erzeugt weder Entwurf noch Leck im Log, Token-Anzahl wird korrekt
+  protokolliert, Aktenisolation (identisches Muster wie im gesamten Projekt).
