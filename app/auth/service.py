@@ -1,0 +1,178 @@
+"""AuthService (Login/Authentifizierung) und UserService (Nutzerverwaltung,
+Admin-only) – Prompt 26.
+"""
+
+from __future__ import annotations
+
+import secrets
+
+from sqlalchemy.orm import Session
+
+from app.auth.security import hash_password, verify_password
+from app.models import AuditEvent, Role, User
+
+
+class AuthService:
+    def authenticate(self, email: str, plain_password: str, db: Session) -> User | None:
+        """Prüft E-Mail + Passwort. Gibt `None` zurück bei jedem Fehler
+        (unbekannte E-Mail, falsches Passwort, deaktivierter Nutzer,
+        Nutzer ohne Passwort-Hash) - bewusst KEIN unterschiedliches
+        Verhalten je nach Fehlerursache (verhindert User-Enumeration).
+        Schreibt in JEDEM Fall (Erfolg wie Fehlschlag) ein Audit-Event."""
+        normalized_email = email.strip().lower()
+        user = db.query(User).filter(User.email == normalized_email).first()
+
+        if user is None or not user.is_active:
+            db.add(
+                AuditEvent(
+                    entity_type="User",
+                    entity_id=normalized_email,
+                    event_type="login_failed",
+                    actor=normalized_email,
+                    details="Unbekannte E-Mail oder deaktivierter Nutzer",
+                )
+            )
+            db.commit()
+            return None
+
+        if not verify_password(plain_password, user.password_hash):
+            db.add(
+                AuditEvent(
+                    entity_type="User",
+                    entity_id=user.id,
+                    event_type="login_failed",
+                    actor=normalized_email,
+                    details="Falsches Passwort",
+                )
+            )
+            db.commit()
+            return None
+
+        db.add(
+            AuditEvent(
+                entity_type="User",
+                entity_id=user.id,
+                event_type="login_succeeded",
+                actor=user.email,
+                details=None,
+            )
+        )
+        db.commit()
+        return user
+
+
+class UserAlreadyExistsError(Exception):
+    pass
+
+
+class UserService:
+    """Nutzerverwaltung - JEDE Methode hier ist ausschließlich für Admins
+    gedacht (Berechtigungsprüfung erfolgt in der aufrufenden Router-Schicht
+    über `require_role("admin")`, siehe app/auth/permissions.py - dieser
+    Service selbst prüft keine Rollen, um Zuständigkeiten sauber zu
+    trennen: WER etwas darf, entscheidet der Router; WAS die Aktion tut,
+    dieser Service)."""
+
+    def list_users(self, db: Session) -> list[User]:
+        return db.query(User).order_by(User.email).all()
+
+    def create_user(
+        self,
+        db: Session,
+        *,
+        email: str,
+        role_name: str,
+        actor: str,
+        initial_password: str | None = None,
+    ) -> tuple[User, str]:
+        """Legt einen neuen Nutzer an. Gibt (User, initiales Klartext-
+        Passwort) zurück - das Klartext-Passwort existiert NUR in diesem
+        Rückgabewert für die einmalige Anzeige im Dashboard, wird an
+        keiner Stelle geloggt oder gespeichert. `must_change_password`
+        wird immer auf True gesetzt."""
+        normalized_email = email.strip().lower()
+        if db.query(User).filter(User.email == normalized_email).first() is not None:
+            raise UserAlreadyExistsError(f"Nutzer {normalized_email} existiert bereits")
+
+        role = db.query(Role).filter(Role.name == role_name).first()
+        if role is None:
+            raise ValueError(f"Rolle '{role_name}' existiert nicht")
+
+        password = initial_password or secrets.token_urlsafe(16)
+        user = User(
+            email=normalized_email,
+            role_id=role.id,
+            is_active=True,
+            password_hash=hash_password(password),
+            must_change_password=True,
+        )
+        db.add(user)
+        db.flush()
+
+        db.add(
+            AuditEvent(
+                entity_type="User",
+                entity_id=user.id,
+                event_type="user_created",
+                actor=actor,
+                details=f"Nutzer {normalized_email} mit Rolle '{role_name}' angelegt",
+            )
+        )
+        db.commit()
+        db.refresh(user)
+        return user, password
+
+    def set_role(self, db: Session, user: User, role_name: str, *, actor: str) -> User:
+        role = db.query(Role).filter(Role.name == role_name).first()
+        if role is None:
+            raise ValueError(f"Rolle '{role_name}' existiert nicht")
+        old_role_name = user.role.name if user.role else None
+        user.role_id = role.id
+        db.add(
+            AuditEvent(
+                entity_type="User",
+                entity_id=user.id,
+                event_type="user_role_changed",
+                actor=actor,
+                details=f"Rolle geändert: {old_role_name} -> {role_name}",
+            )
+        )
+        db.commit()
+        db.refresh(user)
+        return user
+
+    def set_active(self, db: Session, user: User, is_active: bool, *, actor: str) -> User:
+        user.is_active = is_active
+        db.add(
+            AuditEvent(
+                entity_type="User",
+                entity_id=user.id,
+                event_type="user_activated" if is_active else "user_deactivated",
+                actor=actor,
+                details=None,
+            )
+        )
+        db.commit()
+        db.refresh(user)
+        return user
+
+    def change_password(
+        self, db: Session, user: User, new_password: str, *, actor: str
+    ) -> User:
+        """Setzt ein neues Passwort UND löscht `must_change_password`.
+        `new_password` existiert nur für die Dauer dieses Aufrufs als
+        Klartext - wird nicht geloggt (auch nicht im Audit-`details`)."""
+        user.password_hash = hash_password(new_password)
+        user.must_change_password = False
+        db.add(
+            AuditEvent(
+                entity_type="User",
+                entity_id=user.id,
+                event_type="password_changed",
+                actor=actor,
+                details=None,
+            )
+        )
+        db.commit()
+        db.refresh(user)
+        return user

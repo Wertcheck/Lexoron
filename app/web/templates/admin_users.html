@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Nutzerverwaltung{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">Nutzerverwaltung</h1>
+    <div class="topbar__meta">Nur für Administratoren sichtbar</div>
+  </div>
+
+  {% if error %}
+    <div class="banner banner--error">{{ error }}</div>
+  {% endif %}
+
+  {% if created_password %}
+    <div class="banner" style="background: var(--seal-green-tint); border: 1px solid rgba(47,111,98,0.35); color: var(--seal-green-dark);">
+      Nutzer <strong>{{ created_email }}</strong> angelegt. Initiales Passwort (wird nur
+      EINMALIG angezeigt, bitte jetzt sicher weitergeben):
+      <span class="mono" style="display:block; margin-top:6px; font-size: 14px;">{{ created_password }}</span>
+      Der Nutzer muss es beim ersten Login sofort ändern.
+    </div>
+  {% endif %}
+
+  <div class="draft-page">
+    <div class="instructions-panel">
+      <h2 class="panel-title">Neuen Nutzer anlegen</h2>
+      <form method="post" action="/dashboard/admin/users" class="dashboard-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <label class="form-label">
+          E-Mail
+          <input type="email" name="email" required />
+        </label>
+        <label class="form-label">
+          Rolle
+          <select name="role_name" required>
+            {% for role in roles %}
+              <option value="{{ role.name }}">{{ role.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <button type="submit" class="btn btn--primary">Nutzer anlegen</button>
+      </form>
+    </div>
+
+    <table class="draft-table" style="margin-top: 20px;">
+      <thead>
+        <tr>
+          <th>E-Mail</th>
+          <th>Rolle</th>
+          <th>Status</th>
+          <th>Aktionen</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for user in users %}
+          <tr>
+            <td>{{ user.email }}</td>
+            <td>
+              <form method="post" action="/dashboard/admin/users/{{ user.id }}/role" style="display:inline-flex; gap:6px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <select name="role_name" onchange="this.form.submit()">
+                  {% for role in roles %}
+                    <option value="{{ role.name }}" {% if user.role and user.role.name == role.name %}selected{% endif %}>
+                      {{ role.name }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </form>
+            </td>
+            <td>
+              <span class="tag {% if user.is_active %}tag--matched{% else %}tag--outbound{% endif %}">
+                {{ "aktiv" if user.is_active else "deaktiviert" }}
+              </span>
+            </td>
+            <td>
+              {% if user.id != current_user.id %}
+                {% if user.is_active %}
+                  <form method="post" action="/dashboard/admin/users/{{ user.id }}/deactivate" style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                    <button type="submit" class="btn btn--danger">Deaktivieren</button>
+                  </form>
+                {% else %}
+                  <form method="post" action="/dashboard/admin/users/{{ user.id }}/activate" style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                    <button type="submit" class="btn">Aktivieren</button>
+                  </form>
+                {% endif %}
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

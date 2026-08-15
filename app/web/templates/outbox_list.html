@@ -59,9 +59,9 @@
                 {% endif %}
               </td>
               <td>
-                {% if entry.status == "pending" %}
+                {% if entry.status == "pending" and can_mark_sent %}
                   <form method="post" action="/dashboard/outbox/{{ entry.id }}/mark-sent" style="display:inline;">
-                    <input type="text" name="actor" required placeholder="Ihr Kürzel/E-Mail" style="width:150px;" />
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                     <button type="submit" class="btn btn--primary">Als versendet markieren</button>
                   </form>
                 {% endif %}

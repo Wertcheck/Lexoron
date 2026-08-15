@@ -28,6 +28,16 @@ from app.api.deps import get_or_404
 from app.attorney_instructions.schema import AttorneyInstructionInput
 from app.attorney_instructions.service import AttorneyInstructionService
 from app.audit.service import AuditLogService
+from app.auth.permissions import (
+    PERM_CLAUDE_CALL,
+    PERM_DRAFT_APPROVE,
+    PERM_DRAFT_MANUAL_EDIT,
+    PERM_DRAFT_REJECT,
+    PERM_INSTRUCTION_CREATE,
+    has_permission,
+    require_login,
+    require_role,
+)
 from app.db.session import get_db
 from app.drafting.versioning import create_manual_edit_version
 from app.feedback.schema import DraftFeedbackInput
@@ -41,6 +51,7 @@ from app.models import (
     DraftSourceLink,
     Message,
     ReviewFinding,
+    User,
 )
 from app.outbox.service import OutboxEntryAlreadyExistsError, OutboxService
 from app.web.service_factory import (
@@ -172,13 +183,15 @@ def drafts_list_page(
     status: str | None = None,
     show_all_versions: bool = False,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_login),
 ) -> HTMLResponse:
     """Listenansicht aller Entwürfe (Prompt 24) - standardmäßig nur die
     jeweils AKTUELLSTE Version jeder Entwurfslinie (eine Zeile, auf die
     kein anderer Draft per `previous_version_id` zurückverweist), da
     ältere Versionen für die Freigabeprüfung normalerweise nicht relevant
     sind - über die Versions-Zeitleiste in der Einzelansicht weiterhin
-    einsehbar."""
+    einsehbar. Lesen ist für alle drei Rollen erlaubt (require_login
+    ohne zusätzliche Berechtigungsprüfung, siehe Rechte-Matrix)."""
     query = db.query(Draft).options(joinedload(Draft.matter))
     if status is not None:
         query = query.filter(Draft.status == status)
@@ -198,6 +211,7 @@ def drafts_list_page(
         "drafts": drafts,
         "active_status": status,
         "show_all_versions": show_all_versions,
+        "current_user": current_user,
     }
     return templates.TemplateResponse(request, "drafts_list.html", context)
 
@@ -208,6 +222,7 @@ def draft_detail_page(
     request: Request,
     error: str | None = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_login),
 ) -> HTMLResponse:
     draft = get_or_404(db, Draft, draft_id, "Entwurf")
     version_chain = _load_version_chain(draft, db)
@@ -231,6 +246,11 @@ def draft_detail_page(
         "findings": findings,
         "audit_events": audit_events,
         "error": error,
+        "current_user": current_user,
+        "csrf_token": getattr(request.state, "csrf_token", ""),
+        "can_claude_call": has_permission(current_user, PERM_CLAUDE_CALL),
+        "can_approve": has_permission(current_user, PERM_DRAFT_APPROVE),
+        "can_reject": has_permission(current_user, PERM_DRAFT_REJECT),
     }
     return templates.TemplateResponse(request, "draft_detail.html", context)
 
@@ -238,12 +258,13 @@ def draft_detail_page(
 @router.post("/{draft_id}/manual-edit")
 def manual_edit(
     draft_id: str,
-    actor: str = Form(...),
     content: str = Form(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(permission=PERM_DRAFT_MANUAL_EDIT)),
 ) -> RedirectResponse:
     """Direkte manuelle Bearbeitung - erzeugt IMMER eine neue Version,
-    verändert die aktuelle Zeile nicht (siehe create_manual_edit_version)."""
+    verändert die aktuelle Zeile nicht (siehe create_manual_edit_version).
+    Erlaubt für alle drei Rollen (siehe Rechte-Matrix)."""
     draft = get_or_404(db, Draft, draft_id, "Entwurf")
 
     new_draft = create_manual_edit_version(
@@ -251,7 +272,7 @@ def manual_edit(
         previous_draft=draft,
         new_content=content,
         status="draft",
-        actor=actor.strip(),
+        actor=current_user.email,
         details=f"Manuelle Bearbeitung von Draft {draft.id} im Dashboard",
     )
     return RedirectResponse(
@@ -262,9 +283,9 @@ def manual_edit(
 @router.post("/{draft_id}/instructions")
 def save_instruction(
     draft_id: str,
-    actor: str = Form(...),
     instruction_text: str = Form(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(permission=PERM_INSTRUCTION_CREATE)),
     service: AttorneyInstructionService = Depends(
         get_attorney_instruction_service_for_saving_only
     ),
@@ -272,13 +293,13 @@ def save_instruction(
     """"Anmerkung speichern" - legt NUR den Eintrag an, löst KEINE
     Neugenerierung aus. Braucht deshalb bewusst KEINEN vollen
     DraftingService (siehe service_factory.py) - funktioniert auch ohne
-    konfigurierten Claude-API-Key."""
+    konfigurierten Claude-API-Key. Erlaubt für alle drei Rollen."""
     draft = get_or_404(db, Draft, draft_id, "Entwurf")
     service.create_instruction(
         draft,
         AttorneyInstructionInput(instruction_text=instruction_text),
         db,
-        actor=actor.strip(),
+        actor=current_user.email,
     )
     return RedirectResponse(url=f"/dashboard/drafts/{draft_id}", status_code=303)
 
@@ -286,14 +307,15 @@ def save_instruction(
 @router.post("/{draft_id}/instructions/apply")
 def save_and_apply_instruction(
     draft_id: str,
-    actor: str = Form(...),
     instruction_text: str = Form(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(permission=PERM_CLAUDE_CALL)),
 ) -> RedirectResponse:
     """"Änderungen übernehmen & neu formulieren" - speichert die Anmerkung
     UND löst sofort eine Neugenerierung darüber aus (voller Privacy-
     Gateway-Durchlauf, siehe AttorneyInstructionService.apply_instruction).
-    """
+    Löst einen kostenpflichtigen Claude-API-Aufruf aus - NUR Anwalt/Admin
+    (siehe Rechte-Matrix, PERM_CLAUDE_CALL)."""
     draft = get_or_404(db, Draft, draft_id, "Entwurf")
 
     try:
@@ -307,13 +329,13 @@ def save_and_apply_instruction(
         draft,
         AttorneyInstructionInput(instruction_text=instruction_text),
         db,
-        actor=actor.strip(),
+        actor=current_user.email,
     )
     result = service.apply_instruction(
         instruction,
         db,
         purpose=_REGENERATE_PURPOSE,
-        actor=actor.strip(),
+        actor=current_user.email,
     )
 
     if not result.drafting_result.success:
@@ -331,8 +353,8 @@ def save_and_apply_instruction(
 @router.post("/{draft_id}/approve")
 def approve_draft(
     draft_id: str,
-    actor: str = Form(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(permission=PERM_DRAFT_APPROVE)),
     service: DraftFeedbackService = Depends(get_feedback_service),
 ) -> RedirectResponse:
     """"Freigeben & Postausgang übergeben" (Design-Referenz des Anwalts) -
@@ -340,16 +362,17 @@ def approve_draft(
     `DraftFeedbackService` UND Übergabe an den Postausgang über
     `OutboxService.add_to_outbox` (siehe app/outbox/, KEINE Versand-
     fähigkeit - reine Warteschlange mit späterer manueller Bestätigung).
-    Kein automatischer Versand, Grundregel unverändert eingehalten."""
+    Kein automatischer Versand, Grundregel unverändert eingehalten.
+    NUR Anwalt/Admin (siehe Rechte-Matrix)."""
     draft = get_or_404(db, Draft, draft_id, "Entwurf")
     service.record_feedback(
         draft,
         DraftFeedbackInput(approval_status="approved"),
         db,
-        actor=actor.strip(),
+        actor=current_user.email,
     )
     try:
-        OutboxService().add_to_outbox(draft, db, actor=actor.strip())
+        OutboxService().add_to_outbox(draft, db, actor=current_user.email)
     except OutboxEntryAlreadyExistsError:
         # Erneutes Freigeben eines bereits im Postausgang befindlichen
         # Entwurfs darf nicht scheitern - der Eintrag existiert bereits,
@@ -361,19 +384,19 @@ def approve_draft(
 @router.post("/{draft_id}/reject")
 def reject_draft(
     draft_id: str,
-    actor: str = Form(...),
     comment: str = Form(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(permission=PERM_DRAFT_REJECT)),
     service: DraftFeedbackService = Depends(get_feedback_service),
 ) -> RedirectResponse:
     """"Zurückweisen" - erfordert eine Begründung (siehe
-    DraftFeedbackInput.rejection_requires_comment)."""
+    DraftFeedbackInput.rejection_requires_comment). NUR Anwalt/Admin."""
     draft = get_or_404(db, Draft, draft_id, "Entwurf")
     service.record_feedback(
         draft,
         DraftFeedbackInput(approval_status="rejected", comment=comment),
         db,
-        actor=actor.strip(),
+        actor=current_user.email,
     )
     return RedirectResponse(url=f"/dashboard/drafts/{draft_id}", status_code=303)
 
@@ -381,8 +404,8 @@ def reject_draft(
 @router.post("/{draft_id}/regenerate")
 def regenerate_draft(
     draft_id: str,
-    actor: str = Form(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(permission=PERM_CLAUDE_CALL)),
 ) -> RedirectResponse:
     """"Neu generieren" (Design-Referenz) - Neugenerierung OHNE
     spezifische anwaltliche Anmerkung, im Unterschied zu "Änderungen
@@ -390,7 +413,8 @@ def regenerate_draft(
     Anmerkung voraussetzt, siehe AttorneyInstructionInput). Nutzt
     `DraftingService.create_draft` direkt statt über
     `AttorneyInstructionService`, da keine Anmerkung entsteht, die
-    gespeichert/verknüpft werden müsste."""
+    gespeichert/verknüpft werden müsste. Kostenpflichtiger Claude-Aufruf -
+    NUR Anwalt/Admin."""
     draft = get_or_404(db, Draft, draft_id, "Entwurf")
 
     try:
@@ -405,7 +429,7 @@ def regenerate_draft(
         _REGENERATE_PURPOSE,
         db,
         previous_draft=draft,
-        actor=actor.strip(),
+        actor=current_user.email,
     )
 
     if not result.success:
@@ -420,12 +444,15 @@ def regenerate_draft(
 
 @router.post("/{draft_id}/review")
 def review_draft(
-    draft_id: str, actor: str = Form(...), db: Session = Depends(get_db)
+    draft_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(permission=PERM_CLAUDE_CALL)),
 ) -> RedirectResponse:
     """"Entwurf prüfen" - löst die unabhängige Review-Engine (Prompt 18)
     aus. Findings werden von `ReviewEngine.review_draft` selbst persistiert
     (siehe app/review/engine.py) - dieser Endpunkt ruft sie nur auf und
-    leitet zurück, keine eigene Persistenzlogik hier."""
+    leitet zurück, keine eigene Persistenzlogik hier. Kostenpflichtiger
+    Claude-Aufruf - NUR Anwalt/Admin."""
     draft = get_or_404(db, Draft, draft_id, "Entwurf")
 
     try:
@@ -435,7 +462,7 @@ def review_draft(
             url=f"/dashboard/drafts/{draft_id}?error={exc}", status_code=303
         )
 
-    outcome = review_engine.review_draft(draft.id, db, actor=actor.strip())
+    outcome = review_engine.review_draft(draft.id, db, actor=current_user.email)
 
     if not outcome.success:
         reasons = "; ".join(outcome.blocked_reasons) or "Unbekannter Fehler"

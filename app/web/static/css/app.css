@@ -850,3 +850,43 @@ textarea:focus {
   color: var(--paper-000);
   border-color: var(--wax-red);
 }
+
+/* --- Login-Seite (Prompt 26) --- */
+
+.login-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--paper-100);
+}
+
+.login-box {
+  background: var(--paper-000);
+  border: 1px solid var(--paper-line);
+  border-radius: var(--radius-md);
+  padding: 36px 40px;
+  width: 340px;
+}
+
+/* --- Angemeldeter Nutzer / Logout in Sidebar --- */
+
+.sidebar__user {
+  padding: 0 24px 12px;
+  font-size: 12px;
+  color: rgba(243, 244, 240, 0.72);
+}
+
+.sidebar__user form {
+  margin-top: 4px;
+}
+
+.sidebar__logout-btn {
+  background: none;
+  border: none;
+  color: rgba(243, 244, 240, 0.55);
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}

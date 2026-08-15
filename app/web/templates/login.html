@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anmelden · Kanzlei-AI</title>
+  <link rel="stylesheet" href="/dashboard/static/css/app.css" />
+</head>
+<body>
+  <div class="login-shell">
+    <div class="login-box">
+      <div class="sidebar__brand" style="color: var(--ink-900);">Kanzlei&nbsp;AI</div>
+      <div class="sidebar__brand-sub" style="color: var(--ink-500); margin-bottom: 24px;">
+        Anmelden
+      </div>
+
+      {% if error %}
+        <div class="banner banner--error">{{ error }}</div>
+      {% endif %}
+
+      <form method="post" action="/dashboard/login" class="dashboard-form">
+        <input type="hidden" name="next" value="{{ next }}" />
+        <label class="form-label">
+          E-Mail
+          <input type="email" name="email" required autofocus />
+        </label>
+        <label class="form-label">
+          Passwort
+          <input type="password" name="password" required />
+        </label>
+        <button type="submit" class="btn btn--primary">Anmelden</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

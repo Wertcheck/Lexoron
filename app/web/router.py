@@ -22,8 +22,9 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_or_404
+from app.auth.permissions import require_login
 from app.db.session import get_db
-from app.models import Document, Message
+from app.models import Document, Message, User
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -70,7 +71,9 @@ def _load_detail_context(db: Session, message_id: str) -> dict:
 
 
 @router.get("", response_class=HTMLResponse)
-def dashboard_root(request: Request) -> HTMLResponse:
+def dashboard_root(
+    request: Request, current_user: User = Depends(require_login)
+) -> HTMLResponse:
     """Platzhalter fuer das eigentliche Dashboard (Prompt 25) - leitet fuer
     den aktuellen Entwicklungsstand direkt auf den einzigen fertigen
     Bereich weiter, statt eine leere Seite zu zeigen."""
@@ -84,6 +87,7 @@ def inbox_page(
     request: Request,
     filter: str = "all",  # noqa: A002 - passender, konsistenter Query-Param-Name
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_login),
 ) -> HTMLResponse:
     filter_key = filter if filter in _VALID_FILTER_KEYS else "all"
     messages = _load_messages(db, filter_key)
@@ -101,6 +105,7 @@ def inbox_page(
         "message": None,
         "documents": [],
         "active_message_id": None,
+        "current_user": current_user,
     }
     return templates.TemplateResponse(request, "inbox.html", context)
 
@@ -110,6 +115,7 @@ def inbox_list_partial(
     request: Request,
     filter: str = "all",  # noqa: A002
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_login),
 ) -> HTMLResponse:
     """HTMX-Partial: nur die gefilterte Nachrichtenliste, fuer den
     Filter-Tab-Wechsel ohne vollen Seiten-Reload."""
@@ -125,7 +131,10 @@ def inbox_list_partial(
 
 @router.get("/inbox/{message_id}", response_class=HTMLResponse)
 def inbox_message_page(
-    request: Request, message_id: str, db: Session = Depends(get_db)
+    request: Request,
+    message_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_login),
 ) -> HTMLResponse:
     """Volle Seite mit vorausgewaehlter Nachricht - ermoeglicht direktes
     Verlinken/Neuladen eines einzelnen Postfach-Eintrags (siehe
@@ -144,6 +153,7 @@ def inbox_message_page(
         "total_count": total_count,
         "unmatched_count": unmatched_count,
         "active_message_id": message_id,
+        "current_user": current_user,
         **detail_context,
     }
     return templates.TemplateResponse(request, "inbox.html", context)
@@ -151,7 +161,10 @@ def inbox_message_page(
 
 @router.get("/inbox/{message_id}/detail", response_class=HTMLResponse)
 def inbox_message_detail_partial(
-    request: Request, message_id: str, db: Session = Depends(get_db)
+    request: Request,
+    message_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_login),
 ) -> HTMLResponse:
     """HTMX-Partial: nur das Detail-Panel, fuer den Klick auf eine
     Nachrichten-Zeile ohne vollen Seiten-Reload."""

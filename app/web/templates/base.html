@@ -1,7 +1,7 @@
-{# Basis-Layout (Prompt 22). Sidebar zeigt alle acht Bereiche aus der
-   Design-Referenz des Anwalts, aber nur tatsaechlich gebaute Bereiche sind
-   klickbar - der Rest ist ehrlich als "bald verfuegbar" markiert statt toter
-   Links, die 404 werfen wuerden. #}
+{# Basis-Layout (Prompt 22, Login/Rollen Prompt 26). Sidebar zeigt alle
+   acht Bereiche aus der Design-Referenz des Anwalts, aber nur tatsaechlich
+   gebaute Bereiche sind klickbar - der Rest ist ehrlich als "bald
+   verfuegbar" markiert statt toter Links, die 404 werfen wuerden. #}
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -38,6 +38,15 @@
     <nav class="sidebar">
       <div class="sidebar__brand">Kanzlei&nbsp;AI</div>
       <div class="sidebar__brand-sub">Steuerrecht&nbsp;· Prototyp</div>
+      {% if current_user %}
+        <div class="sidebar__user">
+          {{ current_user.email }}
+          <span class="tag tag--outbound" style="margin-left:4px;">{{ current_user.role.name if current_user.role else "?" }}</span>
+          <form method="post" action="/dashboard/logout">
+            <button type="submit" class="sidebar__logout-btn">Abmelden</button>
+          </form>
+        </div>
+      {% endif %}
       <div class="sidebar__nav">
         {% set nav_items = [
           ("Dashboard", None, false),
@@ -62,9 +71,15 @@
             </span>
           {% endif %}
         {% endfor %}
+        {% if current_user and current_user.role and current_user.role.name.lower() == "admin" %}
+          <a class="sidebar__link{% if active_nav == 'Nutzerverwaltung' %} sidebar__link--active{% endif %}"
+             href="/dashboard/admin/users">
+            <span>Nutzerverwaltung</span>
+          </a>
+        {% endif %}
       </div>
       <div class="sidebar__footer">
-        Interner Prototyp &middot; keine Produktionsauthentifizierung
+        Interner Prototyp &middot; Session-Login (Prompt 26)
       </div>
     </nav>
     <div class="main">

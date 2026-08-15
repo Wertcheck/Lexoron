@@ -286,7 +286,18 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       ARCHITECTURE.md §37. **Phase 6 (Dashboard) damit vollständig abgeschlossen.**
 
 ## Phase 7 – Sicherheit und Produktisierung (Prompts 26–35)
-- [ ] Rollen/Berechtigungen (Admin, Anwalt, Mitarbeiter)
+- [x] Rollen/Berechtigungen (Admin, Anwalt, Mitarbeiter) – Prompt 26, 15.08. Session-basierte
+      Authentifizierung (signierte 8h-Cookies, Argon2-Hashing), feste Rechte-Matrix exakt nach
+      Vorgabe des Anwalts, CSRF-Schutz auf jeder mutierenden Aktion, serverseitige Durchsetzung
+      unabhängig vom UI (kein ausgeblendeter Button als Berechtigungsprüfung). Alle `/api/...`-
+      Endpunkte jetzt login-pflichtig. Freitext-"Ihr Kürzel/E-Mail" komplett aus allen
+      Formularen entfernt - Actor kommt ausschließlich aus der Session. Admin-Nutzerverwaltung,
+      Setup-Skript für initialen Admin (Passwort nie im Code, erzwungene Änderung). Ein
+      wichtiger Bug gefunden+behoben: `Secure`-Cookie-Flag verhinderte Sessions über HTTP
+      (Dev/Test) - jetzt automatisch abgeleitet aus `app_env` (gleiches Muster wie Secret Key).
+      52 neue Auth-Tests (alle 18 vom Anwalt geforderten Szenarien abgedeckt), 541/541 gesamt
+      grün. Siehe ARCHITECTURE.md §38 für Details, Rechte-Matrix-Bestätigung und offene
+      Sicherheitspunkte.
 - [ ] Security Review + SECURITY.md
 - [ ] Prompt-Injection-Schutz + Tests mit manipulierten Dokumenten
 - [ ] Synthetischer Testdaten-Simulator

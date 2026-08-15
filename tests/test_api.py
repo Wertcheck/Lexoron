@@ -34,6 +34,7 @@ from app.models import (
     Task,
 )
 from app.models.base import Base
+from tests.auth_test_utils import login_as_admin
 
 
 @pytest.fixture()
@@ -60,7 +61,12 @@ def client(db_session: Session) -> Iterator[TestClient]:
 
     app.dependency_overrides[get_db] = _override_get_db
     try:
-        yield TestClient(app)
+        test_client = TestClient(app)
+        # Prompt 26: /api/... erfordert eine gueltige Session - Admin
+        # deckt alle Berechtigungen ab, veraendert die eigentlich
+        # getestete (Prompt-21-)Fachlogik dieser Datei also nicht.
+        login_as_admin(db_session, test_client)
+        yield test_client
     finally:
         app.dependency_overrides.clear()
 
@@ -312,13 +318,19 @@ def test_list_deadlines_filtered_by_review_status(
 
 
 def test_settings_endpoint_does_not_leak_mail_password(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from app.config import get_settings
 
     monkeypatch.setenv("MAIL_PASSWORD", "super-geheimes-test-passwort")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-geheim-00000000")
     get_settings.cache_clear()
+    # cache_clear() erzeugt beim naechsten Zugriff eine NEUE Settings-
+    # Instanz - im Entwicklungsmodus mit einem NEUEN zufaelligen
+    # Session-Secret (siehe resolved_session_secret_key), wodurch die
+    # bereits ausgestellte Session-Cookie ungueltig wird. Erneuter Login
+    # noetig, damit die Cookie mit dem NEUEN Secret signiert ist.
+    login_as_admin(db_session, client, email="admin-reauth@kanzlei.test")
     try:
         response = client.get("/api/settings")
         assert response.status_code == 200
@@ -368,12 +380,14 @@ def test_limit_parameter_is_enforced(client: TestClient, seeded: dict) -> None:
     assert response.status_code == 422
 
 
-def test_no_authentication_required_for_current_development_stage(
+def test_authentication_now_required_since_prompt_26(
     client: TestClient, seeded: dict
 ) -> None:
-    """Dokumentiert bewusst das aktuelle Verhalten (Konzept Prompt 21,
-    woertlich: 'Noch keine Produktionsauthentifizierung vortaeuschen') -
-    kein Authorization-Header noetig. Echte Zugriffskontrolle folgt in
-    Prompt 26."""
+    """Ersetzt den bis Prompt 25 gültigen Test (Konzept Prompt 21: 'noch
+    keine Produktionsauthentifizierung') - seit Prompt 26 gilt das
+    Gegenteil: /api/... erfordert immer eine gültige Session. `client`
+    ist hier bereits eingeloggt (siehe Fixture) - dieser Test bestätigt
+    nur, dass der eingeloggte Zugriff funktioniert; die Verweigerung ohne
+    Login wird ausführlich in tests/test_auth_web.py geprüft."""
     response = client.get("/api/matters")
     assert response.status_code == 200

@@ -1,5 +1,5 @@
 """Tests für app/web/outbox_router.py und die Integration mit
-`approve_draft` in app/web/drafts_router.py (Prompt 25).
+`approve_draft` in app/web/drafts_router.py (Prompt 25, Auth ab Prompt 26).
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from app.db.session import get_db
 from app.main import app
 from app.models import Client, Draft, Matter, OutboxEntry
 from app.models.base import Base
+from tests.auth_test_utils import extract_csrf, login_as_admin
 
 
 @pytest.fixture()
@@ -42,7 +43,9 @@ def client(db_session: Session) -> Iterator[TestClient]:
 
     app.dependency_overrides[get_db] = _override_get_db
     try:
-        yield TestClient(app)
+        test_client = TestClient(app)
+        login_as_admin(db_session, test_client)
+        yield test_client
     finally:
         app.dependency_overrides.clear()
 
@@ -57,15 +60,20 @@ def seeded(db_session: Session) -> dict[str, str]:
     return {"matter_id": matter.id, "draft_id": draft.id}
 
 
+def _draft_csrf(client: TestClient, draft_id: str) -> str:
+    return extract_csrf(client.get(f"/dashboard/drafts/{draft_id}").text)
+
+
 # --- Integration: Freigeben uebergibt automatisch in den Postausgang ---
 
 
 def test_approve_creates_outbox_entry(
     client: TestClient, db_session: Session, seeded: dict
 ) -> None:
+    csrf = _draft_csrf(client, seeded["draft_id"])
     client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/approve",
-        data={"actor": "anwalt@kanzlei.test"},
+        data={"csrf_token": csrf},
     )
     entries = db_session.query(OutboxEntry).filter_by(draft_id=seeded["draft_id"]).all()
     assert len(entries) == 1
@@ -75,13 +83,15 @@ def test_approve_creates_outbox_entry(
 def test_approving_twice_does_not_duplicate_outbox_entry(
     client: TestClient, db_session: Session, seeded: dict
 ) -> None:
+    csrf1 = _draft_csrf(client, seeded["draft_id"])
     client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/approve",
-        data={"actor": "anwalt@kanzlei.test"},
+        data={"csrf_token": csrf1},
     )
+    csrf2 = _draft_csrf(client, seeded["draft_id"])
     response = client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/approve",
-        data={"actor": "anwalt@kanzlei.test"},
+        data={"csrf_token": csrf2},
         follow_redirects=False,
     )
     assert response.status_code == 303  # kein 500, kein Crash
@@ -92,9 +102,10 @@ def test_approving_twice_does_not_duplicate_outbox_entry(
 def test_rejected_draft_gets_no_outbox_entry(
     client: TestClient, db_session: Session, seeded: dict
 ) -> None:
+    csrf = _draft_csrf(client, seeded["draft_id"])
     client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/reject",
-        data={"actor": "anwalt@kanzlei.test", "comment": "Nicht ausreichend."},
+        data={"comment": "Nicht ausreichend.", "csrf_token": csrf},
     )
     assert db_session.query(OutboxEntry).count() == 0
 
@@ -110,9 +121,10 @@ def test_outbox_list_returns_200(client: TestClient) -> None:
 def test_outbox_list_shows_pending_entry(
     client: TestClient, db_session: Session, seeded: dict
 ) -> None:
+    csrf = _draft_csrf(client, seeded["draft_id"])
     client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/approve",
-        data={"actor": "anwalt@kanzlei.test"},
+        data={"csrf_token": csrf},
     )
     response = client.get("/dashboard/outbox")
     assert "Einspruch Steuerbescheid 2025" in response.text
@@ -122,13 +134,15 @@ def test_outbox_list_shows_pending_entry(
 def test_outbox_list_default_excludes_sent(
     client: TestClient, db_session: Session, seeded: dict
 ) -> None:
+    csrf = _draft_csrf(client, seeded["draft_id"])
     client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/approve",
-        data={"actor": "anwalt@kanzlei.test"},
+        data={"csrf_token": csrf},
     )
     entry = db_session.query(OutboxEntry).filter_by(draft_id=seeded["draft_id"]).first()
+    outbox_csrf = _draft_csrf(client, seeded["draft_id"])
     client.post(
-        f"/dashboard/outbox/{entry.id}/mark-sent", data={"actor": "anwalt@kanzlei.test"}
+        f"/dashboard/outbox/{entry.id}/mark-sent", data={"csrf_token": outbox_csrf}
     )
 
     response = client.get("/dashboard/outbox")
@@ -149,15 +163,17 @@ def test_outbox_list_explains_no_automatic_sending(client: TestClient) -> None:
 def test_mark_sent_updates_status_and_redirects(
     client: TestClient, db_session: Session, seeded: dict
 ) -> None:
+    csrf = _draft_csrf(client, seeded["draft_id"])
     client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/approve",
-        data={"actor": "anwalt@kanzlei.test"},
+        data={"csrf_token": csrf},
     )
     entry = db_session.query(OutboxEntry).filter_by(draft_id=seeded["draft_id"]).first()
 
+    outbox_csrf = _draft_csrf(client, seeded["draft_id"])
     response = client.post(
         f"/dashboard/outbox/{entry.id}/mark-sent",
-        data={"actor": "anwalt@kanzlei.test"},
+        data={"csrf_token": outbox_csrf},
         follow_redirects=False,
     )
 
@@ -166,12 +182,13 @@ def test_mark_sent_updates_status_and_redirects(
     db_session.expire_all()
     reloaded = db_session.get(OutboxEntry, entry.id)
     assert reloaded.status == "sent"
-    assert reloaded.sent_by == "anwalt@kanzlei.test"
+    assert reloaded.sent_by == "admin@kanzlei.test"
 
 
-def test_mark_sent_not_found_returns_404(client: TestClient) -> None:
+def test_mark_sent_not_found_returns_404(client: TestClient, seeded: dict) -> None:
+    outbox_csrf = _draft_csrf(client, seeded["draft_id"])
     response = client.post(
-        "/dashboard/outbox/does-not-exist/mark-sent", data={"actor": "anwalt@kanzlei.test"}
+        "/dashboard/outbox/does-not-exist/mark-sent", data={"csrf_token": outbox_csrf}
     )
     assert response.status_code == 404
 
@@ -182,16 +199,19 @@ def test_mark_sent_twice_shows_friendly_error_instead_of_crashing(
     """Ein zweiter Versuch, denselben Eintrag als versendet zu markieren
     (z. B. Doppelklick, zwei parallel geöffnete Tabs), darf NICHT zu
     einem Serverfehler führen - sauberer Redirect mit Fehlermeldung."""
+    csrf = _draft_csrf(client, seeded["draft_id"])
     client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/approve",
-        data={"actor": "anwalt@kanzlei.test"},
+        data={"csrf_token": csrf},
     )
     entry = db_session.query(OutboxEntry).filter_by(draft_id=seeded["draft_id"]).first()
-    client.post(f"/dashboard/outbox/{entry.id}/mark-sent", data={"actor": "a@b.de"})
+    first_csrf = _draft_csrf(client, seeded["draft_id"])
+    client.post(f"/dashboard/outbox/{entry.id}/mark-sent", data={"csrf_token": first_csrf})
 
+    second_csrf = _draft_csrf(client, seeded["draft_id"])
     response = client.post(
         f"/dashboard/outbox/{entry.id}/mark-sent",
-        data={"actor": "a@b.de"},
+        data={"csrf_token": second_csrf},
         follow_redirects=False,
     )
     assert response.status_code == 303
@@ -199,4 +219,4 @@ def test_mark_sent_twice_shows_friendly_error_instead_of_crashing(
 
     db_session.expire_all()
     reloaded = db_session.get(OutboxEntry, entry.id)
-    assert reloaded.sent_by == "a@b.de"  # unveraendert vom ersten (erfolgreichen) Versuch
+    assert reloaded.sent_by == "admin@kanzlei.test"  # unveraendert vom ersten Versuch

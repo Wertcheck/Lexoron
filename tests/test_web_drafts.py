@@ -37,6 +37,7 @@ from app.web.service_factory import (
     WritingProviderNotConfiguredError,
     get_attorney_instruction_service_for_saving_only,
 )
+from tests.auth_test_utils import extract_csrf, login_as_admin
 from tests.fake_embedding_provider import FakeEmbeddingProvider
 
 
@@ -77,7 +78,9 @@ def client(db_session: Session) -> Iterator[TestClient]:
         lambda: AttorneyInstructionService(drafting_service=None)
     )
     try:
-        yield TestClient(app)
+        test_client = TestClient(app)
+        login_as_admin(db_session, test_client)
+        yield test_client
     finally:
         app.dependency_overrides.clear()
 
@@ -157,9 +160,10 @@ def test_draft_detail_page_has_no_error_banner_by_default(
 def test_manual_edit_creates_new_version_and_redirects(
     client: TestClient, db_session: Session, seeded: dict
 ) -> None:
+    csrf = extract_csrf(client.get(f"/dashboard/drafts/{seeded['draft_id']}").text)
     response = client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/manual-edit",
-        data={"actor": "anwalt@kanzlei.test", "content": "Bearbeiteter Text."},
+        data={"content": "Bearbeiteter Text.", "csrf_token": csrf},
         follow_redirects=False,
     )
     assert response.status_code == 303
@@ -182,9 +186,10 @@ def test_manual_edit_creates_new_version_and_redirects(
 def test_manual_edit_redirect_target_shows_two_version_chips(
     client: TestClient, seeded: dict
 ) -> None:
+    csrf = extract_csrf(client.get(f"/dashboard/drafts/{seeded['draft_id']}").text)
     response = client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/manual-edit",
-        data={"actor": "anwalt@kanzlei.test", "content": "Bearbeiteter Text."},
+        data={"content": "Bearbeiteter Text.", "csrf_token": csrf},
         follow_redirects=True,
     )
     assert response.status_code == 200
@@ -201,9 +206,10 @@ def test_save_instruction_works_without_configured_api_key(
 ) -> None:
     """Kernanforderung/Regressionstest: 'Anmerkung speichern' darf NICHT
     daran scheitern, dass kein Claude-API-Key konfiguriert ist."""
+    csrf = extract_csrf(client.get(f"/dashboard/drafts/{seeded['draft_id']}").text)
     response = client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/instructions",
-        data={"actor": "anwalt@kanzlei.test", "instruction_text": "Auf Punkt 3 eingehen."},
+        data={"instruction_text": "Auf Punkt 3 eingehen.", "csrf_token": csrf},
         follow_redirects=False,
     )
     assert response.status_code == 303
@@ -222,9 +228,10 @@ def test_save_instruction_works_without_configured_api_key(
 def test_save_instruction_does_not_create_new_draft_version(
     client: TestClient, db_session: Session, seeded: dict
 ) -> None:
+    csrf = extract_csrf(client.get(f"/dashboard/drafts/{seeded['draft_id']}").text)
     client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/instructions",
-        data={"actor": "anwalt@kanzlei.test", "instruction_text": "Testanmerkung."},
+        data={"instruction_text": "Testanmerkung.", "csrf_token": csrf},
     )
     assert db_session.query(Draft).count() == 1
 
@@ -232,13 +239,14 @@ def test_save_instruction_does_not_create_new_draft_version(
 def test_saved_instruction_appears_on_draft_page(
     client: TestClient, seeded: dict
 ) -> None:
+    csrf = extract_csrf(client.get(f"/dashboard/drafts/{seeded['draft_id']}").text)
     client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/instructions",
-        data={"actor": "anwalt@kanzlei.test", "instruction_text": "Ton bestimmter formulieren."},
+        data={"instruction_text": "Ton bestimmter formulieren.", "csrf_token": csrf},
     )
     response = client.get(f"/dashboard/drafts/{seeded['draft_id']}")
     assert "Ton bestimmter formulieren." in response.text
-    assert "anwalt@kanzlei.test" in response.text
+    assert "admin@kanzlei.test" in response.text
 
 
 # --- Änderungen übernehmen & neu formulieren (mit Fake-Provider) ---
@@ -252,11 +260,12 @@ def test_apply_instruction_via_web_creates_new_version(
         drafts_router_module, "get_attorney_instruction_service", lambda: service
     )
 
+    csrf = extract_csrf(client.get(f"/dashboard/drafts/{seeded['draft_id']}").text)
     response = client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/instructions/apply",
         data={
-            "actor": "anwalt@kanzlei.test",
             "instruction_text": "Schadensersatzhöhe nicht anerkennen.",
+            "csrf_token": csrf,
         },
         follow_redirects=False,
     )
@@ -286,9 +295,10 @@ def test_apply_instruction_without_api_key_shows_friendly_error(
 
     monkeypatch.setattr(drafts_router_module, "get_attorney_instruction_service", _raise)
 
+    csrf = extract_csrf(client.get(f"/dashboard/drafts/{seeded['draft_id']}").text)
     response = client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/instructions/apply",
-        data={"actor": "anwalt@kanzlei.test", "instruction_text": "Testanmerkung."},
+        data={"instruction_text": "Testanmerkung.", "csrf_token": csrf},
         follow_redirects=False,
     )
 
@@ -305,9 +315,10 @@ def test_apply_instruction_without_api_key_creates_no_new_draft(
 
     monkeypatch.setattr(drafts_router_module, "get_attorney_instruction_service", _raise)
 
+    csrf = extract_csrf(client.get(f"/dashboard/drafts/{seeded['draft_id']}").text)
     client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/instructions/apply",
-        data={"actor": "anwalt@kanzlei.test", "instruction_text": "Testanmerkung."},
+        data={"instruction_text": "Testanmerkung.", "csrf_token": csrf},
     )
 
     assert db_session.query(Draft).count() == 1

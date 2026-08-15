@@ -42,6 +42,7 @@ from app.review.engine import ReviewEngine
 from app.review.schema import Finding, ReviewResult
 from app.search.service import DocumentSearchService
 from app.web.service_factory import WritingProviderNotConfiguredError
+from tests.auth_test_utils import extract_csrf, login_as_admin
 from tests.fake_embedding_provider import FakeEmbeddingProvider
 
 
@@ -82,7 +83,9 @@ def client(db_session: Session) -> Iterator[TestClient]:
 
     app.dependency_overrides[get_db] = _override_get_db
     try:
-        yield TestClient(app)
+        test_client = TestClient(app)
+        login_as_admin(db_session, test_client)
+        yield test_client
     finally:
         app.dependency_overrides.clear()
 
@@ -289,9 +292,10 @@ def test_draft_detail_shows_audit_events_for_draft_and_instructions(
 def test_approve_sets_status_and_redirects(
     client: TestClient, db_session: Session, seeded: dict
 ) -> None:
+    csrf = extract_csrf(client.get(f"/dashboard/drafts/{seeded['draft_id']}").text)
     response = client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/approve",
-        data={"actor": "anwalt@kanzlei.test"},
+        data={"csrf_token": csrf},
         follow_redirects=False,
     )
     assert response.status_code == 303
@@ -311,9 +315,10 @@ def test_approve_does_not_send_anything(client: TestClient, seeded: dict) -> Non
 
 
 def test_reject_requires_comment(client: TestClient, seeded: dict) -> None:
+    csrf = extract_csrf(client.get(f"/dashboard/drafts/{seeded['draft_id']}").text)
     response = client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/reject",
-        data={"actor": "anwalt@kanzlei.test"},
+        data={"csrf_token": csrf},
     )
     assert response.status_code == 422
 
@@ -321,9 +326,10 @@ def test_reject_requires_comment(client: TestClient, seeded: dict) -> None:
 def test_reject_sets_status_rejected(
     client: TestClient, db_session: Session, seeded: dict
 ) -> None:
+    csrf = extract_csrf(client.get(f"/dashboard/drafts/{seeded['draft_id']}").text)
     response = client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/reject",
-        data={"actor": "anwalt@kanzlei.test", "comment": "Fehlerhafte Rechtsgrundlage."},
+        data={"comment": "Fehlerhafte Rechtsgrundlage.", "csrf_token": csrf},
         follow_redirects=False,
     )
     assert response.status_code == 303
@@ -342,9 +348,10 @@ def test_regenerate_creates_new_version(
         drafts_router_module, "get_drafting_service", lambda: _working_drafting_service()
     )
 
+    csrf = extract_csrf(client.get(f"/dashboard/drafts/{seeded['draft_id']}").text)
     response = client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/regenerate",
-        data={"actor": "anwalt@kanzlei.test"},
+        data={"csrf_token": csrf},
         follow_redirects=False,
     )
 
@@ -363,9 +370,10 @@ def test_regenerate_without_api_key_shows_friendly_error(
 
     monkeypatch.setattr(drafts_router_module, "get_drafting_service", _raise)
 
+    csrf = extract_csrf(client.get(f"/dashboard/drafts/{seeded['draft_id']}").text)
     response = client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/regenerate",
-        data={"actor": "anwalt@kanzlei.test"},
+        data={"csrf_token": csrf},
         follow_redirects=False,
     )
     assert response.status_code == 303
@@ -391,9 +399,10 @@ def test_review_persists_findings_and_redirects_back(
         drafts_router_module, "get_review_engine", lambda: _working_review_engine(findings)
     )
 
+    csrf = extract_csrf(client.get(f"/dashboard/drafts/{seeded['draft_id']}").text)
     response = client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/review",
-        data={"actor": "anwalt@kanzlei.test"},
+        data={"csrf_token": csrf},
         follow_redirects=False,
     )
 
@@ -412,9 +421,10 @@ def test_review_without_api_key_shows_friendly_error(
 
     monkeypatch.setattr(drafts_router_module, "get_review_engine", _raise)
 
+    csrf = extract_csrf(client.get(f"/dashboard/drafts/{seeded['draft_id']}").text)
     response = client.post(
         f"/dashboard/drafts/{seeded['draft_id']}/review",
-        data={"actor": "anwalt@kanzlei.test"},
+        data={"csrf_token": csrf},
         follow_redirects=False,
     )
     assert response.status_code == 303

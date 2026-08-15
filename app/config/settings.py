@@ -134,6 +134,66 @@ class Settings(BaseSettings):
     # Konzept Abschnitt 1).
     require_human_approval_before_send: bool = True
 
+    # --- Authentifizierung / Sessions (Prompt 26) ---
+    # Signiert die Session-Cookies (itsdangerous). MUSS in Produktion aus
+    # der Umgebung kommen - kein Default hier (siehe Validator unten), da
+    # ein bekannter Fallback-Wert die gesamte Session-Signatur wertlos
+    # machen würde. Im Entwicklungsbetrieb (app_env="development") wird
+    # ein Prozess-lokaler Zufallswert verwendet, falls nicht gesetzt (siehe
+    # get_settings) - bewusst NICHT persistent, damit ein fehlender Wert
+    # in Produktion sofort auffällt (alle Sessions ungültig nach Neustart),
+    # statt unbemerkt einen unsicheren Default zu verwenden.
+    session_secret_key: SecretStr | None = None
+    # 8 Stunden, wie vom Anwalt vorgegeben.
+    session_max_age_seconds: int = 8 * 60 * 60
+    # Cookie nur über HTTPS übertragen - sicherer Default für Produktion.
+    # None = automatisch ableiten (siehe resolved_session_cookie_secure):
+    # True außer in app_env="development" - lokale HTTP-Entwicklung und
+    # die Testsuite (TestClient laeuft ueber "http://testserver", kein
+    # TLS) brauchen sonst in JEDEM Test einen expliziten Override, nur um
+    # ueberhaupt eine Session aufrechtzuerhalten. Ein expliziter Wert
+    # (True/False in .env) hat immer Vorrang vor dieser Ableitung.
+    session_cookie_secure: bool | None = None
+
+    @property
+    def resolved_session_cookie_secure(self) -> bool:
+        if self.session_cookie_secure is not None:
+            return self.session_cookie_secure
+        return self.app_env != "development"
+
+    @field_validator("session_max_age_seconds")
+    @classmethod
+    def session_max_age_must_be_positive(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("session_max_age_seconds muss positiv sein")
+        return value
+
+    @property
+    def resolved_session_secret_key(self) -> str:
+        """Liefert den tatsächlich zu verwendenden Session-Schlüssel.
+
+        In Produktion (`app_env != "development"`) MUSS `session_secret_key`
+        gesetzt sein - ein fehlender Wert ist ein Konfigurationsfehler und
+        führt bewusst zu einem harten Absturz beim Start, nicht zu einem
+        stillen, unsicheren Fallback. Im Entwicklungsbetrieb wird ein
+        zufälliger, NICHT persistenter Wert erzeugt (alle Sessions werden
+        bei jedem Neustart ungültig) - praktikabel für lokale Entwicklung,
+        ohne einen bekannten/erratbaren Default im Quellcode zu haben.
+        """
+        if self.session_secret_key is not None:
+            return self.session_secret_key.get_secret_value()
+        if self.app_env != "development":
+            raise RuntimeError(
+                "SESSION_SECRET_KEY ist nicht konfiguriert - in einer "
+                "Nicht-Entwicklungsumgebung (APP_ENV != 'development') ist "
+                "das ein hartes Konfigurationsfehler, kein Fallback erlaubt."
+            )
+        import secrets
+
+        if not hasattr(self, "_dev_session_secret"):
+            object.__setattr__(self, "_dev_session_secret", secrets.token_urlsafe(48))
+        return self._dev_session_secret
+
     # --- Vorlagen (Platzhalter, echte Logik erst Prompt 39) ---
     templates_dir: str = "data/templates"
 

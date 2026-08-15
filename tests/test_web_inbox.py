@@ -19,6 +19,7 @@ from app.db.session import get_db
 from app.main import app
 from app.models import Client, Document, Matter, Message
 from app.models.base import Base
+from tests.auth_test_utils import login_as_admin
 
 
 @pytest.fixture()
@@ -45,7 +46,9 @@ def client(db_session: Session) -> Iterator[TestClient]:
 
     app.dependency_overrides[get_db] = _override_get_db
     try:
-        yield TestClient(app)
+        test_client = TestClient(app)
+        login_as_admin(db_session, test_client)
+        yield test_client
     finally:
         app.dependency_overrides.clear()
 

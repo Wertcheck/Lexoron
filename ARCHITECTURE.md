@@ -1391,3 +1391,130 @@ verifiziert (Wartend-/Versendet-Ansicht).
    bis Prompt 26.
 
 **Mit Prompt 25 ist Phase 6 (Dashboard, Prompts 21–25) vollständig abgeschlossen.**
+
+## 38. Rollen & Berechtigungen (Prompt 26)
+
+Schließt die überall im Dashboard bewusst offen gelassene Lücke ("noch keine
+Produktionsauthentifizierung", siehe Prompt 21/23/24/25-Fußnoten). Session-basierte
+Authentifizierung, feste Rechte-Matrix für drei Rollen, serverseitige Durchsetzung
+unabhängig vom UI.
+
+### Rechte-Matrix (verbindliche Vorgabe des Anwalts, wörtlich umgesetzt)
+
+| Berechtigung | Admin | Anwalt | Mitarbeiter |
+|---|---|---|---|
+| Dashboard/Akten/Entwürfe lesen | ✓ | ✓ | ✓ |
+| Manuelle Entwurfsbearbeitung | ✓ | ✓ | ✓ |
+| Anmerkungen erstellen/speichern | ✓ | ✓ | ✓ |
+| Claude-Neugenerierung/-Prüfung auslösen | ✓ | ✓ | ✗ |
+| Entwurf freigeben | ✓ | ✓ | ✗ |
+| Entwurf zurückweisen | ✓ | ✓ | ✗ |
+| Als versendet markieren | ✓ | ✓ | ✗ |
+| Nutzer-/Rollenverwaltung | ✓ | ✗ | ✗ |
+
+Implementiert als `PERMISSION_MATRIX` (`app/auth/permissions.py`) - ein Rollenname (aus der
+Datenbank, siehe unten) wird gegen eine feste Menge von Berechtigungs-Konstanten geprüft. Diese
+Zuordnung ist bewusst Code, nicht Datenbank: die drei Rollen und ihre exakten Rechte sind eine
+vom Anwalt festgelegte fachliche Vorgabe, keine admin-editierbare Rechteverwaltung in diesem
+Prompt (siehe "Bewusst nicht umgesetzt" unten für die Abwägung).
+
+### Datenmodell
+
+- **`User`** (Prompt 04, jetzt erstmals genutzt): + `password_hash` (Argon2id, NIE Klartext),
+  `must_change_password` (erzwingt Passwortänderung vor jedem weiteren Dashboard-Zugriff).
+- **`Role`** (Prompt 04, jetzt erstmals genutzt): drei Zeilen (Admin/Anwalt/Mitarbeiter) als
+  **Datenbank-Seed-Daten** (Alembic-Datenmigration `4e15e8bb50a1`), NICHT als Python-Enum -
+  damit spätere kanzleispezifische Rollen ohne Codeänderung am Datenmodell möglich bleiben
+  (passt zum vom Anwalt genannten Multi-Kanzlei-Ziel).
+
+### Authentifizierung (`app/auth/`)
+
+- **`security.py`**: Argon2id-Hashing (`argon2-cffi`, direkt, nicht über `passlib`). Jede
+  Fehlerart bei `verify_password` (falsches Passwort, fehlender/kaputter Hash) führt einheitlich
+  zu `False` - verhindert, dass Fehlerverhalten verrät, ob ein Nutzer überhaupt existiert.
+- **`session.py`**: signierte, zeitgestempelte Cookies (`itsdangerous`), KEIN Server-Side-
+  Session-Store. Ablauf wird beim Verifizieren geprüft (`max_age=8h`, wie vorgegeben) - nicht
+  nur über das Browser-Cookie-Attribut, sondern kryptographisch im Token selbst verankert.
+- **`permissions.py`**: `require_login` (jede Dashboard-Seite), `require_role(permission=...)`
+  (jede mutierende Aktion - prüft IN DIESER REIHENFOLGE Login → CSRF → Berechtigung),
+  `require_api_login` (JSON-401 statt Redirect für `/api/...`).
+- **`service.py`**: `AuthService.authenticate` (schreibt bei JEDEM Versuch - Erfolg wie
+  Fehlschlag - ein Audit-Event), `UserService` (Nutzerverwaltung, ausschließlich für Admin-
+  Router gedacht, prüft selbst keine Rollen - Zuständigkeitstrennung: der Router entscheidet WER,
+  der Service macht WAS).
+
+### CSRF-Schutz
+
+Jede mutierende Dashboard-Aktion erfordert ein `csrf_token`-Formularfeld, das gegen den in der
+Session hinterlegten Wert geprüft wird (`app/auth/permissions.py: verify_csrf_token`, eingebaut
+in `require_role`). Token wird bei jedem Login neu erzeugt, ist an die Session gebunden. GET-
+Routen brauchen keinen CSRF-Schutz (keine Zustandsänderung).
+
+### Serverseitige Durchsetzung, unabhängig vom UI (Vorgabe des Anwalts, wörtlich befolgt)
+
+"Ein ausgeblendeter Button ist KEINE Berechtigungsprüfung." Buttons werden im Template zwar
+bedingt ausgeblendet (z. B. "Freigeben" nur sichtbar, wenn `can_approve`), aber JEDE Route prüft
+zusätzlich und unabhängig über `Depends(require_role(...))` in der Funktionssignatur selbst -
+ein direkter POST-Aufruf (curl, Skript, manipuliertes Formular) unterliegt exakt denselben
+Prüfungen. Per Test bewiesen (`test_mitarbeiter_direct_post_to_approve_endpoint_denied_even_with_valid_csrf`).
+
+### API-Schutz
+
+`api_router = APIRouter(dependencies=[Depends(require_api_login)])` (`app/api/__init__.py`) -
+router-weite Dependency, jede neue Route in einem Unter-Router ist automatisch mitgeschützt.
+Geprüft und per Test abgesichert: es existiert **kein** mutierender `/api/...`-Endpunkt - alle
+zugriffsbeschränkten Aktionen (Freigeben/Zurückweisen/Neugenerieren/Versandmarkierung/
+Nutzerverwaltung) existieren ausschließlich in `app/web/`, dort rollenspezifisch geschützt. Kein
+alternativer, ungeschützter Weg.
+
+### Initialer Admin (`scripts/create_admin.py`)
+
+Einmaliges, manuell auszuführendes Setup-Skript. Liest `ADMIN_EMAIL`/`ADMIN_INITIAL_PASSWORD`
+aus Umgebungsvariablen (nie im Code) - fehlt Letzteres, wird ein kryptographisch sicheres
+Zufallspasswort erzeugt und EINMALIG auf der Konsole ausgegeben. `must_change_password=True`
+immer gesetzt. Idempotent: bricht ab, wenn bereits ein Admin existiert (kein versehentliches
+Zurücksetzen).
+
+### Gefundener und behobener Bug: Secure-Cookie-Flag blockierte Sessions über HTTP
+
+`session_cookie_secure` hatte ursprünglich den festen Default `True` - das verhindert (korrekt)
+Cookie-Übertragung über unverschlüsseltes HTTP, blockierte damit aber auch jede lokale
+Entwicklung (`uvicorn` ohne TLS) und die gesamte Testsuite (`TestClient` läuft über
+`http://testserver`). Behoben nach demselben Muster wie `resolved_session_secret_key`:
+`session_cookie_secure: bool | None = None` mit `resolved_session_cookie_secure`-Property -
+automatisch `False` nur wenn `app_env == "development"`, sonst immer `True`. Ein expliziter Wert
+in `.env` hat weiterhin Vorrang. Wichtig für jeden zukünftigen Produktions-Deploy: `APP_ENV` MUSS
+dort auf etwas anderes als `"development"` gesetzt sein, sonst greift der unsichere Default.
+
+### Getestet
+
+52 neue Tests: `tests/test_auth_core.py` (15 - Hashing, Session-Ablauf, Signatur-Manipulation),
+`tests/test_auth_web.py` (22 - alle 18 vom Anwalt vorgegebenen Testszenarien plus CSRF-
+Ergänzungen). Zusätzlich mussten fünf Bestandstestdateien aus Prompts 21-25 auf die neue Login-
+Pflicht angepasst werden (`tests/auth_test_utils.py` als gemeinsame Hilfsdatei, Admin-Auto-Login
+in deren `client`-Fixtures, `csrf_token` in allen betroffenen POST-Aufrufen) - keine fachliche
+Änderung an diesen Tests, nur Anpassung an die neue Zugriffsschicht. 541/541 Tests gesamt grün.
+Migrationen in beide Richtungen getestet. Kompletter Login→Passwortänderung→erneuter
+Login→Dashboard-Flow per Playwright-Screenshot verifiziert.
+
+### Bewusst nicht umgesetzt / offene Punkte (siehe auch Abschlussbericht im Chat)
+
+1. **Rechte-Matrix ist Code, nicht Datenbank** - eine vollständige Role-Permission-
+   Datenbanktabelle (admin-editierbare Rechteverwaltung) wäre für drei fest vorgegebene Rollen
+   vorzeitige Komplexität. Bei Bedarf (z. B. für kanzleispezifische Rollen im Rahmen des
+   Multi-Kanzlei-Ziels) sauber nachrüstbar, ohne das bestehende Muster zu brechen.
+2. **Kein Session-Store, kein "alle Sessions eines Nutzers beenden"**: da Sessions rein
+   client-seitig signiert sind (kein Server-Side-Store), kann ein Admin einen Nutzer zwar
+   deaktivieren (zukünftige Logins gesperrt), aber eine bereits ausgestellte, noch gültige
+   Session eines gerade deaktivierten Nutzers läuft bis zum natürlichen Ablauf (max. 8h) weiter.
+   Für ein sofortiges Sperren wäre ein Server-Side-Session-Store (z. B. Session-ID in der DB mit
+   Widerrufsliste) nötig - bewusst nicht umgesetzt, da vom Anwalt nicht gefordert und ein
+   spürbarer Architektur-Mehraufwand.
+3. **Kein Rate-Limiting auf `/dashboard/login`** - wiederholte Fehlversuche werden auditiert
+   (`login_failed`-Events), aber nicht technisch gedrosselt. Für den aktuellen internen
+   Prototyp-Stand (eine Kanzlei, wenige Nutzer) als Risiko vertretbar eingeschätzt, für einen
+   späteren Produktivbetrieb empfehlenswert nachzurüsten (siehe Abschlussbericht).
+4. **Keine Zwei-Faktor-Authentifizierung** - nicht gefordert, für einen späteren
+   Produktivbetrieb mit Mandantendaten empfehlenswert.
+5. `PromptContextBuilder`-Altlast (Prompt 16) weiterhin unangetastet, wie in Prompt 23
+   dokumentiert - unverändert kein Bezug zu diesem Prompt.

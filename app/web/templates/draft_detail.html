@@ -60,10 +60,7 @@
         <details class="manual-edit-toggle">
           <summary>Entwurf manuell bearbeiten</summary>
           <form method="post" action="/dashboard/drafts/{{ draft.id }}/manual-edit" class="dashboard-form">
-            <label class="form-label">
-              Ihr Kürzel/E-Mail
-              <input type="text" name="actor" required placeholder="anwalt@kanzlei.test" />
-            </label>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
             <label class="form-label">
               Entwurfstext
               <textarea name="content" rows="14" required>{{ draft.content }}</textarea>
@@ -100,13 +97,16 @@
 
         <div class="instructions-panel">
           <h2 class="panel-title">Review-Findings</h2>
-          <form method="post" action="/dashboard/drafts/{{ draft.id }}/review" class="dashboard-form" style="margin-top:0;">
-            <label class="form-label">
-              Ihr Kürzel/E-Mail
-              <input type="text" name="actor" required placeholder="anwalt@kanzlei.test" />
-            </label>
-            <button type="submit" class="btn">Entwurf prüfen (Review-Engine)</button>
-          </form>
+          {% if can_claude_call %}
+            <form method="post" action="/dashboard/drafts/{{ draft.id }}/review" class="dashboard-form" style="margin-top:0;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+              <button type="submit" class="btn">Entwurf prüfen (Review-Engine)</button>
+            </form>
+          {% else %}
+            <p class="form-hint" style="margin-top:0;">
+              Nur Anwalt/Admin können eine Prüfung auslösen (löst einen Claude-API-Aufruf aus).
+            </p>
+          {% endif %}
           {% if findings %}
             <div style="margin-top: 14px;">
               {% for finding in findings %}
@@ -130,10 +130,7 @@
             "Auf Punkt 3 eingehen" oder "§ 286 BGB berücksichtigen".
           </p>
           <form method="post" action="/dashboard/drafts/{{ draft.id }}/instructions" class="dashboard-form">
-            <label class="form-label">
-              Ihr Kürzel/E-Mail
-              <input type="text" name="actor" required placeholder="anwalt@kanzlei.test" />
-            </label>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
             <label class="form-label">
               Anmerkung
               <textarea name="instruction_text" rows="4" required
@@ -141,12 +138,19 @@
             </label>
             <div class="instruction-actions">
               <button type="submit" class="btn">Anmerkung speichern</button>
-              <button type="submit" formaction="/dashboard/drafts/{{ draft.id }}/instructions/apply"
-                      class="btn btn--primary">
-                Änderungen übernehmen &amp; neu formulieren
-              </button>
+              {% if can_claude_call %}
+                <button type="submit" formaction="/dashboard/drafts/{{ draft.id }}/instructions/apply"
+                        class="btn btn--primary">
+                  Änderungen übernehmen &amp; neu formulieren
+                </button>
+              {% endif %}
             </div>
           </form>
+          {% if not can_claude_call %}
+            <p class="form-hint">
+              Nur Anwalt/Admin können eine Neuformulierung auslösen (Claude-API-Aufruf).
+            </p>
+          {% endif %}
         </div>
 
         {% if instructions %}
@@ -187,19 +191,30 @@
     </div>
 
     <div class="action-bar">
-      <form method="post" action="/dashboard/drafts/{{ draft.id }}/approve">
-        <input type="text" name="actor" required placeholder="Ihr Kürzel/E-Mail" style="width:160px; margin-right:6px;" />
-        <button type="submit" class="btn btn--primary">Freigeben &amp; Postausgang übergeben</button>
-      </form>
-      <form method="post" action="/dashboard/drafts/{{ draft.id }}/regenerate">
-        <input type="text" name="actor" required placeholder="Ihr Kürzel/E-Mail" style="width:160px; margin-right:6px;" />
-        <button type="submit" class="btn">Neu generieren</button>
-      </form>
-      <form method="post" action="/dashboard/drafts/{{ draft.id }}/reject">
-        <input type="text" name="actor" required placeholder="Ihr Kürzel/E-Mail" style="width:160px; margin-right:6px;" />
-        <input type="text" name="comment" required placeholder="Begründung (Pflicht)" style="width:220px; margin-right:6px;" />
-        <button type="submit" class="btn btn--danger">Zurückweisen</button>
-      </form>
+      {% if can_approve %}
+        <form method="post" action="/dashboard/drafts/{{ draft.id }}/approve">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <button type="submit" class="btn btn--primary">Freigeben &amp; Postausgang übergeben</button>
+        </form>
+      {% endif %}
+      {% if can_claude_call %}
+        <form method="post" action="/dashboard/drafts/{{ draft.id }}/regenerate">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <button type="submit" class="btn">Neu generieren</button>
+        </form>
+      {% endif %}
+      {% if can_reject %}
+        <form method="post" action="/dashboard/drafts/{{ draft.id }}/reject">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <input type="text" name="comment" required placeholder="Begründung (Pflicht)" style="width:220px; margin-right:6px;" />
+          <button type="submit" class="btn btn--danger">Zurückweisen</button>
+        </form>
+      {% endif %}
+      {% if not (can_approve or can_reject or can_claude_call) %}
+        <p class="form-hint">
+          Ihre Rolle erlaubt kein Freigeben, Zurückweisen oder Neugenerieren - nur Anwalt/Admin.
+        </p>
+      {% endif %}
     </div>
     <p class="form-hint" style="margin-top:8px;">
       Hinweis: "Freigeben &amp; Postausgang übergeben" markiert den Entwurf als freigegeben.

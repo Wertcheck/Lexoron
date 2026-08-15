@@ -1,8 +1,13 @@
 """User – Benutzer.
 
-Passwort-/Auth-Handling ist bewusst nicht Teil dieses Datenmodells (folgt
-mit echter Authentifizierung erst spaeter, kein Vortaeuschen einer
-Produktionsauthentifizierung laut Prompt 21)."""
+Passwort-Handling (Prompt 26): `password_hash` speichert AUSSCHLIESSLICH
+einen Argon2-Hash (siehe app/auth/security.py) - an keiner Stelle im
+Projekt wird ein Klartext-Passwort persistiert oder geloggt. Nullable,
+weil ein Nutzer OHNE Hash sich schlicht nicht anmelden kann (siehe
+AuthService.authenticate) - technisch nullable gehalten, um zukünftige
+SSO-/Passkey-Nutzer ohne lokales Passwort nicht von vornherein
+auszuschließen.
+"""
 
 from __future__ import annotations
 
@@ -19,5 +24,12 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     role_id: Mapped[str | None] = mapped_column(ForeignKey("roles.id"), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Erzwingt eine Passwortänderung vor dem nächsten Dashboard-Zugriff -
+    # insbesondere für den initialen Admin (siehe scripts/create_admin.py)
+    # und für von einem Admin neu angelegte Nutzer.
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
 
     role: Mapped["Role | None"] = relationship(back_populates="users")
