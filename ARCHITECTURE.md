@@ -1518,3 +1518,36 @@ Login→Dashboard-Flow per Playwright-Screenshot verifiziert.
    Produktivbetrieb mit Mandantendaten empfehlenswert.
 5. `PromptContextBuilder`-Altlast (Prompt 16) weiterhin unangetastet, wie in Prompt 23
    dokumentiert - unverändert kein Bezug zu diesem Prompt.
+
+## 39. Synthetischer Testdaten-Simulator (Prompt 29)
+
+`app/synthetic_data/` – erzeugt vollständig fiktive, aber realistische Kanzlei-Fälle für
+Demo-/Entwicklungszwecke und als Datengrundlage für den in Prompt 30 geforderten
+Qualitäts-Benchmark ("≥20 synthetische Fälle"). Bewusst als eigenständiges Modul von der
+eigentlichen Benchmark-/Bewertungslogik (Prompt 30) getrennt.
+
+- **`scenarios.py`**: 6 Fallszenario-Vorlagen (Einspruch Steuerbescheid, Betriebsprüfung,
+  Umsatzsteuer-Nachschau, Mahnung Zahlungsverzug, Vertragsprüfung, Kündigungswiderspruch),
+  orientiert an den bestehenden `ALLOWED_DOCUMENT_TYPES` (Prompt 08).
+- **`generator.py`**: `SyntheticDataGenerator(seed=...)` – deterministisch bei gesetztem
+  Seed (reproduzierbarer Benchmark), erzeugt bei `seed=None` echte Zufälligkeit (Demo-Zweck).
+  `generate_case`/`generate_many`/`generate_shared_knowledge_base`. Ruft an KEINER Stelle die
+  Claude API auf.
+- **Grundregel konsequent eingehalten** (Konzept-Annahme A3): ausschließlich deutsche
+  Standard-Platzhalternamen ("Max Mustermann" u. Ä., das Äquivalent zu "John Doe") und
+  klar erfundene Firmennamen-Muster, ausschließlich `@example-testdomain.invalid`-
+  E-Mail-Adressen (RFC 2606, technisch nie zustellbar) - per Test abgesichert
+  (`test_no_real_looking_domains_used`).
+- **Gefundener und behobener Bug:** `Matter.reference_number` trägt eine UNIQUE-Constraint,
+  die beim ursprünglichen, rein zufälligen Generieren des Aktenzeichens bei wiederholter
+  Nutzung gegen dieselbe (Demo-)Datenbank gelegentlich zu einem harten `IntegrityError`
+  hätte führen können. Behoben durch aktive Kollisionsprüfung gegen die Datenbank vor dem
+  Insert (`_generate_unique_reference_number`), per Test mit 60 aufeinanderfolgenden
+  Aufrufen gegen dieselbe DB abgesichert.
+- **CLI:** `scripts/seed_synthetic_data.py --count 20 --seed 42 --with-knowledge-base`.
+- **Getestet:** 13 neue Tests (`tests/test_synthetic_data_generator.py`) - Konsistenz der
+  erzeugten Datensätze untereinander, Determinismus bei gleichem Seed (über zwei komplett
+  getrennte Datenbanken geprüft), Abdeckung aller 6 Szenarien bei ausreichender Fallzahl,
+  Kollisionsschutz, Zusammenspiel mit der bestehenden Such-/Recherche-Infrastruktur ohne
+  Sonderbehandlung. Zusätzlich per Playwright-Screenshot visuell verifiziert (20 generierte
+  Fälle im Posteingang).

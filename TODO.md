@@ -340,7 +340,19 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       2FA und die produktionsweite Härtung (öffentliche Erreichbarkeit) bewusst weiterhin
       zurückgestellt - siehe SECURITY_REVIEW.md für die aktualisierte Bewertung. 13 neue
       Tests, 578/578 gesamt grün.
-- [ ] Synthetischer Testdaten-Simulator
+- [x] Synthetischer Testdaten-Simulator – Prompt 29, 15.08. Neues Modul `app/synthetic_data/`
+      mit `SyntheticDataGenerator`: erzeugt vollständig fiktive, aber realistische Kanzlei-
+      Fälle (Mandant + Akte + eingehende Nachricht + Dokument + ggf. Frist) über 6 verschiedene
+      Fallszenarien (Einspruch Steuerbescheid, Betriebsprüfung, Umsatzsteuer-Nachschau, Mahnung,
+      Vertragsprüfung, Kündigungswiderspruch). Deterministisch bei gesetztem Seed (wichtig für
+      den reproduzierbaren Qualitäts-Benchmark aus Prompt 30) - ruft an keiner Stelle die
+      Claude API auf. CLI-Skript `scripts/seed_synthetic_data.py --count N --seed S`. Ein
+      echter Bug während der Entwicklung gefunden+behoben: `Matter.reference_number` trägt
+      eine UNIQUE-Constraint - ohne Kollisionsprüfung hätte wiederholte Generator-Nutzung
+      gegen dieselbe Datenbank irgendwann fehlschlagen können; jetzt aktive Prüfung+Retry.
+      Per Browser-Screenshot verifiziert (20 synthetische Fälle im Posteingang, ausschließlich
+      `.invalid`-Testdomain, keine Ähnlichkeit zu echten Personen). 13 neue Tests, 591/591
+      gesamt grün.
 - [ ] End-to-End-Test
 - [ ] Fehler-/Retry-System
 - [ ] Logging/Monitoring (ohne sensible Inhalte)
