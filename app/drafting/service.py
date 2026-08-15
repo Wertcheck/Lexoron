@@ -27,7 +27,8 @@ from sqlalchemy.orm import Session
 from app.ai_providers.claude_writing_provider import ClaudeWritingProvider
 from app.ai_providers.local_ai_provider import LocalAIProvider
 from app.drafting.schema import DraftingResult, KnowledgeItemReference, SourceReference
-from app.models import AuditEvent, Deadline, Draft, KnowledgeItem, Matter
+from app.drafting.versioning import create_new_draft_version
+from app.models import Deadline, Draft, KnowledgeItem, Matter
 from app.privacy.api_logger import ApiCallLogger
 from app.privacy.gateway import ClaudePrivacyGateway
 from app.research.service import LegalResearchService
@@ -62,8 +63,28 @@ class DraftingService:
         *,
         stil: str | None = None,
         vorlage: str | None = None,
+        attorney_anmerkungen: str | None = None,
+        previous_draft: Draft | None = None,
         actor: str = "system",
     ) -> DraftingResult:
+        """Erstellt eine neue Draft-Version.
+
+        `previous_draft=None` (Standardfall): erste Version einer neuen
+        Entwurfslinie (v1).
+
+        `previous_draft=<Draft>`: Neugenerierung als FOLGEVERSION - z. B.
+        angestoßen durch `AttorneyInstructionService.apply_instruction`
+        (siehe app/attorney_instructions/service.py). Erzeugt IMMER eine
+        NEUE `Draft`-Zeile über `create_new_draft_version`
+        (app/drafting/versioning.py) - die Vorgänger-Zeile wird an keiner
+        Stelle verändert.
+
+        `attorney_anmerkungen`: unpseudonymisierter Freitext einer
+        anwaltlichen Anmerkung (siebtes Allowlist-Feld, siehe
+        gateway_schema.py) - durchläuft hier denselben Privacy-Gateway-
+        Durchlauf wie Sachverhalt/Quellen/Vorlage, GENAU EINMAL, bevor
+        irgendetwas Claude erreicht.
+        """
         if not matter_id:
             raise ValueError(
                 "matter_id ist erforderlich - Entwurfserstellung ohne "
@@ -72,6 +93,11 @@ class DraftingService:
         matter = db.query(Matter).filter_by(id=matter_id).first()
         if matter is None:
             raise ValueError(f"Matter {matter_id} nicht gefunden")
+        if previous_draft is not None and previous_draft.matter_id != matter_id:
+            raise ValueError(
+                "previous_draft gehört nicht zur angegebenen Akte - "
+                "Versionsketten dürfen Aktengrenzen nicht überschreiten"
+            )
 
         preparation = self.local_ai.prepare_draft_context(matter_id, db)
 
@@ -87,6 +113,7 @@ class DraftingService:
             quellenverweise=quellen_texts + knowledge_texts,
             stil=stil,
             vorlage=vorlage,
+            anwaltliche_anmerkungen=attorney_anmerkungen,
             known_entities=preparation.known_entities,
         )
 
@@ -133,7 +160,14 @@ class DraftingService:
             writing_result.text, gateway_result.mappings
         )
 
-        draft = self._persist_draft(matter_id, reconstructed_text, purpose, db, actor=actor)
+        draft = self._persist_draft(
+            matter_id,
+            reconstructed_text,
+            purpose,
+            db,
+            actor=actor,
+            previous_draft=previous_draft,
+        )
         uncertainties = self._gather_uncertainties(matter_id, db)
 
         return DraftingResult(
@@ -202,23 +236,36 @@ class DraftingService:
         return knowledge_items_used, knowledge_texts
 
     def _persist_draft(
-        self, matter_id: str, content: str, purpose: str, db: Session, *, actor: str
+        self,
+        matter_id: str,
+        content: str,
+        purpose: str,
+        db: Session,
+        *,
+        actor: str,
+        previous_draft: Draft | None = None,
     ) -> Draft:
-        draft = Draft(matter_id=matter_id, content=content, version=1, status="draft")
-        db.add(draft)
-        db.flush()
-        db.add(
-            AuditEvent(
-                entity_type="Draft",
-                entity_id=draft.id,
-                event_type="draft_created",
-                actor=actor,
-                details=f"Entwurf erstellt (Zweck: {purpose})",
-            )
+        """Delegiert an `create_new_draft_version` (app/drafting/versioning.py) -
+        siehe dort für die Begründung, warum das Anlegen neuer Draft-Zeilen
+        an EINER zentralen Stelle gebündelt ist. `event_type` unterscheidet
+        die allererste Version ("draft_created", unverändertes Verhalten)
+        von einer Folgeversion durch Neugenerierung ("draft_version_created").
+        """
+        event_type = "draft_created" if previous_draft is None else "draft_version_created"
+        details = (
+            f"Entwurf erstellt (Zweck: {purpose})"
+            if previous_draft is None
+            else f"Neue Version durch Neugenerierung (Zweck: {purpose})"
         )
-        db.commit()
-        db.refresh(draft)
-        return draft
+        return create_new_draft_version(
+            db,
+            matter_id=matter_id,
+            content=content,
+            previous_draft=previous_draft,
+            actor=actor,
+            event_type=event_type,
+            details=details,
+        )
 
     def _gather_uncertainties(self, matter_id: str, db: Session) -> list[str]:
         uncertainties: list[str] = []

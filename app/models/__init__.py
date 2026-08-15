@@ -7,6 +7,10 @@ String-Foreign-Key-Aufloesung keine Rolle.
 """
 
 from app.models.api_call_log import ApiCallLog
+from app.models.attorney_instruction import (
+    VALID_ATTORNEY_INSTRUCTION_STATUSES,
+    AttorneyInstruction,
+)
 from app.models.audit_event import AuditEvent, AuditLogImmutableError
 from app.models.base import Base
 from app.models.client import Client
@@ -40,6 +44,8 @@ __all__ = [
     "Deadline",
     "Draft",
     "DraftFeedback",
+    "AttorneyInstruction",
+    "VALID_ATTORNEY_INSTRUCTION_STATUSES",
     "Embedding",
     "Source",
     "KnowledgeItem",

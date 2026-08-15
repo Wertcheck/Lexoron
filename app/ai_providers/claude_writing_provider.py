@@ -38,6 +38,15 @@ markiere die Aussage als offenen Prüfpunkt statt sie zu erfinden.
 - Formuliere einen professionellen, sachlichen Kanzleistil.
 - Triff keine rechtliche Entscheidung - du erstellst einen Entwurf zur \
 Prüfung durch den Anwalt.
+- Falls "Anwaltliche Anmerkungen" im Auftrag enthalten sind: das sind \
+konkrete, verbindlich zu berücksichtigende Arbeitsanweisungen des \
+Anwalts für diese Version - setze sie um.
+- ERFINDE NIEMALS eine anwaltliche Position, Bewertung oder Entscheidung \
+zu einer Frage, zu der KEINE anwaltliche Anmerkung vorliegt. Das \
+Fehlen einer Anmerkung zu einem Punkt bedeutet NICHT Zustimmung, \
+Ablehnung oder irgendeine sonstige inhaltliche Position - es bedeutet \
+ausschließlich, dass dazu noch keine Weisung erteilt wurde. Behandle \
+einen solchen Punkt stattdessen als offenen Prüfpunkt.
 - Gib ausschließlich den fertigen Schreibtext zurück, keine Erklärungen \
 oder Meta-Kommentare.
 """
@@ -62,7 +71,7 @@ class ClaudeWritingProvider(Protocol):
 
 
 def build_writing_prompt(payload: ClaudeRequestPayload) -> str:
-    """Baut den an Claude gesendeten Text AUSSCHLIESSLICH aus den sechs
+    """Baut den an Claude gesendeten Text AUSSCHLIESSLICH aus den sieben
     Allowlist-Feldern - structurell unmöglich, hier versehentlich weitere
     Daten (z. B. rohe Aktendaten) einzuschleusen, da `ClaudeRequestPayload`
     keine weiteren Felder besitzt."""
@@ -82,4 +91,9 @@ def build_writing_prompt(payload: ClaudeRequestPayload) -> str:
         parts.append(f"Quellenverweise:\n{quellen}")
     if payload.schreibvorlage:
         parts.append(f"Vorlage/Beispielstil:\n{payload.schreibvorlage}")
+    if payload.anonymisierte_anwaltliche_anmerkungen:
+        parts.append(
+            "Anwaltliche Anmerkungen (verbindlicher Arbeitsauftrag für "
+            f"diese Version):\n{payload.anonymisierte_anwaltliche_anmerkungen}"
+        )
     return "\n\n".join(parts)

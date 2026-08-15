@@ -2,16 +2,20 @@
 (Architekturvorgabe Punkt 3, wörtlich).
 
 WICHTIGE DESIGN-ENTSCHEIDUNG: Alle Payload-Felder (Sachverhalt,
-Argumentationspunkte, Quellenverweise, Vorlage) werden GEMEINSAM in
-EINEM Pseudonymizer-Aufruf verarbeitet, nicht Feld für Feld separat.
-Grund: Der Pseudonymizer vergibt Platzhalter-Nummern pro Aufruf neu
-(siehe pseudonymizer.py) - würde man Felder einzeln pseudonymisieren,
-könnte derselbe Name in zwei Feldern zwei unterschiedliche Platzhalter
-bekommen (z. B. "Max Mustermann" im Sachverhalt als [MANDANT_01], aber
-in einem Argumentationspunkt fälschlich erneut als [MANDANT_01] einer
-ANDEREN Person). Durch das Zusammenführen in einen Text (mit eindeutigen,
-kollisionssicheren Trennmarkierungen) VOR der Pseudonymisierung bleiben
-Platzhalter über die gesamte Anfrage hinweg konsistent.
+Argumentationspunkte, Quellenverweise, Vorlage, anwaltliche Anmerkungen)
+werden GEMEINSAM in EINEM Pseudonymizer-Aufruf verarbeitet, nicht Feld für
+Feld separat. Grund: Der Pseudonymizer vergibt Platzhalter-Nummern pro
+Aufruf neu (siehe pseudonymizer.py) - würde man Felder einzeln
+pseudonymisieren, könnte derselbe Name in zwei Feldern zwei
+unterschiedliche Platzhalter bekommen (z. B. "Max Mustermann" im
+Sachverhalt als [MANDANT_01], aber in einer anwaltlichen Anmerkung
+fälschlich erneut als [MANDANT_01] einer ANDEREN Person). Durch das
+Zusammenführen in einen Text (mit eindeutigen, kollisionssicheren
+Trennmarkierungen) VOR der Pseudonymisierung bleiben Platzhalter über die
+gesamte Anfrage hinweg konsistent - das gilt seit Prompt 23 explizit auch
+für anwaltliche Anmerkungen (siebtes Allowlist-Feld, siehe
+gateway_schema.py): sie erhalten KEINEN eigenen, separaten
+Pseudonymisierungsdurchlauf.
 
 Ablauf (= der in der Vorgabe geforderte Datenfluss):
 LOCAL DATA -> lokale Analyse (bereits erledigt, Ergebnis wird übergeben)
@@ -41,6 +45,7 @@ _SEP_SACHVERHALT = "@@GATEWAY_SACHVERHALT@@"
 _SEP_ARGUMENTE = "@@GATEWAY_ARGUMENTE@@"
 _SEP_QUELLEN = "@@GATEWAY_QUELLEN@@"
 _SEP_VORLAGE = "@@GATEWAY_VORLAGE@@"
+_SEP_ANMERKUNGEN = "@@GATEWAY_ANMERKUNGEN@@"
 _SEP_LIST_ITEM = "@@GATEWAY_ITEM@@"
 
 _ALL_MARKERS = (
@@ -48,6 +53,7 @@ _ALL_MARKERS = (
     _SEP_ARGUMENTE,
     _SEP_QUELLEN,
     _SEP_VORLAGE,
+    _SEP_ANMERKUNGEN,
     _SEP_LIST_ITEM,
 )
 
@@ -81,16 +87,27 @@ class ClaudePrivacyGateway:
         quellenverweise: list[str] | None = None,
         stil: str | None = None,
         vorlage: str | None = None,
+        anwaltliche_anmerkungen: str | None = None,
         known_entities: dict[str, list[str]] | None = None,
     ) -> GatewayResult:
         """Baut eine sendefertige, pseudonymisierte Payload - oder
         blockiert (siehe GatewayResult.allowed). Ruft selbst KEINE Claude
-        API auf (das übernimmt erst Schritt 4)."""
+        API auf (das übernimmt erst Schritt 4).
+
+        `anwaltliche_anmerkungen` (siebtes Allowlist-Feld, siehe
+        gateway_schema.py) durchläuft GENAU DENSELBEN gemeinsamen
+        Pseudonymisierungs-/Security-Check-Durchlauf wie alle anderen
+        Felder - es gibt keinen Pfad, der anwaltliche Anmerkungen ungeprüft
+        an Claude weiterreichen könnte."""
         argumentationspunkte = argumentationspunkte or []
         quellenverweise = quellenverweise or []
 
         combined = self._build_combined_text(
-            sachverhalt, argumentationspunkte, quellenverweise, vorlage
+            sachverhalt,
+            argumentationspunkte,
+            quellenverweise,
+            vorlage,
+            anwaltliche_anmerkungen,
         )
 
         pseudonymized_combined, mappings = self.pseudonymizer.pseudonymize(
@@ -114,6 +131,7 @@ class ClaudePrivacyGateway:
             pseudo_argumente,
             pseudo_quellen,
             pseudo_vorlage,
+            pseudo_anmerkungen,
         ) = self._split_combined_text(pseudonymized_combined)
 
         payload = ClaudeRequestPayload(
@@ -123,6 +141,7 @@ class ClaudePrivacyGateway:
             anonymisierte_argumentationspunkte=pseudo_argumente,
             anonymisierte_quellenverweise=pseudo_quellen,
             schreibvorlage=pseudo_vorlage,
+            anonymisierte_anwaltliche_anmerkungen=pseudo_anmerkungen,
         )
 
         return GatewayResult(
@@ -142,11 +161,15 @@ class ClaudePrivacyGateway:
         argumentationspunkte: list[str],
         quellenverweise: list[str],
         vorlage: str | None,
+        anwaltliche_anmerkungen: str | None,
     ) -> str:
         clean_sachverhalt = _sanitize_input(sachverhalt)
         clean_argumente = [_sanitize_input(a) for a in argumentationspunkte]
         clean_quellen = [_sanitize_input(q) for q in quellenverweise]
         clean_vorlage = _sanitize_input(vorlage) if vorlage else ""
+        clean_anmerkungen = (
+            _sanitize_input(anwaltliche_anmerkungen) if anwaltliche_anmerkungen else ""
+        )
 
         parts = [
             _SEP_SACHVERHALT,
@@ -157,16 +180,19 @@ class ClaudePrivacyGateway:
             _SEP_LIST_ITEM.join(clean_quellen),
             _SEP_VORLAGE,
             clean_vorlage,
+            _SEP_ANMERKUNGEN,
+            clean_anmerkungen,
         ]
         return "\n".join(parts)
 
     @staticmethod
     def _split_combined_text(
         combined: str,
-    ) -> tuple[str, list[str], list[str], str | None]:
+    ) -> tuple[str, list[str], list[str], str | None, str | None]:
         pattern = re.compile(
             rf"{re.escape(_SEP_SACHVERHALT)}\n(.*?)\n{re.escape(_SEP_ARGUMENTE)}\n"
-            rf"(.*?)\n{re.escape(_SEP_QUELLEN)}\n(.*?)\n{re.escape(_SEP_VORLAGE)}\n(.*)",
+            rf"(.*?)\n{re.escape(_SEP_QUELLEN)}\n(.*?)\n{re.escape(_SEP_VORLAGE)}\n(.*?)\n"
+            rf"{re.escape(_SEP_ANMERKUNGEN)}\n(.*)",
             re.DOTALL,
         )
         match = pattern.match(combined)
@@ -177,12 +203,19 @@ class ClaudePrivacyGateway:
                 "möglicherweise durch die Pseudonymisierung verändert."
             )
 
-        sachverhalt_text, argumente_text, quellen_text, vorlage_text = match.groups()
+        (
+            sachverhalt_text,
+            argumente_text,
+            quellen_text,
+            vorlage_text,
+            anmerkungen_text,
+        ) = match.groups()
 
         argumente = (
             argumente_text.split(_SEP_LIST_ITEM) if argumente_text else []
         )
         quellen = quellen_text.split(_SEP_LIST_ITEM) if quellen_text else []
         vorlage = vorlage_text if vorlage_text else None
+        anmerkungen = anmerkungen_text if anmerkungen_text else None
 
-        return sachverhalt_text, argumente, quellen, vorlage
+        return sachverhalt_text, argumente, quellen, vorlage, anmerkungen

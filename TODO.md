@@ -241,8 +241,29 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       Akten-Tab-Badge (Signatur-Designelement) zeigt Aktenzeichen bzw. "nicht zugeordnet".
       Sidebar zeigt ehrlich alle 8 Bereiche, nur "Posteingang" tatsaechlich klickbar. Per
       Playwright-Screenshots visuell verifiziert. 19 neue Tests, 425/425 gesamt gruen.
+- [x] Anwaltliche Anmerkungen (AttorneyInstructions) – Architekturerweiterung, vom Anwalt
+      angefordert und freigegeben, 15.08. (kein nummerierter Plan-Prompt, ergänzt VOR
+      Prompt 24). Neues Modell `AttorneyInstruction` (bewusst getrennt von `DraftFeedback` -
+      Anmerkung = Arbeitsauftrag an die NÄCHSTE Version, Feedback = Bewertung/Position zu einer
+      VORLIEGENDEN Version). `Draft.previous_version_id` löst den bisherigen Versionierungs-Bug
+      (in-place-Überschreiben bei "approved_with_edits") strukturell: zentraler Helfer
+      `app/drafting/versioning.py` ist die EINZIGE Stelle, die neue Draft-Zeilen anlegt.
+      Privacy Gateway um siebtes Allowlist-Feld erweitert (`anonymisierte_anwaltliche_
+      anmerkungen`), läuft durch denselben Pseudonymisierungsdurchlauf wie die übrigen sechs
+      Felder. `WRITING_SYSTEM_PROMPT` verschärft: keine erfundene anwaltliche Position bei
+      fehlender Anweisung. Dashboard-Entwurfsansicht (`/dashboard/drafts/{id}`, noch nicht über
+      die Sidebar verlinkt - keine Listenansicht, das bleibt Prompt 24) mit Versions-Zeitleiste,
+      Anmerkungs-Panel (beide Aktionen), manueller Bearbeitung. Ein echter Bug beim Bauen
+      gefunden+behoben: "Anmerkung speichern" baute unnötig den vollen `DraftingService` auf und
+      scheiterte dadurch ohne konfigurierten Claude-API-Key, obwohl dafür keine Claude-Anbindung
+      nötig ist. 39 neue Tests (Gateway, Versionierung, AttorneyInstructionService, Web-Router),
+      463/463 gesamt grün. Siehe ARCHITECTURE.md §35 für Details und offene Punkte.
 - [ ] Akte-Ansicht
-- [ ] Entwurfsprüfung (Original/Entwurf, Quellen, Findings, Versionsvergleich)
+- [ ] Entwurfsprüfung (Original/Entwurf, Quellen, Findings, Versionsvergleich) – Grundgerüst
+      (Versions-Zeitleiste, Einzelansicht) bereits durch die AttorneyInstruction-Erweiterung
+      vorhanden; es fehlen noch: Listenansicht aller Entwürfe, Original-Nachricht/-Dokument
+      daneben, Quellen-/Findings-Anzeige aus der Review-Engine (Prompt 18), echter
+      Seite-an-Seite-Versionsvergleich (Diff), Sidebar-Verlinkung.
 - [ ] Postausgang (kein automatischer Versand)
 
 ## Phase 7 – Sicherheit und Produktisierung (Prompts 26–35)

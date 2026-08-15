@@ -1107,3 +1107,133 @@ Erster Baustein des serverseitig gerenderten Dashboards, implementiert in `app/w
   wie `test_api.py`. Zusaetzlich per Playwright-Screenshots (Desktop- und Mobil-Viewport)
   visuell verifiziert: Listenansicht, Detailansicht nach Klick, Filterwechsel, aktive
   Zeilen-/Tab-Markierung.
+
+## 35. Anwaltliche Anmerkungen / AttorneyInstructions & echte Draft-Versionierung (Ergänzung nach Prompt 22)
+
+Vom Anwalt angeforderte Architekturerweiterung (kein nummerierter Plan-Prompt, zwischen
+Prompt 22 und 24 eingefügt, nach vorheriger Analyse und expliziter Freigabe). Schließt eine
+Lücke im bisherigen Workflow: der Anwalt konnte einem KI-Entwurf noch keine strukturierten
+Änderungsanweisungen mitgeben, die als eigener Kontextbestandteil in eine Neugenerierung
+einfließen.
+
+### Begriffliche Abgrenzung (bewusst getrennt gehalten, nicht ineinander integriert)
+
+- **`DraftFeedback`** (Prompt 13, unverändert in seiner fachlichen Rolle): anwaltliche
+  BEWERTUNG/POSITION zu einem VORLIEGENDEN Entwurf (Freigabe/Ablehnung, ggf. mit Korrektur).
+  Rückblickend.
+- **`AttorneyInstruction`** (neu): konkreter Änderungs-/Arbeitsauftrag an die NÄCHSTE
+  Entwurfsversion ("Auf Punkt 3 eingehen", "§ 286 BGB berücksichtigen"). Vorausblickend.
+
+### Datenmodell
+
+- **`AttorneyInstruction`** (`app/models/attorney_instruction.py`): `matter_id`, `draft_id`
+  (Version, auf die sich die Anmerkung bezieht), `instruction_text`, `status`
+  (open/applied/discarded), `resulting_draft_id` (gesetzt bei erfolgreicher Anwendung),
+  `actor`, `created_at`.
+- **`Draft.previous_version_id`** (neues Self-FK-Feld): löst einen zuvor bestehenden
+  strukturellen Bug - `DraftFeedbackService` überschrieb bei "approved_with_edits" bislang die
+  bestehende Zeile in-place (`draft.content = ...; draft.version += 1`). Das widersprach der
+  Grundregel "ein bestehender Entwurf darf bei einer Neugenerierung nicht überschrieben
+  werden" und ist jetzt behoben: JEDE neue Version ist eine EIGENE Zeile.
+- Migration `f696903b174e`: SQLite unterstützt kein direktes `ALTER TABLE ADD CONSTRAINT` -
+  Alembic-Autogenerate erzeugte zunächst nicht-SQLite-kompatibles DDL, von Hand auf
+  `batch_alter_table` umgestellt und in beide Richtungen (upgrade/downgrade/upgrade) getestet.
+
+### Zentrale Versionierung (`app/drafting/versioning.py`)
+
+`create_new_draft_version` ist die EINZIGE Stelle im Projekt, die neue `Draft`-Zeilen anlegt -
+zentralisiert statt in drei Services (KI-Neugenerierung, `DraftFeedback`-Bearbeitung,
+eigenständige Dashboard-Bearbeitung) jeweils neu implementiert. `create_manual_edit_version`
+baut darauf auf und wird von BEIDEN "manuelle Bearbeitung"-Pfaden geteilt (`DraftFeedbackService`
+und die neue Dashboard-Aktion) - identische Versionierungs- und Audit-Logik an einer Stelle.
+
+### Privacy Gateway: siebtes Allowlist-Feld
+
+`ClaudeRequestPayload.anonymisierte_anwaltliche_anmerkungen` (`app/privacy/gateway_schema.py`).
+Läuft durch GENAU DENSELBEN gemeinsamen Pseudonymisierungs-/Security-Check-Durchlauf wie
+Sachverhalt/Argumentationspunkte/Quellenverweise/Vorlage (neue Trennmarkierung
+`@@GATEWAY_ANMERKUNGEN@@` in `gateway.py`) - kein separater, ungeprüfter Pfad. Per Test
+bewiesen: derselbe Name in Sachverhalt UND Anmerkung erhält denselben Platzhalter; unerkannte
+PII in der Anmerkung blockiert die gesamte Anfrage genauso wie im Sachverhalt.
+
+### KI-Verhalten: keine erfundene anwaltliche Position
+
+`WRITING_SYSTEM_PROMPT` (`app/ai_providers/claude_writing_provider.py`) um eine explizite Regel
+ergänzt: das Fehlen einer anwaltlichen Anmerkung zu einem Punkt bedeutet NICHT Zustimmung,
+Ablehnung oder irgendeine sonstige Position - ein solcher Punkt ist als offener Prüfpunkt zu
+behandeln, nicht selbst zu entscheiden.
+
+### AttorneyInstructionService (`app/attorney_instructions/`)
+
+Zwei getrennte Methoden, analog zum Muster von `DraftFeedbackService`:
+- `create_instruction`: speichert NUR (status="open"), löst KEINE Claude-Anfrage aus.
+- `apply_instruction`: löst eine Neugenerierung aus (`DraftingService.create_draft` mit
+  `previous_draft`+`attorney_anmerkungen`), markiert die Anmerkung nur bei ERFOLG als
+  "applied" mit `resulting_draft_id` - bei Blockierung/Fehler bleibt sie "open" (nichts wurde
+  tatsächlich angewendet), damit ein späterer erneuter Versuch möglich bleibt.
+
+**Design-Entscheidung, dokumentiert statt stillschweigend entschieden:** die Neugenerierung
+baut den Aktenkontext (Sachverhalt/Quellen/Wissen) unverändert aus den AKTUELLEN Aktendaten neu
+auf - sie erhält NICHT zusätzlich den Text der vorherigen Draft-Version als Eingabe (die
+Allowlist-Erweiterung ist auf GENAU EIN neues Feld beschränkt, wie vom Anwalt vorgegeben). Für
+Anmerkungen, die wörtlich auf den bisherigen Text Bezug nehmen (z. B. "diesen Absatz
+streichen"), ist das eine bekannte Grenze - siehe offene Punkte unten.
+
+### Gefundener und behobener Bug: Web-Layer
+
+Die Dashboard-Aktion "Anmerkung speichern" baute ursprünglich über ihre FastAPI-Dependency
+unnötig den VOLLEN `DraftingService` auf (inkl. Prüfung auf konfigurierten Claude-API-Key) -
+obwohl `create_instruction` diesen nie verwendet. Das führte dazu, dass reines Speichern einer
+Anmerkung mit 500 fehlschlug, solange kein Claude-API-Key hinterlegt war. Behoben durch
+`drafting_service: DraftingService | None = None` in `AttorneyInstructionService.__init__` und
+eine eigene, leichtgewichtige Factory `get_attorney_instruction_service_for_saving_only`
+(`app/web/service_factory.py`) für genau diesen Fall.
+
+### Web-Oberfläche (`app/web/drafts_router.py`, `templates/draft_detail.html`)
+
+`/dashboard/drafts/{draft_id}`: Versions-Zeitleiste (klickbare Kette v1 → v2 → ...),
+Entwurfstext, aufklappbare manuelle Bearbeitung (erzeugt neue Version), Anmerkungs-Panel mit
+beiden geforderten Aktionen ("Anmerkung speichern" / "Änderungen übernehmen & neu
+formulieren"), Historie bisheriger Anmerkungen zur jeweiligen Version. Noch NICHT über die
+Sidebar erreichbar (keine Listenansicht aller Entwürfe - das bleibt Teil von Prompt 24) - nur
+per direkter URL. Bewusst KEINE HTMX-Partials hier (anders als die Inbox): volle
+Seiten-Redirects nach jeder Aktion, da diese Formulare folgenreiche Aktionen auslösen
+(Neugenerierung über die Claude API) - einfacher nachvollziehbar und einfacher zu testen.
+
+`app/web/service_factory.py` baut erstmals die "echten" Services (mit echtem
+Embedding-Provider, echtem `AnthropicClaudeWritingProvider`) für die Anwendungsschicht - bisher
+existierten diese Services ausschließlich in Tests. Fehlt der Claude-API-Key, wird eine klare
+`WritingProviderNotConfiguredError` geworfen und im Dashboard als freundliche Fehlermeldung
+angezeigt (per Playwright-Screenshot verifiziert), kein Stacktrace.
+
+### PromptContextBuilder-Altlast (Prompt 16) - bewusst NICHT angefasst
+
+Bereits vor dieser Erweiterung festgestellt und dokumentiert: `PromptContextBuilder`
+(`app/promptlayer/`, Prompt 16) hat ein eigenes, nie mit der tatsächlichen Erzeugungs-Pipeline
+verdrahtetes Konzept einer "user_instruction"-Sektion. Wie vom Anwalt vorgegeben, wird das hier
+NICHT nachträglich integriert - bleibt offen dokumentierter technischer Schuldposten, keine
+Architekturänderung daraus abgeleitet.
+
+### Getestet (39 neue Tests, siehe Abschlussbericht im Chat für die vollständige Aufschlüsselung)
+
+`tests/test_privacy_gateway.py` (+6), `tests/test_draft_versioning.py` (neu, 6),
+`tests/test_attorney_instructions.py` (neu, 12), `tests/test_web_drafts.py` (neu, 13),
+`tests/test_feedback_service.py` (komplett auf neue Versionierungs-Semantik umgeschrieben).
+Schwerpunkte: kein bestehender Draft wird überschrieben (per DB-Reload verifiziert, nicht nur
+am Python-Objekt), `AttorneyInstruction.draft_id` verweist auf die korrekte Version,
+`resulting_draft_id`-Verknüpfung stimmt, Versionskette über mehrere Runden nachvollziehbar,
+Anmerkungen erreichen Claude nachweislich nur pseudonymisiert (kein Bypass des Privacy
+Gateway). 463/463 Tests gesamt grün (1 weiterhin sauber übersprungen).
+
+### Offene Punkte
+
+1. Keine Listenansicht aller Entwürfe/Sidebar-Verlinkung (Teil von Prompt 24).
+2. Neugenerierung berücksichtigt den vorherigen Entwurfstext nicht als Eingabe (siehe
+   Design-Entscheidung oben) - Anmerkungen, die wörtlich auf konkrete Textstellen verweisen,
+   führen zu einer komplett neu formulierten Version, keinem gezielten Patch.
+3. `PromptContextBuilder` bleibt unintegrierte Altlast (unverändert, wie vorgegeben).
+4. Manuelle End-to-End-Verifikation eines ECHTEN Claude-API-Aufrufs mit gültigem Schlüssel
+   steht aus (in der Sandbox nicht sinnvoll testbar/nicht mit Kosten für den Anwalt zu
+   testen) - empfohlen auf James's Windows-Maschine nach Hinterlegen des Schlüssels.
+5. Kein Session-/Auth-System - das Feld "Ihr Kürzel/E-Mail" in den Formularen ist ein
+   manueller Platzhalter für den Actor bis Prompt 26.
