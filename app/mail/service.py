@@ -92,8 +92,32 @@ class MailIngestionService:
         self, attachment: FetchedAttachment, message: Message, db: Session
     ) -> Document:
         self.attachment_storage_dir.mkdir(parents=True, exist_ok=True)
-        destination_filename = f"{uuid.uuid4()}_{attachment.filename}"
+        # SICHERHEITSKRITISCH (gefunden + behoben im Security Review,
+        # Prompt 27): `attachment.filename` stammt direkt aus einem
+        # E-Mail-Header (Content-Disposition) und ist damit vollstaendig
+        # durch den ABSENDER kontrollierbar - z. B.
+        # "../../../../home/kanzlei/.ssh/authorized_keys". Ohne
+        # Bereinigung wuerde `attachment_storage_dir / destination_filename`
+        # eingebettete "/"/".." als echte Pfadsegmente interpretieren und
+        # Dateien AUSSERHALB von `attachment_storage_dir` schreiben
+        # (Path Traversal / beliebiges Dateischreiben). `Path(...).name`
+        # reduziert IMMER auf die letzte Pfadkomponente, unabhaengig von
+        # enthaltenen Trennzeichen - siehe
+        # tests/test_security_review.py::test_email_attachment_path_traversal_is_blocked
+        # fuer den Beweis. Gleiches Muster wie bereits in
+        # app/ingestion/intake.py (dort schon immer sicher, da
+        # `source_path.name` verwendet wird).
+        safe_filename = Path(attachment.filename).name or "unbenannt"
+        destination_filename = f"{uuid.uuid4()}_{safe_filename}"
         destination_path = self.attachment_storage_dir / destination_filename
+        # Tiefenverteidigung: selbst nach der Bereinigung zusaetzlich
+        # verifizieren, dass der Zielpfad tatsaechlich innerhalb des
+        # Speicherverzeichnisses liegt, bevor geschrieben wird.
+        if destination_path.resolve().parent != self.attachment_storage_dir.resolve():
+            raise ValueError(
+                f"Sicherheitsabbruch: Zieldateiname fuehrt ausserhalb des "
+                f"Speicherverzeichnisses ({attachment.filename!r})"
+            )
         destination_path.write_bytes(attachment.content)
 
         content_hash = hashlib.sha256(attachment.content).hexdigest()

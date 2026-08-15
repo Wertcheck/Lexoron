@@ -56,6 +56,48 @@ def categorize_block_reasons(reasons: list[str]) -> str | None:
     return ",".join(matched_categories)
 
 
+_FRIENDLY_BLOCK_MESSAGES: dict[str, str] = {
+    "purpose_not_allowed": "Der angeforderte Zweck ist nicht freigegeben.",
+    "residual_pii_detected": (
+        "Es wurden nach der Pseudonymisierung weiterhin erkennbare Muster gefunden."
+    ),
+    "mapping_inconsistency": "Interner Konsistenzfehler bei der Pseudonymisierung.",
+    "unrecognized_entity_suspected": (
+        "Im Text wurden möglicherweise nicht erkannte Namen/Daten gefunden."
+    ),
+    "unknown_block_reason": "Die Anfrage wurde aus Datenschutzgründen blockiert.",
+}
+
+
+def friendly_block_message(reasons: list[str]) -> str:
+    """Wie `categorize_block_reasons`, aber als für den Anwalt lesbarer
+    Satz statt Kategorie-Codes - WICHTIG (Security Review, Prompt 27,
+    gefundene Schwachstelle): darf NIEMALS die rohen `reasons` selbst
+    zurückgeben oder enthalten. Diese können laut Modul-Docstring oben
+    tatsächlich erkannte, sensible Werte im Klartext enthalten (z. B.
+    einen erkannten Namen). Roh angezeigt (insbesondere in einer
+    Redirect-URL, siehe app/web/drafts_router.py) würden diese Werte
+    sonst per Referer-Header an extern geladene Ressourcen (z. B. Google
+    Fonts) durchsickern oder in Web-Server-Zugriffslogs landen - genau
+    die Art Leck, die die gesamte Privacy-Gateway-Architektur verhindern
+    soll. Siehe
+    tests/test_security_review.py::test_blocked_reason_never_leaks_pii_into_redirect_url.
+    """
+    categories = categorize_block_reasons(reasons)
+    if categories is None:
+        return "Unbekannter Fehler."
+    messages = [
+        _FRIENDLY_BLOCK_MESSAGES.get(cat, "Blockiert aus Datenschutzgründen.")
+        for cat in categories.split(",")
+    ]
+    # dedupliziert, Reihenfolge erhalten
+    seen: list[str] = []
+    for msg in messages:
+        if msg not in seen:
+            seen.append(msg)
+    return " ".join(seen)
+
+
 def compute_anonymized_prompt_id(payload: ClaudeRequestPayload) -> str:
     """Nicht-umkehrbarer Hash der (bereits pseudonymisierten) Payload -
     für Nachvollziehbarkeit ('war das derselbe Aufruf'), ohne den Inhalt

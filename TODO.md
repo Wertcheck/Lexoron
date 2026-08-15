@@ -298,7 +298,21 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       52 neue Auth-Tests (alle 18 vom Anwalt geforderten Szenarien abgedeckt), 541/541 gesamt
       grün. Siehe ARCHITECTURE.md §38 für Details, Rechte-Matrix-Bestätigung und offene
       Sicherheitspunkte.
-- [ ] Security Review + SECURITY.md
+- [x] Security Review + SECURITY.md – Prompt 27, 15.08. Vollständiger Bericht in
+      `SECURITY_REVIEW.md`. Zwei KRITISCHE, bis dahin unentdeckte Schwachstellen gefunden und
+      behoben: (1) Path Traversal über E-Mail-Anhang-Dateinamen - erlaubte beliebiges
+      Dateischreiben ausserhalb des Speicherverzeichnisses, aus der Ferne ohne
+      Authentifizierung auslösbar; (2) PII-Leck über Redirect-URL/Referer-Header bei
+      blockierten Claude-Anfragen (erkannte Namen landeten im Klartext in der URL, damit
+      potenziell im Referer-Header an Google Fonts). Zusätzlich behoben: Symlink-Angriff auf
+      den überwachten Scan-Ordner. Anti-Prompt-Injection-Klausel in beide System-Prompts
+      (Writing/Review) ergänzt - deckt strukturell alle 5 geforderten Kanäle (E-Mail/PDF/OCR/
+      Rechtsquellen/Kanzlei-Wissen) gleichzeitig ab, da alle durch dieselben Payload-Felder
+      laufen (per Test bewiesen). Die 5 aus Prompt 26 mitgebrachten offenen Punkte einzeln
+      neu bewertet (Risiko Prototyp/Produktiv, Fix, Priorität, Pilot- vs. Produktiv-Gate) -
+      keiner blockiert einen internen Pilotbetrieb, mehrere sind vor echtem
+      Produktiv-/Mehrkanzlei-Einsatz zwingend. 12 neue Angriffssimulationstests, 553/553
+      gesamt grün. Siehe SECURITY_REVIEW.md für die vollständige Bewertung.
 - [ ] Prompt-Injection-Schutz + Tests mit manipulierten Dokumenten
 - [ ] Synthetischer Testdaten-Simulator
 - [ ] End-to-End-Test

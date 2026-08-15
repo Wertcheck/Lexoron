@@ -53,6 +53,23 @@ class IntakeService:
         """
         source_path = Path(source_path)
 
+        # SICHERHEITSKRITISCH (Security Review, Prompt 27): der
+        # ueberwachte Scan-Ordner (app/ingestion/watcher.py) kann von
+        # mehreren Personen/Geraeten (Netzlaufwerk, Scanner) beschrieben
+        # werden. Ein dort abgelegter SYMLINK wuerde von
+        # `shutil.copy2`/`Path.stat()` (beide folgen Symlinks per Default)
+        # transparent aufgeloest - eine boesartig oder versehentlich
+        # platzierte Verknuepfung auf eine Datei AUSSERHALB des Ordners
+        # (z. B. eine andere Akte, eine Systemdatei) wuerde sonst
+        # unbemerkt in die Kanzlei-Datenbank kopiert. Symlinks werden
+        # daher grundsaetzlich abgelehnt, bevor irgendetwas gelesen wird -
+        # siehe tests/test_security_review.py::test_intake_rejects_symlinks.
+        if source_path.is_symlink():
+            raise IntakeError(
+                f"Symbolische Verknüpfungen werden aus Sicherheitsgründen "
+                f"nicht erfasst: {source_path}"
+            )
+
         if not wait_until_stable(
             source_path, timeout_seconds=stability_timeout_seconds
         ):

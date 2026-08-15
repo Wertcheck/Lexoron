@@ -54,6 +54,7 @@ from app.models import (
     User,
 )
 from app.outbox.service import OutboxEntryAlreadyExistsError, OutboxService
+from app.privacy.api_logger import friendly_block_message
 from app.web.service_factory import (
     WritingProviderNotConfiguredError,
     get_attorney_instruction_service,
@@ -339,9 +340,12 @@ def save_and_apply_instruction(
     )
 
     if not result.drafting_result.success:
-        reasons = "; ".join(result.drafting_result.blocked_reasons) or "Unbekannter Fehler"
+        # Sicherheitskritisch (Security Review, Prompt 27): NIEMALS die
+        # rohen blocked_reasons in die URL einbetten - koennen erkannte
+        # PII im Klartext enthalten (siehe app/privacy/api_logger.py).
+        safe_message = friendly_block_message(result.drafting_result.blocked_reasons)
         return RedirectResponse(
-            url=f"/dashboard/drafts/{draft_id}?error=Neugenerierung blockiert: {reasons}",
+            url=f"/dashboard/drafts/{draft_id}?error=Neugenerierung blockiert: {safe_message}",
             status_code=303,
         )
 
@@ -433,9 +437,9 @@ def regenerate_draft(
     )
 
     if not result.success:
-        reasons = "; ".join(result.blocked_reasons) or "Unbekannter Fehler"
+        safe_message = friendly_block_message(result.blocked_reasons)
         return RedirectResponse(
-            url=f"/dashboard/drafts/{draft_id}?error=Neugenerierung blockiert: {reasons}",
+            url=f"/dashboard/drafts/{draft_id}?error=Neugenerierung blockiert: {safe_message}",
             status_code=303,
         )
 
@@ -465,9 +469,9 @@ def review_draft(
     outcome = review_engine.review_draft(draft.id, db, actor=current_user.email)
 
     if not outcome.success:
-        reasons = "; ".join(outcome.blocked_reasons) or "Unbekannter Fehler"
+        safe_message = friendly_block_message(outcome.blocked_reasons)
         return RedirectResponse(
-            url=f"/dashboard/drafts/{draft_id}?error=Prüfung blockiert: {reasons}",
+            url=f"/dashboard/drafts/{draft_id}?error=Prüfung blockiert: {safe_message}",
             status_code=303,
         )
 
