@@ -124,3 +124,16 @@ def activate_user(
     user = get_or_404(db, User, user_id, "Nutzer")
     UserService().set_active(db, user, True, actor=current_user.email)
     return RedirectResponse(url="/dashboard/admin/users", status_code=303)
+
+
+@router.post("/{user_id}/force-logout")
+def force_logout_user(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("admin")),
+) -> RedirectResponse:
+    """Beendet alle laufenden Sessions eines Nutzers sofort, ohne das
+    Passwort zu ändern (Prompt 29) - z. B. bei einem gestohlenen Gerät."""
+    user = get_or_404(db, User, user_id, "Nutzer")
+    UserService().force_logout(db, user, actor=current_user.email)
+    return RedirectResponse(url="/dashboard/admin/users", status_code=303)

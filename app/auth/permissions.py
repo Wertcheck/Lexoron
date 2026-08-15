@@ -29,6 +29,7 @@ app/models/role.py-Docstring und ARCHITECTURE.md §38 für die Abwägung.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timezone
 
 from fastapi import Depends, Form, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -137,6 +138,23 @@ def _load_user_from_session(request: Request, db: Session, settings: Settings) -
     user = db.get(User, payload["user_id"])
     if user is None or not user.is_active:
         return None
+    # Session-Widerruf (Prompt 29): ein Token, das VOR der letzten
+    # Passwortänderung/Admin-Sperre ausgestellt wurde, ist ungültig -
+    # schließt die Lücke "gestohlenes Cookie überlebt Passwortänderung".
+    # `issued_at` stammt aus der itsdangerous-Signatur selbst (siehe
+    # session.py), ist also vom Client nicht manipulierbar.
+    invalidated_after = user.sessions_invalidated_after
+    if invalidated_after is not None:
+        # SQLite gibt DateTime(timezone=True)-Werte als NAIVE Datetimes
+        # zurück (keine echte TZ-Unterstützung) - ohne diese Normalisierung
+        # würde der Vergleich mit dem TZ-bewussten `issued_at` (aus
+        # itsdangerous) eine TypeError auslösen. Der Wert wird immer als
+        # UTC geschrieben (siehe app/auth/service.py), daher hier sicher
+        # als UTC interpretierbar.
+        if invalidated_after.tzinfo is None:
+            invalidated_after = invalidated_after.replace(tzinfo=timezone.utc)
+        if payload["issued_at"] < invalidated_after:
+            return None
     request.state.csrf_token = payload["csrf"]
     request.state.user = user
     return user

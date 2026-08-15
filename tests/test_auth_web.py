@@ -58,6 +58,19 @@ def _working_drafting_service() -> DraftingService:
     )
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter() -> Iterator[None]:
+    """Der Login-Rate-Limiter (Prompt 29) ist ein Prozess-Singleton -
+    ohne Reset würden fehlgeschlagene Logins aus früheren Tests sich
+    über die gesamte Testsuite hinweg aufsummieren und irgendwann
+    spätere, eigentlich korrekte Logins fälschlich sperren."""
+    from app.auth.rate_limit import login_rate_limiter
+
+    login_rate_limiter.reset()
+    yield
+    login_rate_limiter.reset()
+
+
 @pytest.fixture()
 def db_session() -> Iterator[Session]:
     engine = create_engine(

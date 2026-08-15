@@ -17,6 +17,26 @@ optional).
 
 ### 1. Fehlendes Rate-Limiting beim Login
 
+**Status: BEHOBEN (Nachtrag, außerhalb der Prompt-Reihenfolge, auf Wunsch des Anwalts vorgezogen,
+da der Pilotbetrieb mit echten Mandantendaten stattfindet).** Ursprüngliche Bewertung unten
+zur Nachvollziehbarkeit erhalten.
+
+Prozesslokaler In-Memory-Rate-Limiter (`app/auth/rate_limit.py`, `LoginRateLimiter`):
+5 Fehlversuche innerhalb von 15 Minuten sperren sowohl den betroffenen E-Mail-Schlüssel als
+auch den IP-Schlüssel für weitere 15 Minuten - schützt sowohl gegen Brute-Force auf ein
+einzelnes Konto als auch gegen Credential-Stuffing über viele Konten von derselben Quelle.
+Bewusst kein Redis/externe Abhängigkeit - passend zur bestehenden Ein-Prozess-Architektur.
+Live am laufenden Server verifiziert (5 Fehlversuche → Sperre, selbst das korrekte Passwort
+wird danach abgelehnt) sowie per Test bewiesen
+(`tests/test_rate_limiting_and_session_revocation.py`).
+
+**Bekannte Grenze:** der Zähler ist NICHT prozessübergreifend/persistent - ein Neustart der
+Anwendung setzt ihn zurück. Für den aktuellen Ein-Prozess-Betrieb akzeptabel; bei einem
+Mehr-Prozess-/Load-Balancer-Deployment müsste der Zähler in einen gemeinsamen Speicher
+(Redis) verlagert werden.
+
+Ursprüngliche Bewertung (Prompt 26/27):
+
 - **Prototyp-Risiko: niedrig.** Ein Angreifer bräuchte bereits Netzwerkzugriff auf die
   interne Instanz; bei einer Handvoll Nutzern und Argon2 (absichtlich langsam, ~100 ms/Hash)
   ist Online-Brute-Force selbst ohne Drosselung unpraktikabel langsam.
@@ -34,6 +54,31 @@ optional).
   `app/web/auth_router.py: login_submit`).
 
 ### 2. Fehlender sofortiger serverseitiger Session-Widerruf
+
+**Status: TEILWEISE KORRIGIERT UND BEHOBEN (Nachtrag).**
+
+**Korrektur zur ursprünglichen Einschätzung:** Bei erneuter Prüfung des Codes im Rahmen
+dieses Nachtrags stellte sich heraus, dass die ursprüngliche Bewertung an einer Stelle zu
+pessimistisch war: `_load_user_from_session` (`app/auth/permissions.py`) lädt den Nutzer bei
+JEDER Anfrage frisch aus der Datenbank und prüft `is_active` live - eine **Deaktivierung
+wirkt bereits seit Prompt 26 sofort**, nicht erst nach bis zu 8 Stunden, wie ursprünglich
+hier behauptet. Das wird jetzt zusätzlich per Regressionstest abgesichert
+(`test_deactivation_still_works_immediately_as_before`).
+
+Die tatsächliche, engere Lücke: ein bereits gestohlenes Session-Cookie überlebte bislang
+eine **Passwortänderung** unverändert (das Token trug nur die Nutzer-ID, keinen
+Passwort-Stand). Behoben durch `User.sessions_invalidated_after` - wird bei jeder
+Passwortänderung UND bei jeder Admin-Deaktivierung gesetzt; jedes Session-Token, das davor
+ausgestellt wurde, gilt ab sofort als ungültig (Ausstellungszeitpunkt stammt aus der
+itsdangerous-Signatur selbst, vom Client nicht manipulierbar). Zusätzlich eine neue
+Admin-Aktion "Sessions beenden" ergänzt (`UserService.force_logout`) - beendet alle
+laufenden Sessions eines Nutzers, ohne das Passwort zu ändern (z. B. bei einem gestohlenen/
+verlorenen Gerät). Per Test bewiesen: eine zweite ("gestohlene") Session wird durch eine
+Passwortänderung sofort ungültig, während eine danach neu ausgestellte Session normal
+weiterfunktioniert.
+
+Ursprüngliche Bewertung (Prompt 26/27, mit der oben genannten Korrektur zur Kenntnis zu
+nehmen):
 
 - **Prototyp-Risiko: niedrig.** Sessions sind signierte, client-seitige Cookies ohne
   Server-Store (bewusste Design-Entscheidung, siehe ARCHITECTURE.md §38). Ein deaktivierter

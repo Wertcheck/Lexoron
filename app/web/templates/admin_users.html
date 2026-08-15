@@ -77,6 +77,10 @@
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                     <button type="submit" class="btn btn--danger">Deaktivieren</button>
                   </form>
+                  <form method="post" action="/dashboard/admin/users/{{ user.id }}/force-logout" style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                    <button type="submit" class="btn" title="Beendet alle laufenden Sitzungen dieses Nutzers, ohne das Passwort zu ändern">Sessions beenden</button>
+                  </form>
                 {% else %}
                   <form method="post" action="/dashboard/admin/users/{{ user.id }}/activate" style="display:inline;">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />

@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.auth.permissions import get_current_user_optional, require_login
+from app.auth.rate_limit import login_rate_limiter
 from app.auth.service import AuthService, UserService
 from app.auth.session import SESSION_COOKIE_NAME, create_session_token
 from app.config import Settings, get_settings
@@ -57,14 +58,37 @@ def login_submit(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> RedirectResponse:
+    normalized_email = email.strip().lower()
+    client_ip = request.client.host if request.client else "unknown"
+    # Zwei unabhängige Schlüssel (Prompt 29): pro E-Mail (klassisches
+    # Brute-Force gegen EIN Konto) UND pro IP (verhindert, dass dieselbe
+    # Quelle viele VERSCHIEDENE Konten durchprobiert). Schon EINE der
+    # beiden Sperren blockiert den Versuch.
+    email_key = f"email:{normalized_email}"
+    ip_key = f"ip:{client_ip}"
+    if login_rate_limiter.is_locked_out(email_key) or login_rate_limiter.is_locked_out(
+        ip_key
+    ):
+        return RedirectResponse(
+            url=(
+                "/dashboard/login?error=Zu viele Fehlversuche - bitte in 15 Minuten "
+                f"erneut versuchen&next={next}"
+            ),
+            status_code=303,
+        )
+
     user = AuthService().authenticate(email, password, db)
     if user is None:
+        login_rate_limiter.record_failure(email_key)
+        login_rate_limiter.record_failure(ip_key)
         # Bewusst dieselbe, generische Fehlermeldung fuer "unbekannte
         # E-Mail" und "falsches Passwort" (siehe AuthService.authenticate).
         return RedirectResponse(
             url=f"/dashboard/login?error=E-Mail oder Passwort falsch&next={next}",
             status_code=303,
         )
+    login_rate_limiter.record_success(email_key)
+    login_rate_limiter.record_success(ip_key)
 
     token, _csrf = create_session_token(user.id, settings)
     target = "/dashboard/change-password" if user.must_change_password else next

@@ -324,6 +324,22 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       begrenzt. OCR-Artefakt-Simulation, manipulierte externe Quelle, kombinierter E-Mail-
       Body+Anhang-Angriff ebenfalls getestet. 12 neue Tests, 565/565 gesamt grün. Siehe
       SECURITY_REVIEW.md, Abschnitt 2.1 und "Ergänzung Prompt 28".
+- [x] Nachtrag (außerhalb der Prompt-Reihenfolge, vorgezogen), 15.08.: Rate-Limiting beim
+      Login + Session-Sofortwiderruf bei Passwortänderung. Auf Wunsch des Anwalts vorgezogen,
+      da der Pilotbetrieb mit ECHTEN Mandantendaten stattfinden wird (beide Punkte waren im
+      Security Review als "vor Pilotbetrieb mit echten Daten empfehlenswert" bzw. "vor
+      öffentlichem Zugriff zwingend" bewertet, Netzwerkerreichbarkeit des Pilotbetriebs zum
+      jetzigen Zeitpunkt nicht final entschieden - daher defensiv vorgezogen statt auf die
+      Netzwerkentscheidung zu warten). Wichtige Korrektur dabei entdeckt: die ursprüngliche
+      Einschätzung "Deaktivierung wirkt erst nach bis zu 8h" war zu pessimistisch - wirkt
+      bereits seit Prompt 26 sofort (jede Anfrage lädt den Nutzer frisch aus der DB). Die
+      tatsächliche Lücke war enger: ein gestohlenes Cookie überlebte eine Passwortänderung
+      unverändert - behoben über `User.sessions_invalidated_after`. Prozesslokaler
+      In-Memory-Rate-Limiter (kein Redis) sperrt nach 5 Fehlversuchen für 15 Minuten, sowohl
+      pro E-Mail als auch pro IP. Neue Admin-Aktion "Sessions beenden" (ohne Passwortzwang).
+      2FA und die produktionsweite Härtung (öffentliche Erreichbarkeit) bewusst weiterhin
+      zurückgestellt - siehe SECURITY_REVIEW.md für die aktualisierte Bewertung. 13 neue
+      Tests, 578/578 gesamt grün.
 - [ ] Synthetischer Testdaten-Simulator
 - [ ] End-to-End-Test
 - [ ] Fehler-/Retry-System

@@ -5,6 +5,7 @@ Admin-only) – Prompt 26.
 from __future__ import annotations
 
 import secrets
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -143,6 +144,12 @@ class UserService:
 
     def set_active(self, db: Session, user: User, is_active: bool, *, actor: str) -> User:
         user.is_active = is_active
+        if not is_active:
+            # Deaktivierung wirkt ohnehin sofort (jede Anfrage laedt den
+            # Nutzer frisch, siehe app/auth/permissions.py), aber
+            # `sessions_invalidated_after` zusaetzlich zu setzen macht die
+            # Absicht explizit nachvollziehbar und ist unschaedlich.
+            user.sessions_invalidated_after = datetime.now(timezone.utc)
         db.add(
             AuditEvent(
                 entity_type="User",
@@ -156,14 +163,39 @@ class UserService:
         db.refresh(user)
         return user
 
+    def force_logout(self, db: Session, user: User, *, actor: str) -> User:
+        """Beendet ALLE aktuell laufenden Sessions eines Nutzers sofort,
+        OHNE das Passwort zu ändern (Prompt 29) - z. B. bei einem
+        gestohlenen/verlorenen Gerät, wenn eine Passwortänderung allein
+        (noch) nicht nötig erscheint, aber Vorsicht geboten ist."""
+        user.sessions_invalidated_after = datetime.now(timezone.utc)
+        db.add(
+            AuditEvent(
+                entity_type="User",
+                entity_id=user.id,
+                event_type="sessions_force_logged_out",
+                actor=actor,
+                details=None,
+            )
+        )
+        db.commit()
+        db.refresh(user)
+        return user
+
     def change_password(
         self, db: Session, user: User, new_password: str, *, actor: str
     ) -> User:
         """Setzt ein neues Passwort UND löscht `must_change_password`.
         `new_password` existiert nur für die Dauer dieses Aufrufs als
-        Klartext - wird nicht geloggt (auch nicht im Audit-`details`)."""
+        Klartext - wird nicht geloggt (auch nicht im Audit-`details`).
+
+        Widerruft zusätzlich ALLE bestehenden Sessions dieses Nutzers
+        (`sessions_invalidated_after`, Prompt 29) - schließt die Lücke,
+        dass ein bereits gestohlenes Session-Cookie eine Passwortänderung
+        sonst unbeeindruckt überlebt hätte."""
         user.password_hash = hash_password(new_password)
         user.must_change_password = False
+        user.sessions_invalidated_after = datetime.now(timezone.utc)
         db.add(
             AuditEvent(
                 entity_type="User",

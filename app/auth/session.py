@@ -47,10 +47,18 @@ def read_session_token(token: str, settings: Settings) -> dict | None:
     Gibt `None` zurück bei fehlender/falscher Signatur ODER abgelaufener
     Session (älter als `session_max_age_seconds`) - beide Fälle werden
     hier bewusst gleich behandelt (kein Unterschied für den Aufrufer, der
-    ohnehin nur "eingeloggt oder nicht" braucht)."""
+    ohnehin nur "eingeloggt oder nicht" braucht).
+
+    Der zurückgegebene Payload enthält zusätzlich `"issued_at"` (UTC,
+    aus der itsdangerous-Signatur selbst, nicht aus dem Payload-Inhalt -
+    kann also nicht vom Client manipuliert werden) - Grundlage für den
+    Session-Widerruf bei Passwortänderung (siehe
+    app/auth/permissions.py: `_load_user_from_session`)."""
     try:
-        return _serializer(settings).loads(
-            token, max_age=settings.session_max_age_seconds
+        payload, timestamp = _serializer(settings).loads(
+            token, max_age=settings.session_max_age_seconds, return_timestamp=True
         )
     except (BadSignature, SignatureExpired):
         return None
+    payload["issued_at"] = timestamp
+    return payload
