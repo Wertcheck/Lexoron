@@ -31,6 +31,7 @@ from app.auth.permissions import ForcePasswordChangeError, NotAuthenticatedError
 from app.config import get_settings
 from app.web.auth_router import router as auth_web_router
 from app.web.drafts_router import router as drafts_web_router
+from app.web.errors_router import router as errors_web_router
 from app.web.outbox_router import router as outbox_web_router
 from app.web.router import router as web_router
 from app.web.users_router import router as users_web_router
@@ -88,6 +89,7 @@ app.include_router(drafts_web_router)
 app.include_router(outbox_web_router)
 app.include_router(auth_web_router)
 app.include_router(users_web_router)
+app.include_router(errors_web_router)
 app.mount(
     "/dashboard/static",
     StaticFiles(directory="app/web/static"),

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Fehler{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">Fehler &amp; Wiederholungen</h1>
+    <div class="topbar__meta">
+      <strong>{{ errors|length }}</strong> offene Einträge
+    </div>
+  </div>
+
+  <div class="draft-page">
+    <p class="form-hint" style="margin-bottom: 16px;">
+      Fehlgeschlagene technische Verarbeitungsschritte (z. B. OCR, Posteingangserfassung).
+      "Vorübergehend" eingestufte Fehler werden automatisch mit steigendem Zeitabstand erneut
+      versucht; "Dauerhaft" eingestufte oder nach mehreren Versuchen weiterhin fehlschlagende
+      Einträge benötigen eine manuelle Prüfung.
+    </p>
+
+    {% if errors %}
+      <table class="draft-table">
+        <thead>
+          <tr>
+            <th>Vorgang</th>
+            <th>Betrifft</th>
+            <th>Status</th>
+            <th>Versuche</th>
+            <th>Meldung</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for error in errors %}
+            <tr>
+              <td class="mono">{{ error.operation }}</td>
+              <td class="mono">{{ error.entity_type }} · {{ error.entity_id[:8] }}…</td>
+              <td>
+                <span class="tag {% if error.status == 'failed_permanent' %}tag--outbound{% else %}tag--unmatched{% endif %}">
+                  {{ "dauerhaft fehlgeschlagen" if error.status == "failed_permanent" else "wartet auf Wiederholung" }}
+                </span>
+              </td>
+              <td class="mono">{{ error.attempt_count }} / {{ error.max_attempts }}</td>
+              <td style="max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ error.error_message }}">
+                {{ error.error_message }}
+              </td>
+              <td>
+                <form method="post" action="/dashboard/errors/{{ error.id }}/retry" style="display:inline;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                  <button type="submit" class="btn btn--primary">Jetzt erneut versuchen</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="empty-state">Keine offenen Fehler.</div>
+    {% endif %}
+  </div>
+{% endblock %}

@@ -46,9 +46,21 @@ def run_ocr(path: Path, *, languages: str = "deu+eng", dpi: int = 200) -> str:
         if suffix in IMAGE_EXTENSIONS:
             return _run_ocr_on_image(path, languages=languages)
     except Exception as exc:  # noqa: BLE001 - in OcrError kapseln
-        raise OcrError(f"OCR fehlgeschlagen für {path}: {exc}") from exc
+        # SICHERHEITSKRITISCH (Prompt 31, gefunden bei der Absicherung des
+        # neuen Fehler-/Retry-Systems): weder der volle Dateipfad NOCH die
+        # Nachricht der zugrunde liegenden Exception (`str(exc)`) dürfen
+        # hier verwendet werden - Bibliotheken wie PyMuPDF/PIL betten den
+        # Dateipfad standardmäßig in IHRE EIGENE Fehlermeldung ein (z. B.
+        # "no such file: '.../Max_Mustermann_Steuerbescheid.pdf'"), auch
+        # wenn der eigene f-String keinen Pfad mehr referenziert. Nur der
+        # EXCEPTION-TYP (z. B. "FileNotFoundError") ist sicher - enthält
+        # nie Datei-/Personennamen. Die vollständige Original-Exception
+        # bleibt über `from exc` im Stacktrace/`__cause__` erhalten, falls
+        # später tiefergehendes (lokales) Debugging nötig ist - landet
+        # aber NICHT im persistierten `error_message`/Audit-Log.
+        raise OcrError(f"OCR fehlgeschlagen: {type(exc).__name__}") from exc
 
-    raise OcrError(f"OCR wird für dieses Dateiformat nicht unterstützt: {path}")
+    raise OcrError(f"OCR wird für dieses Dateiformat nicht unterstützt: {suffix}")
 
 
 def _run_ocr_on_pdf(path: Path, *, languages: str, dpi: int) -> str:

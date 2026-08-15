@@ -1551,3 +1551,111 @@ eigentlichen Benchmark-/Bewertungslogik (Prompt 30) getrennt.
   Kollisionsschutz, Zusammenspiel mit der bestehenden Such-/Recherche-Infrastruktur ohne
   Sonderbehandlung. Zusätzlich per Playwright-Screenshot visuell verifiziert (20 generierte
   Fälle im Posteingang).
+
+## 40. Fehler-/Retry-System (Prompt 31)
+
+Schließt eine seit Prompt 05/20 bewusst offen gelassene Lücke ("vollständiges Fehler-/Retry-
+System folgt in Prompt 31"): einzelne Pipeline-Stufen (OCR, Intake) markierten einen
+Fehlschlag bereits als Endzustand (`Document.ocr_status = "failed"`), es gab aber KEINEN Weg,
+es erneut zu versuchen, außer den Datensatz manuell zu löschen und neu anzulegen.
+
+### Datenmodell und Service
+
+`ProcessingError` (`app/models/processing_error.py`, unter `app/models/` wie jedes andere
+Modell im Projekt) verfolgt fehlgeschlagene Vorgänge generisch über `(entity_type, entity_id,
+operation)` - dasselbe Muster wie `AuditEvent`. `RetryService` (`app/errors/service.py`):
+
+- **`record_failure`**: legt einen neuen Eintrag an ODER erhöht `attempt_count` eines
+  bestehenden offenen Eintrags für dieselbe `(entity_type, entity_id, operation)` -
+  verhindert zuverlässig doppelte Zeilen für denselben wiederholt fehlschlagenden Vorgang
+  (per Test bewiesen: `test_repeated_failures_never_create_duplicate_open_rows`).
+- **Exponentielles Backoff**: Basis 120s, Faktor 4 → ca. 2/8/32 Minuten bis zum nächsten
+  automatischen Versuch.
+- **`max_attempts=3`** (Default, pro Aufruf konfigurierbar) - danach `status="failed_permanent"`,
+  `next_retry_at=None`. `list_due_for_retry` filtert ausschließlich nach
+  `status="pending_retry"` - ein `failed_permanent`-Eintrag taucht dort nie wieder auf, damit
+  ist eine Endlosschleife strukturell ausgeschlossen (per Test bewiesen).
+- **`record_success`**: markiert einen offenen Eintrag als `resolved`. Ein danach erneut
+  auftretendes Problem erzeugt einen NEUEN, unabhängigen Eintrag (frischer Vorfall, nicht das
+  stille Wiederaufleben des alten) - bewusste Design-Entscheidung, per Test dokumentiert.
+- **`execute_retry`**: einzige Dispatch-Stelle, die einen konkreten Wiederholungsversuch
+  tatsächlich ausführt (verzweigt anhand `operation` zu OCR/Intake) - von
+  `scripts/retry_failed_items.py` UND der manuellen Dashboard-Aktion gemeinsam genutzt, damit
+  beide Wege garantiert dasselbe Verhalten haben. **Parallelitätsschutz**: setzt den Status
+  sofort auf `"retrying"` (committed, bevor die eigentliche Arbeit beginnt) - ein
+  (nahezu) gleichzeitiger zweiter Aufruf für denselben Eintrag (Doppelklick, manuelles Retry
+  während das periodische Skript gerade läuft) sieht diesen Zwischenstatus und bricht sofort
+  ab, statt denselben Vorgang zweimal parallel auszuführen (per Test bewiesen).
+
+### Verdrahtung
+
+- **`DocumentProcessingService`** (OCR): `retry_service` als injizierbarer Konstruktor-
+  Parameter (Default: neue Instanz). Erfolg UND Fehlschlag werden konsequent gemeldet
+  (`record_success` auch beim direkten Extraktionserfolg ohne OCR, nicht nur nach einer
+  vorherigen Reparatur).
+- **`IntakeWatcher`**: der Dateipfad selbst dient als `entity_id` (zum Zeitpunkt des
+  Fehlschlags existiert noch kein `Document`) - Intake-Fehler werden als `"permanent"`
+  eingestuft (eine nie stabil werdende Datei oder ein bewusst abgelehnter Symlink ist meist
+  kein vorübergehendes Problem), ein unerwarteter Fehler dagegen als `"transient"`.
+
+### Zwei echte PII-Lecks gefunden und behoben
+
+1. Die OCR-Fehlermeldung baute ursprünglich `f"OCR fehlgeschlagen für {path}: {exc}"` - der
+   gespeicherte Dateipfad folgt dem Muster `{uuid}_{urspruenglicher_Dateiname}`, und der
+   ursprüngliche Dateiname stammt direkt aus einem E-Mail-Anhang/Scan (kann einen Mandanten-/
+   Personennamen enthalten). Diese Meldung landet in `ProcessingError.error_message` UND im
+   Audit-Log (`AuditEvent.details`) - beide dürfen laut Grundregel keine Mandanteninhalte
+   enthalten.
+2. **Selbst nach Entfernen von `{path}` aus dem eigenen f-String blieb das Leck bestehen**:
+   `{exc}` (die Nachricht der zugrunde liegenden PyMuPDF-/PIL-Exception) enthält den Dateipfad
+   standardmäßig IN IHRER EIGENEN Fehlermeldung (z. B. `"no such file: '.../Max_Mustermann_
+   Steuerbescheid.pdf'"`) - per Test entdeckt (`test_ocr_error_message_never_contains_
+   original_filename`, initial fehlgeschlagen). Endgültig behoben durch Verwendung
+   ausschließlich des Exception-**Typnamens** (`type(exc).__name__`, z. B.
+   `"FileNotFoundError"`) - nie die Original-Nachricht. Die vollständige Original-Exception
+   bleibt über `from exc` im Stacktrace/`__cause__` für lokales Debugging erhalten, landet aber
+   nicht im persistierten Fehler-/Audit-Text.
+
+### Weiterer gefundener und behobener Robustheitsfehler
+
+`extract_text()` (Textextraktion vor OCR) war NICHT gegen eine fehlende/unlesbare/beschädigte
+Datei abgesichert - ein `FileNotFoundError` hätte `DocumentProcessingService.process_document`
+komplett unkontrolliert abstürzen lassen, statt dem gerade gebauten Fehler-/Retry-System
+übergeben zu werden (entdeckt durch einen zunächst real crashenden Test). Behoben: der
+Extraktionsaufruf ist jetzt in denselben kontrollierten Fehlerpfad wie OCR-Fehlschläge
+eingebunden (`operation="ocr"`, `error_category="transient"`).
+
+### Web-Oberfläche
+
+`/dashboard/errors` (`app/web/errors_router.py`) - **bewusst für alle drei Rollen** zugänglich
+(lesen UND manuell wiederholen): die bestehende Rechte-Matrix aus Prompt 26 sah diesen Bereich
+nicht vor, und eine OCR-/Intake-Wiederholung ist eine operative Wiederherstellungsaktion ohne
+Kostenrisiko (kein Claude-Aufruf) - anders als die Claude-kostenpflichtigen Aktionen, die auf
+Anwalt/Admin beschränkt bleiben. CSRF-Schutz über `require_role()` ohne Rolleneinschränkung
+(erzwingt weiterhin Login + CSRF, konsistent mit jeder anderen mutierenden Aktion im Projekt).
+
+### CLI
+
+`scripts/retry_failed_items.py` - für den periodischen Aufruf ohne eingebauten
+Scheduler/Hintergrunddienst (z. B. Windows-Aufgabenplanung alle 15 Minuten), konsistent mit der
+bewusst einfachen Ein-Prozess-Architektur (kein Celery o. Ä.).
+
+### Getestet
+
+38 neue Tests: `tests/test_errors_retry_service.py` (25 - Speicherung, Zähler, Backoff,
+Obergrenze, Endzustand, Erfolg-Reset, neuer Vorfall nach Auflösung, keine Duplikate, kein
+Doppelversuch, Audit-Trail, keine PII/Secrets), `tests/test_web_errors.py` (13 - Zugriff aller
+Rollen, CSRF, erfolgreiche Wiederholung über die echte HTTP-Schicht, nicht authentifizierter
+Zugriff). 632/632 Tests gesamt grün. Migration in beide Richtungen getestet. Per Playwright-
+Screenshot visuell verifiziert (zwei Fehlereinträge mit unterschiedlichem Status, Meldungen
+ohne Pfad-/Dateiname-Leck).
+
+### Offene Punkte
+
+1. Aktuell nur OCR und Intake verdrahtet - Klassifikation/Aktenzuordnung (Prompt 08/09) nutzen
+   das Fehler-/Retry-System noch nicht, da sie bislang keine netzwerkabhängigen/transienten
+   Fehlerquellen haben (reine lokale Keyword-/Regex-Heuristik). Bei Bedarf ohne Änderung am
+   Kern-Service nachrüstbar (gleiches Muster wie OCR/Intake).
+2. Der Backoff-Zähler ist rein In-Memory-unabhängig (in der Datenbank persistiert, nicht im
+   Prozessspeicher) - läuft daher über Neustarts hinweg korrekt weiter, im Unterschied zum
+   Login-Rate-Limiter (Prompt 29-Nachtrag), der bewusst prozesslokal ist.

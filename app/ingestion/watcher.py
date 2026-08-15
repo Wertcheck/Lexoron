@@ -4,8 +4,16 @@ Nutzt `watchdog`, das rekursives Monitoring unterstuetzt und damit fuer den
 Scan-Eingang geeignet ist (siehe ARCHITECTURE.md §3). Jede neu erkannte
 Datei wird an den `IntakeService` uebergeben. Fehler bei einzelner Datei
 (z. B. nie stabil) duerfen die Ueberwachung der uebrigen Dateien/Ordner
-nicht abbrechen - vollstaendiges Fehler-/Retry-System folgt in Prompt 31,
-hier daher zunaechst ein bewusst einfaches try/except mit Logging.
+nicht abbrechen.
+
+Seit Prompt 31: ein Fehlschlag wird zusätzlich im Fehler-/Retry-System
+(app/errors/) protokolliert, statt nur geloggt zu werden - vorher gab es
+KEINEN Weg, eine fehlgeschlagene Datei erneut zu versuchen, außer sie
+manuell aus dem überwachten Ordner zu entfernen und neu abzulegen (was
+u. U. gar nicht möglich ist, wenn der überwachte Ordner z. B. ein
+Scanner-Ausgabeverzeichnis ohne Schreibrechte für den Anwalt ist). Der
+Dateipfad selbst dient als `entity_id` - zum Zeitpunkt des Fehlschlags
+existiert noch kein `Document`-Datensatz (der entsteht erst bei Erfolg).
 """
 
 from __future__ import annotations
@@ -17,6 +25,7 @@ from pathlib import Path
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
+from app.errors.service import RetryService
 from app.ingestion.intake import IntakeError, IntakeService
 from app.models import Document
 
@@ -40,10 +49,12 @@ class _NewFileEventHandler(FileSystemEventHandler):
         intake_service: IntakeService,
         session_factory: SessionFactory,
         on_ingested: Callable[[Document], None] | None = None,
+        retry_service: RetryService | None = None,
     ) -> None:
         self._intake_service = intake_service
         self._session_factory = session_factory
         self._on_ingested = on_ingested
+        self._retry_service = retry_service or RetryService()
 
     def on_created(self, event: FileSystemEvent) -> None:
         if event.is_directory:
@@ -57,10 +68,33 @@ class _NewFileEventHandler(FileSystemEventHandler):
             logger.info("Datei erfolgreich erfasst: %s -> %s", path, document.id)
             if self._on_ingested is not None:
                 self._on_ingested(document)
-        except IntakeError:
+        except IntakeError as exc:
             logger.warning("Datei konnte nicht erfasst werden: %s", path, exc_info=True)
+            self._retry_service.record_failure(
+                db,  # type: ignore[arg-type]
+                entity_type="IntakeFile",
+                entity_id=str(path),
+                operation="intake",
+                # Eine Datei, die nie stabil wird oder ein Symlink ist,
+                # ist meist ein dauerhaftes Problem (falsche Datei,
+                # bewusst abgelehnter Symlink) - nicht automatisch
+                # wiederholen, sondern menschliche Prüfung verlangen.
+                error_category="permanent",
+                error_message=str(exc),
+            )
         except Exception:  # noqa: BLE001 - Ueberwachung darf nicht abbrechen
             logger.exception("Unerwarteter Fehler bei der Erfassung von %s", path)
+            self._retry_service.record_failure(
+                db,  # type: ignore[arg-type]
+                entity_type="IntakeFile",
+                entity_id=str(path),
+                operation="intake",
+                # Ein unerwarteter Fehler (z. B. Netzlaufwerk kurz nicht
+                # erreichbar) ist eher vorübergehend - automatischer
+                # Wiederholungsversuch sinnvoll.
+                error_category="transient",
+                error_message="Unerwarteter Fehler bei der Dateierfassung",
+            )
         finally:
             db.close()  # type: ignore[attr-defined]
 

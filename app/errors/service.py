@@ -1,0 +1,256 @@
+"""RetryService – zentrale Fehler-/Retry-Verwaltung (Prompt 31).
+
+Verantwortlich für:
+1. Einen Fehlschlag protokollieren (`record_failure`) - legt einen neuen
+   `ProcessingError` an ODER erhöht den Zähler eines bestehenden
+   offenen Fehlers für dieselbe (entity_type, entity_id, operation).
+2. Einen Erfolg protokollieren (`record_success`) - markiert einen
+   zuvor offenen Fehler als aufgelöst, falls vorhanden. Kein Fehler
+   vorhanden = kein Effekt (Normalfall).
+3. Fällige Wiederholungen ermitteln (`list_due_for_retry`) - für den
+   manuellen "Erneut versuchen"-Button im Dashboard UND für ein
+   optionales periodisches Skript (siehe scripts/retry_failed_items.py).
+
+Exponentielles Backoff: 1. Wiederholung nach ~2 Minuten, 2. nach ~8
+Minuten, 3. nach ~32 Minuten (Basis 2 Minuten, Faktor 4) - bewusst
+moderat, kein Sekundentakt (die meisten hier abgedeckten Fehlerursachen
+- OCR-Engine kurzzeitig nicht erreichbar, IMAP-Verbindung gestört - lösen
+sich nicht in Sekunden).
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy.orm import Session
+
+from app.models import AuditEvent, ProcessingError
+
+_BACKOFF_BASE_SECONDS = 120  # 2 Minuten
+_BACKOFF_FACTOR = 4
+
+
+def _compute_next_retry_at(attempt_count: int) -> datetime:
+    delay_seconds = _BACKOFF_BASE_SECONDS * (_BACKOFF_FACTOR ** (attempt_count - 1))
+    return datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
+
+
+class RetryService:
+    def record_failure(
+        self,
+        db: Session,
+        *,
+        entity_type: str,
+        entity_id: str,
+        operation: str,
+        error_category: str,
+        error_message: str,
+        max_attempts: int = 3,
+        actor: str = "system",
+    ) -> ProcessingError:
+        """Protokolliert einen Fehlschlag. `error_message` MUSS bereits
+        frei von Mandanteninhalten sein (siehe app/errors/models.py) -
+        dieser Service prüft das nicht selbst, das liegt in der
+        Verantwortung des Aufrufers (dieselbe Grundregel wie beim
+        Security-Check-Kategorie-System, app/privacy/api_logger.py)."""
+        # Sucht nach JEDEM nicht-abgeschlossenen bestehenden Eintrag für
+        # dieselbe (entity_type, entity_id, operation) - unabhängig vom
+        # genauen Status (pending_retry/failed_permanent/retrying).
+        # WICHTIG: verhindert, dass für denselben wiederholt fehl-
+        # schlagenden Vorgang mehrere separate ProcessingError-Zeilen
+        # entstehen (z. B. wenn nach einem bereits "failed_permanent"
+        # eingestuften Fehler ein manueller Retry erneut fehlschlägt -
+        # ohne diese Erweiterung wäre dafür fälschlich ein zweiter,
+        # unabhängiger Datensatz angelegt worden).
+        existing = (
+            db.query(ProcessingError)
+            .filter_by(entity_type=entity_type, entity_id=entity_id, operation=operation)
+            .filter(ProcessingError.status != "resolved")
+            .first()
+        )
+
+        if existing is not None:
+            existing.attempt_count += 1
+            existing.error_message = error_message
+            if existing.attempt_count >= existing.max_attempts:
+                existing.status = "failed_permanent"
+                existing.next_retry_at = None
+            else:
+                existing.next_retry_at = _compute_next_retry_at(existing.attempt_count)
+            processing_error = existing
+        else:
+            status = "failed_permanent" if error_category == "permanent" else "pending_retry"
+            processing_error = ProcessingError(
+                entity_type=entity_type,
+                entity_id=entity_id,
+                operation=operation,
+                error_category=error_category,
+                error_message=error_message,
+                attempt_count=1,
+                max_attempts=max_attempts,
+                status=status,
+                next_retry_at=_compute_next_retry_at(1) if status == "pending_retry" else None,
+            )
+            db.add(processing_error)
+
+        db.flush()
+        db.add(
+            AuditEvent(
+                entity_type="ProcessingError",
+                entity_id=processing_error.id,
+                event_type="processing_failed",
+                actor=actor,
+                details=(
+                    f"{operation} fehlgeschlagen für {entity_type} {entity_id} "
+                    f"(Versuch {processing_error.attempt_count}/{processing_error.max_attempts})"
+                ),
+            )
+        )
+        db.commit()
+        db.refresh(processing_error)
+        return processing_error
+
+    def record_success(
+        self,
+        db: Session,
+        *,
+        entity_type: str,
+        entity_id: str,
+        operation: str,
+        actor: str = "system",
+    ) -> None:
+        """Markiert einen zuvor offenen Fehler als aufgelöst. Kein Effekt,
+        wenn keiner vorlag (Normalfall - die meisten Operationen
+        gelingen sofort)."""
+        existing = (
+            db.query(ProcessingError)
+            .filter_by(
+                entity_type=entity_type,
+                entity_id=entity_id,
+                operation=operation,
+            )
+            .filter(ProcessingError.status != "resolved")
+            .first()
+        )
+        if existing is None:
+            return
+        existing.status = "resolved"
+        existing.resolved_at = datetime.now(timezone.utc)
+        db.add(
+            AuditEvent(
+                entity_type="ProcessingError",
+                entity_id=existing.id,
+                event_type="processing_recovered",
+                actor=actor,
+                details=f"{operation} für {entity_type} {entity_id} nach Wiederholung erfolgreich",
+            )
+        )
+        db.commit()
+
+    def list_due_for_retry(self, db: Session) -> list[ProcessingError]:
+        """Fehler, deren Backoff-Wartezeit abgelaufen ist - Grundlage für
+        ein periodisches Retry-Skript (scripts/retry_failed_items.py)."""
+        now = datetime.now(timezone.utc)
+        candidates = (
+            db.query(ProcessingError).filter_by(status="pending_retry").all()
+        )
+        due = []
+        for error in candidates:
+            next_retry_at = error.next_retry_at
+            if next_retry_at is not None and next_retry_at.tzinfo is None:
+                next_retry_at = next_retry_at.replace(tzinfo=timezone.utc)
+            if next_retry_at is None or next_retry_at <= now:
+                due.append(error)
+        return due
+
+    def list_all_unresolved(self, db: Session) -> list[ProcessingError]:
+        """Für die Dashboard-Fehlerübersicht - pending_retry UND
+        failed_permanent, sortiert nach dringlichstem zuerst."""
+        return (
+            db.query(ProcessingError)
+            .filter(ProcessingError.status != "resolved")
+            .order_by(ProcessingError.created_at.desc())
+            .all()
+        )
+
+    def execute_retry(
+        self, db: Session, error: ProcessingError, *, actor: str = "system"
+    ) -> bool:
+        """Führt EINEN konkreten Wiederholungsversuch tatsächlich aus -
+        dispatcht anhand von `error.operation` an die zuständige
+        Pipeline-Stufe. Wiederverwendet von `scripts/retry_failed_items.py`
+        UND der manuellen "Erneut versuchen"-Aktion im Dashboard, damit
+        beide Wege garantiert dasselbe Verhalten haben.
+
+        Parallelitätsschutz: setzt den Status VOR der eigentlichen Arbeit
+        sofort auf "retrying" und committet das sofort - ein zweiter,
+        (nahezu) gleichzeitiger Aufruf für DENSELBEN Fehlereintrag (z. B.
+        Doppelklick auf "Erneut versuchen", oder das periodische Skript
+        UND ein manueller Klick zur gleichen Zeit) sieht diesen
+        Zwischenstatus und bricht sofort ohne Doppelausführung ab, statt
+        denselben Vorgang zweimal parallel auszuführen.
+
+        Gibt True zurück, wenn der Versuch erfolgreich war (Fehler wurde
+        aufgelöst), sonst False (inkl. wenn der Aufruf wegen eines bereits
+        laufenden/abgeschlossenen Versuchs übersprungen wurde). Wirft
+        `ValueError` bei unbekannter Operation - bewusst kein stiller
+        Fehlschlag."""
+        if error.status not in ("pending_retry", "failed_permanent"):
+            # "retrying" (bereits in Bearbeitung) oder "resolved" (nichts
+            # zu tun) - in beiden Fällen KEIN erneuter Ausführungsversuch.
+            return False
+
+        error.status = "retrying"
+        db.commit()
+
+        from app.config import get_settings
+
+        settings = get_settings()
+
+        if error.operation == "ocr":
+            from app.documents.service import DocumentProcessingService
+            from app.models import Document
+
+            document = db.get(Document, error.entity_id)
+            if document is None:
+                return False
+            processor = DocumentProcessingService(
+                ocr_enabled=settings.ocr_enabled,
+                ocr_languages=settings.ocr_languages,
+                tesseract_cmd=settings.tesseract_cmd,
+                retry_service=self,
+            )
+            processor.process_document(document, db, actor=actor)
+            db.refresh(error)
+            return error.status == "resolved"
+
+        if error.operation == "intake":
+            from pathlib import Path
+
+            from app.ingestion.intake import IntakeError, IntakeService
+
+            source_path = Path(error.entity_id)
+            intake_service = IntakeService(settings.intake_storage_dir)
+            try:
+                intake_service.ingest_file(source_path, db)
+            except IntakeError as exc:
+                self.record_failure(
+                    db,
+                    entity_type="IntakeFile",
+                    entity_id=error.entity_id,
+                    operation="intake",
+                    error_category="permanent",
+                    error_message=str(exc),
+                    actor=actor,
+                )
+                return False
+            self.record_success(
+                db,
+                entity_type="IntakeFile",
+                entity_id=error.entity_id,
+                operation="intake",
+                actor=actor,
+            )
+            return True
+
+        raise ValueError(f"Unbekannte Operation '{error.operation}' - kein Retry möglich")

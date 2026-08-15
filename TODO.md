@@ -367,7 +367,26 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       Datenschutzrisiko (fail-closed), aber ein spürbarer Nutzbarkeits-Fund für den
       Pilotbetrieb, dauerhaft per Test festgehalten. Siehe SECURITY_REVIEW.md, Abschnitt 2.9.
       3 neue Tests, 594/594 gesamt grün.
-- [ ] Fehler-/Retry-System
+- [x] Fehler-/Retry-System – Prompt 31, 15.08. Neues Modell `ProcessingError` (unter
+      `app/models/`, konsistent mit Projektkonvention) + `RetryService` mit exponentiellem
+      Backoff (Basis 120s, Faktor 4: ~2/8/32 Min.), max. 3 Versuche (konfigurierbar), danach
+      `failed_permanent` (kein automatischer Retry mehr - kein Endlosschleifen-Risiko, per Test
+      bewiesen). Verdrahtet in `DocumentProcessingService` (OCR) und `IntakeWatcher` (Intake) -
+      die beiden Stellen, die laut bestehender Doku explizit auf Prompt 31 warteten.
+      Parallelitätsschutz über einen "retrying"-Zwischenstatus (kein doppelter Ausführungs-
+      versuch bei Doppelklick/gleichzeitigem Skriptlauf). Dashboard-Ansicht `/dashboard/errors`
+      (alle drei Rollen, manueller "Jetzt erneut versuchen"-Button, CSRF-geschützt) + CLI-
+      Skript `scripts/retry_failed_items.py` (periodischer Lauf ohne Hintergrunddienst, z. B.
+      Windows-Aufgabenplanung) - beide nutzen dieselbe `execute_retry`-Dispatch-Logik. **Zwei
+      echte, im Zuge der Absicherung gefundene und behobene PII-Lecks:** (1) die OCR-
+      Fehlermeldung enthielt den vollen gespeicherten Dateipfad, der den ursprünglichen
+      (potenziell personenbezogenen) Dateinamen aus einem E-Mail-Anhang trug; (2) selbst nach
+      dem ersten Fix blieb die zugrunde liegende PyMuPDF-Exception selbst pfadhaltig - beide
+      Fälle jetzt auf den reinen Exception-Typnamen reduziert. Zusätzlich gefunden+behoben:
+      `extract_text()` war nicht gegen fehlende/beschädigte Dateien abgesichert und hätte die
+      gesamte Verarbeitung unkontrolliert abstürzen lassen statt sie dem neuen Fehler-/Retry-
+      System zu übergeben. 38 neue Tests (25 Service-Ebene, 13 Web-Ebene), 632/632 gesamt grün.
+      Siehe ARCHITECTURE.md §40.
 - [ ] Logging/Monitoring (ohne sensible Inhalte)
 - [ ] KI-Kostenkontrolle
 - [ ] ModelProvider-Abstraktion

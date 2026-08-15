@@ -71,6 +71,12 @@
             </span>
           {% endif %}
         {% endfor %}
+        {% if current_user %}
+          <a class="sidebar__link{% if active_nav == 'Fehler' %} sidebar__link--active{% endif %}"
+             href="/dashboard/errors">
+            <span>Fehler</span>
+          </a>
+        {% endif %}
         {% if current_user and current_user.role and current_user.role.name.lower() == "admin" %}
           <a class="sidebar__link{% if active_nav == 'Nutzerverwaltung' %} sidebar__link--active{% endif %}"
              href="/dashboard/admin/users">
