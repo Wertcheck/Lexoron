@@ -384,6 +384,48 @@ existiert** – nicht "sicher implementiert", sondern "Funktion existiert nicht"
 
 ---
 
+### 2.9 Nachtrag Prompt 30: Hohe False-Positive-Rate der PII-Heuristik bei realistischem deutschem Rechtstext
+
+**Befund (End-to-End-Test, Prompt 30):** Beim Aufbau des vollständigen End-to-End-Tests mit
+dem synthetischen Testdaten-Generator (Prompt 29) stellte sich heraus, dass die bestehende
+Security-Check-Heuristik für "möglicherweise unerkannte Namen" (zwei aufeinanderfolgende
+großgeschriebene Wörter) bei **vier von sechs** realistischen Fallszenarien fälschlich
+auslöst - sowohl durch Akten-/Dokumenttitel ("Mahnung Zahlungsverzug", "Fristlose Kündigung")
+als auch durch normale Kanzleiwissens-/Quellentexte ("AO Regelt die formellen
+Voraussetzungen..."). Das liegt an der deutschen Grammatik selbst: zusammengesetzte
+Verwaltungs-/Rechtsbegriffe und Gesetzesabkürzungen (AO, BGB, KSchG) gefolgt von einem
+großgeschriebenen Satzanfang erzeugen sehr leicht genau das Muster, nach dem die Heuristik
+sucht.
+
+**Kein Datenschutzrisiko** - die Anfrage wird im Zweifel blockiert (fail-closed), nie
+fälschlich durchgelassen. Aber ein **spürbarer Nutzbarkeits-/Reibungsverlust-Fund**: in der
+Praxis würde ein Anwalt bei einem erheblichen Teil aller Entwurfsanfragen auf einen
+Blockierungs-Hinweis stoßen, obwohl der Text völlig unproblematisch ist - das könnte zu
+Frustration und im schlimmsten Fall dazu führen, dass Nutzer versuchen, die Heuristik zu
+umgehen (z. B. durch Umformulieren, um die Blockierung zu vermeiden) statt sie als
+Schutzmechanismus zu akzeptieren.
+
+**Bewusst NICHT in diesem Prompt behoben** - eine Lockerung der Heuristik ist eine
+Sicherheitsentscheidung, die eine bewusste Abwägung durch den Anwalt braucht (Risiko: mehr
+False Negatives, also tatsächlich unerkannte Namen, die durchrutschen), kein technischer
+Nebeneffekt eines End-to-End-Tests. Per Test dauerhaft festgehalten
+(`test_some_scenario_texts_trigger_unrecognized_entity_heuristic`), damit der Fund nicht
+verloren geht.
+
+- **Prototyp-Risiko: keines** (kein Datenschutzproblem, nur Reibung).
+- **Produktiv-Risiko: mittel** (Nutzbarkeitsproblem, könnte Akzeptanz im Pilotbetrieb
+  beeinträchtigen oder zu Umgehungsversuchen verleiten).
+- **Fix (Vorschlag, nicht umgesetzt):** eine verfeinerte Heuristik, die bekannte deutsche
+  Rechts-/Verwaltungsbegriffe und Gesetzesabkürzungen aus der Namens-Erkennung ausnimmt
+  (z. B. eine kleine Ausschlussliste), oder ein kontextsensitiverer Ansatz (z. B. nur
+  auslösen, wenn die erkannten Wörter NICHT in einem Wörterbuch bekannter Rechtsbegriffe
+  stehen). Erfordert eine bewusste Entscheidung des Anwalts, da sie die Sicherheits-
+  Schwelle verändert.
+- **Priorität:** Mittel - spürbar im Pilotbetrieb, aber kein Sicherheitsproblem.
+- **Gate: empfehlenswert vor dem Pilotbetrieb zu adressieren** (sonst hohe Reibung von
+  Beginn an), aber kein hartes Gate - die Heuristik blockiert sicher, sie blockiert nur zu
+  oft.
+
 ## Teil 3: Zusammenfassung nach deinen vier Leitfragen
 
 ### "Was funktioniert bereits sicher?"

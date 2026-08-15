@@ -353,7 +353,20 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       Per Browser-Screenshot verifiziert (20 synthetische Fälle im Posteingang, ausschließlich
       `.invalid`-Testdomain, keine Ähnlichkeit zu echten Personen). 13 neue Tests, 591/591
       gesamt grün.
-- [ ] End-to-End-Test
+- [x] End-to-End-Test – Prompt 30, 15.08. EINE durchgängige Fallreise über die gesamte, in
+      Prompts 04-29 gebaute Kette hinweg, über die ECHTE HTTP-/Dashboard-Schicht (nicht durch
+      isolierte Service-Aufrufe wie sonst üblich): synthetischer Fall (Prompt 29) → Entwurf
+      erstellen → Original/Entwurf/Quellen/Findings/Audit ansehen → Anmerkung speichern →
+      Anmerkung anwenden (neue Version) → Review-Engine-Prüfung → manuelle Bearbeitung (weitere
+      Version) → Rollentrennung mitten in der echten Reise geprüft (Mitarbeiter kann NICHT
+      freigeben) → Freigabe → automatische Postausgang-Übergabe → als versendet markieren →
+      lückenloser Audit-Trail über die gesamte Reise verifiziert → Cross-Matter-Isolation
+      geprüft. Bedeutender Fund dabei: die PII-Heuristik aus dem Security Check blockiert 4 von
+      6 realistischen synthetischen Szenarien fälschlich (deutsche Rechts-/Verwaltungsbegriffe
+      + Gesetzesabkürzungen lösen das "zwei Großbuchstaben-Wörter"-Muster aus) - kein
+      Datenschutzrisiko (fail-closed), aber ein spürbarer Nutzbarkeits-Fund für den
+      Pilotbetrieb, dauerhaft per Test festgehalten. Siehe SECURITY_REVIEW.md, Abschnitt 2.9.
+      3 neue Tests, 594/594 gesamt grün.
 - [ ] Fehler-/Retry-System
 - [ ] Logging/Monitoring (ohne sensible Inhalte)
 - [ ] KI-Kostenkontrolle
