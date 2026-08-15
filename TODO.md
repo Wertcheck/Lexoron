@@ -259,11 +259,20 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       nötig ist. 39 neue Tests (Gateway, Versionierung, AttorneyInstructionService, Web-Router),
       463/463 gesamt grün. Siehe ARCHITECTURE.md §35 für Details und offene Punkte.
 - [ ] Akte-Ansicht
-- [ ] Entwurfsprüfung (Original/Entwurf, Quellen, Findings, Versionsvergleich) – Grundgerüst
-      (Versions-Zeitleiste, Einzelansicht) bereits durch die AttorneyInstruction-Erweiterung
-      vorhanden; es fehlen noch: Listenansicht aller Entwürfe, Original-Nachricht/-Dokument
-      daneben, Quellen-/Findings-Anzeige aus der Review-Engine (Prompt 18), echter
-      Seite-an-Seite-Versionsvergleich (Diff), Sidebar-Verlinkung.
+- [x] Entwurfsprüfung (Original/Entwurf, Quellen, Findings, Versionsvergleich) – Prompt 24,
+      15.08. Listenansicht (`/dashboard/drafts`, Status-Filter, "nur aktuellste Version"),
+      Sidebar jetzt verlinkt. Detailansicht erweitert: Original-Nachricht/-Dokumente links,
+      Entwurf rechts (wie Design-Referenz), Quellen-/Kanzleiwissen-Panel, Review-Findings-Panel
+      (mit Auslöse-Button), Audit-Log-Panel, Aktionsleiste (Freigeben & Postausgang übergeben /
+      Neu generieren / Zurückweisen). Echte Lücke gefunden+geschlossen: `DraftSourceLink`/
+      `DraftKnowledgeItemLink` persistieren erstmals, welche Quellen/Wissenselemente TATSÄCHLICH
+      für eine Version verwendet wurden (vorher nur transient). `AttorneyInstruction` in die
+      aktenweite Audit-Abfrage aufgenommen (war vorher unsichtbar). 23 neue Tests
+      (5 Drafting-Service, 18 Web-Router), 485/485 gesamt grün. Offene Punkte: kein UI-Trigger
+      im Posteingang, um aus einer Nachricht direkt einen Entwurf zu erstellen (Entwürfe
+      entstehen bisher nur programmatisch/direkt); "Freigeben & Postausgang übergeben" markiert
+      nur den Status - eine echte Postausgang-Übergabe folgt erst Prompt 25. Siehe
+      ARCHITECTURE.md §36.
 - [ ] Postausgang (kein automatischer Versand)
 
 ## Phase 7 – Sicherheit und Produktisierung (Prompts 26–35)

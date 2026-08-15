@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Entwürfe zur Prüfung{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">Entwürfe zur Prüfung</h1>
+    <div class="topbar__meta">
+      <strong>{{ drafts|length }}</strong> Entwürfe
+      {% if not show_all_versions %}&middot; nur aktuellste Version je Linie{% endif %}
+    </div>
+    <div class="filters">
+      {% for key, label in [(None, "Alle"), ("draft", "Entwurf"), ("legal_review", "In Prüfung"), ("approved", "Freigegeben"), ("rejected", "Zurückgewiesen")] %}
+        <a class="filter-tab{% if active_status == key %} filter-tab--active{% endif %}"
+           href="/dashboard/drafts{% if key %}?status={{ key }}{% endif %}{% if show_all_versions %}{{ '&' if key else '?' }}show_all_versions=true{% endif %}">
+          {{ label }}
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="draft-page">
+    {% if drafts %}
+      <table class="draft-table">
+        <thead>
+          <tr>
+            <th>Akte</th>
+            <th>Version</th>
+            <th>Status</th>
+            <th>Zuletzt geändert</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for draft in drafts %}
+            <tr onclick="window.location='/dashboard/drafts/{{ draft.id }}'">
+              <td>{{ draft.matter.title if draft.matter else draft.matter_id }}</td>
+              <td class="mono">v{{ draft.version }}</td>
+              <td>
+                <span class="tag {% if draft.status == 'approved' %}tag--matched{% elif draft.status == 'rejected' %}tag--outbound{% else %}tag--unmatched{% endif %}">
+                  {{ draft.status }}
+                </span>
+              </td>
+              <td class="mono">{{ draft.updated_at.strftime("%d.%m.%Y, %H:%M") }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="empty-state">Keine Entwürfe in dieser Ansicht.</div>
+    {% endif %}
+  </div>
+{% endblock %}

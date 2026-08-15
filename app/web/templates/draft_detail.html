@@ -10,6 +10,7 @@
     <div class="topbar__meta">
       Status: <strong>{{ draft.status }}</strong>
       &middot; Akte <span class="mono">{{ draft.matter_id }}</span>
+      &middot; <a href="/dashboard/drafts">zur Liste</a>
     </div>
   </div>
 
@@ -28,8 +29,32 @@
       {% endfor %}
     </div>
 
-    <div class="draft-columns">
-      <div class="draft-main">
+    <!-- Original links / Entwurf rechts (Design-Referenz des Anwalts) -->
+    <div class="split-two">
+      <div class="original-box">
+        <h2 class="panel-title">Original</h2>
+        {% if original_message %}
+          <div class="original-box__meta">
+            Von: {{ original_message.sender or "unbekannt" }}
+            &middot; {{ original_message.created_at.strftime("%d.%m.%Y, %H:%M") }} Uhr
+          </div>
+          <div class="original-box__body">{{ original_message.body_text or "(kein Inhalt extrahiert)" }}</div>
+          {% if original_documents %}
+            <div class="detail-section-label">Anhänge ({{ original_documents|length }})</div>
+            {% for document in original_documents %}
+              <span class="doc-chip">{{ document.original_filename or "Dokument" }}</span>
+            {% endfor %}
+          {% endif %}
+        {% else %}
+          <p class="form-hint">
+            Kein Bezug zu einer eingehenden Nachricht hinterlegt (dieser Entwurf wurde ohne
+            Nachrichtenzuordnung erstellt).
+          </p>
+        {% endif %}
+      </div>
+
+      <div class="original-box">
+        <h2 class="panel-title">Entwurf</h2>
         <div class="draft-content-box">{{ draft.content }}</div>
 
         <details class="manual-edit-toggle">
@@ -41,7 +66,7 @@
             </label>
             <label class="form-label">
               Entwurfstext
-              <textarea name="content" rows="16" required>{{ draft.content }}</textarea>
+              <textarea name="content" rows="14" required>{{ draft.content }}</textarea>
             </label>
             <p class="form-hint">
               Erzeugt eine NEUE Version (v{{ draft.version + 1 }}) - die aktuelle Version
@@ -50,6 +75,51 @@
             <button type="submit" class="btn">Als neue Version speichern</button>
           </form>
         </details>
+      </div>
+    </div>
+
+    <div class="draft-columns" style="margin-top: 20px;">
+      <div class="draft-main">
+        <div class="instructions-panel">
+          <h2 class="panel-title">Verwendete Rechtsquellen &amp; Kanzlei-Wissen</h2>
+          {% if sources or knowledge_items %}
+            <div class="reference-chip-list">
+              {% for source in sources %}
+                <span class="reference-chip">
+                  {{ source.title }}<span class="reference-chip__ref">{{ source.reference or "" }}</span>
+                </span>
+              {% endfor %}
+              {% for item in knowledge_items %}
+                <span class="reference-chip">{{ item.title }}<span class="reference-chip__ref">Kanzlei-Wissen</span></span>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="form-hint">Für diese Version wurden keine Rechtsquellen oder Kanzlei-Wissenselemente herangezogen.</p>
+          {% endif %}
+        </div>
+
+        <div class="instructions-panel">
+          <h2 class="panel-title">Review-Findings</h2>
+          <form method="post" action="/dashboard/drafts/{{ draft.id }}/review" class="dashboard-form" style="margin-top:0;">
+            <label class="form-label">
+              Ihr Kürzel/E-Mail
+              <input type="text" name="actor" required placeholder="anwalt@kanzlei.test" />
+            </label>
+            <button type="submit" class="btn">Entwurf prüfen (Review-Engine)</button>
+          </form>
+          {% if findings %}
+            <div style="margin-top: 14px;">
+              {% for finding in findings %}
+                <div class="finding-item finding-item--{{ finding.severity }}">
+                  <div class="finding-item__category">{{ finding.category }} · {{ finding.severity }}</div>
+                  <p class="finding-item__description">{{ finding.description }}</p>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="form-hint" style="margin-top:10px;">Noch keine Prüfung durchgeführt.</p>
+          {% endif %}
+        </div>
       </div>
 
       <div class="draft-sidebar">
@@ -97,7 +167,44 @@
             </ul>
           </div>
         {% endif %}
+
+        <div class="instructions-panel">
+          <h2 class="panel-title">Audit-Log</h2>
+          {% if audit_events %}
+            <ul class="audit-trail">
+              {% for event in audit_events %}
+                <li>
+                  <span class="audit-trail__type">{{ event.event_type }} &middot; {{ event.actor }}</span>
+                  <span class="audit-trail__time">{{ event.created_at.strftime("%d.%m. %H:%M") }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="form-hint">Noch keine Ereignisse.</p>
+          {% endif %}
+        </div>
       </div>
     </div>
+
+    <div class="action-bar">
+      <form method="post" action="/dashboard/drafts/{{ draft.id }}/approve">
+        <input type="text" name="actor" required placeholder="Ihr Kürzel/E-Mail" style="width:160px; margin-right:6px;" />
+        <button type="submit" class="btn btn--primary">Freigeben &amp; Postausgang übergeben</button>
+      </form>
+      <form method="post" action="/dashboard/drafts/{{ draft.id }}/regenerate">
+        <input type="text" name="actor" required placeholder="Ihr Kürzel/E-Mail" style="width:160px; margin-right:6px;" />
+        <button type="submit" class="btn">Neu generieren</button>
+      </form>
+      <form method="post" action="/dashboard/drafts/{{ draft.id }}/reject">
+        <input type="text" name="actor" required placeholder="Ihr Kürzel/E-Mail" style="width:160px; margin-right:6px;" />
+        <input type="text" name="comment" required placeholder="Begründung (Pflicht)" style="width:220px; margin-right:6px;" />
+        <button type="submit" class="btn btn--danger">Zurückweisen</button>
+      </form>
+    </div>
+    <p class="form-hint" style="margin-top:8px;">
+      Hinweis: "Freigeben &amp; Postausgang übergeben" markiert den Entwurf als freigegeben.
+      Ein tatsächlicher Postausgang mit Versandfunktion existiert noch nicht (Prompt 25) - es
+      wird in keinem Fall automatisch etwas versendet.
+    </p>
   </div>
 {% endblock %}

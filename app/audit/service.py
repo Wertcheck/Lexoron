@@ -23,7 +23,16 @@ from __future__ import annotations
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
-from app.models import AuditEvent, Deadline, Document, Draft, Message, Task, WorkflowRun
+from app.models import (
+    AttorneyInstruction,
+    AuditEvent,
+    Deadline,
+    Document,
+    Draft,
+    Message,
+    Task,
+    WorkflowRun,
+)
 
 # (SQLAlchemy-Modell, entity_type-String) - der entity_type-String muss
 # exakt dem entsprechen, was die jeweiligen Services beim Schreiben von
@@ -35,6 +44,12 @@ _MATTER_SCOPED_MODELS: tuple[tuple[type, str], ...] = (
     (Draft, "Draft"),
     (Task, "Task"),
     (WorkflowRun, "WorkflowRun"),
+    # Ergaenzt Prompt 24: AttorneyInstruction (Prompt 23) hatte bislang
+    # KEINEN Eintrag hier - ihre Audit-Events (attorney_instruction_created/
+    # _applied) waren dadurch bei einer aktenweiten Abfrage unsichtbar,
+    # obwohl das Modell bereits matter_id trägt. Echte Luecke, jetzt
+    # geschlossen.
+    (AttorneyInstruction, "AttorneyInstruction"),
 )
 
 

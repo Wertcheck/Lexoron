@@ -1237,3 +1237,86 @@ Gateway). 463/463 Tests gesamt grün (1 weiterhin sauber übersprungen).
    testen) - empfohlen auf James's Windows-Maschine nach Hinterlegen des Schlüssels.
 5. Kein Session-/Auth-System - das Feld "Ihr Kürzel/E-Mail" in den Formularen ist ein
    manueller Platzhalter für den Actor bis Prompt 26.
+
+## 36. Entwurfsprüfung – Listenansicht, Original-Split, Quellen, Findings, Audit, Aktionsleiste (Prompt 24)
+
+Vervollständigt die Entwurfsansicht gemäß der Design-Referenz des Anwalts (§ zu Phase 6):
+Original links / Entwurf rechts, separates Review-Findings-Panel, Audit-Log-Panel direkt in der
+Ansicht, Aktionsleiste mit den vier geforderten Aktionen.
+
+### Neue Persistenz: tatsächlich verwendete Quellen/Wissenselemente
+
+**`DraftSourceLink`/`DraftKnowledgeItemLink`** (`app/models/draft_reference_links.py`): vorher
+gab es KEINE Persistenz dafür, welche `Source`-/`KnowledgeItem`-Zeilen tatsächlich für eine
+konkrete Draft-VERSION herangezogen wurden - `DraftingResult.source_list`/
+`knowledge_items_used` existierten nur transient im Rückgabewert. `DraftingService` persistiert
+diese Links jetzt automatisch nach jeder erfolgreichen Erstellung (`_persist_reference_links`) -
+JEDE Version bekommt EIGENE Links, keine Wiederverwendung über Versionen hinweg (per Test
+geprüft), da sich die tatsächlich gefundenen Quellen zwischen Versionen unterscheiden können
+(z. B. wenn eine Quelle zwischenzeitlich als veraltet markiert wird).
+
+### Audit-Lücke geschlossen
+
+`AttorneyInstruction` (Prompt 23) fehlte bislang in `AuditLogService._MATTER_SCOPED_MODELS` -
+ihre Audit-Events (`attorney_instruction_created`/`_applied`) waren dadurch bei einer
+aktenweiten Abfrage (`list_events_for_matter`) unsichtbar, obwohl das Modell bereits `matter_id`
+trägt. Ergänzt, keine weitere Verhaltensänderung.
+
+### Web-Oberfläche
+
+- **`GET /dashboard/drafts`** (Listenansicht): zeigt standardmäßig nur die jeweils AKTUELLSTE
+  Version jeder Entwurfslinie (kein anderer Draft verweist per `previous_version_id` auf sie) -
+  ältere Versionen bleiben über die Versions-Zeitleiste der Einzelansicht einsehbar. Filter nach
+  Status, Umschalter "alle Versionen anzeigen". Sidebar-Link "Entwürfe zur Prüfung" jetzt aktiv.
+- **Original-Split** in der Detailansicht: `draft.message_id` (nullable) verlinkt zur
+  ursprünglichen `Message` + zugehörigen `Document`-Zeilen. Da noch kein Dashboard-Trigger
+  existiert, der beim Erstellen eines Entwurfs `message_id` tatsächlich setzt (siehe offene
+  Punkte), zeigt die Ansicht ehrlich einen Leerzustand statt eines Fehlers, wenn kein Bezug
+  vorliegt.
+- **Quellen-/Kanzleiwissen-Panel**: liest `DraftSourceLink`/`DraftKnowledgeItemLink` für die
+  aktuell angezeigte Version.
+- **Review-Findings-Panel**: zeigt bestehende `ReviewFinding`-Zeilen (nach Schweregrad sortiert,
+  farblich markiert) plus einen Button "Entwurf prüfen", der `ReviewEngine.review_draft`
+  (Prompt 18) auslöst - Findings werden dort bereits selbst persistiert, der Router ruft nur auf.
+- **Audit-Log-Panel**: kombiniert die eigenen Audit-Events der angezeigten Draft-Version
+  (`AuditLogService.list_events_for_entity`) mit denen aller zugehörigen
+  `AttorneyInstruction`-Einträge - ein chronologisches Bild direkt in der Ansicht.
+- **Aktionsleiste** (vier Aktionen aus der Design-Referenz):
+  - *Freigeben & Postausgang übergeben*: ruft `DraftFeedbackService.record_feedback(approved)`.
+    Ehrlich benannt: KEINE tatsächliche Postausgang-Zuordnung oder Versandfunktion (die gibt es
+    als Konzept erst ab Prompt 25) - markiert nur den Freigabe-Status. Kein automatischer
+    Versand, Grundregel unverändert eingehalten.
+  - *Zurückweisen*: `record_feedback(rejected)`, Begründung im Formular verpflichtend
+    (`DraftFeedbackInput.rejection_requires_comment`, unverändert aus Prompt 13).
+  - *Neu generieren*: Neugenerierung OHNE spezifische Anmerkung - ruft
+    `DraftingService.create_draft(previous_draft=...)` direkt, im Unterschied zum
+    Anmerkungs-Panel ("Änderungen übernehmen & neu formulieren", das IMMER eine
+    `AttorneyInstruction` voraussetzt).
+  - *Bearbeiten*: die bereits in Prompt 23 gebaute aufklappbare manuelle Bearbeitung, jetzt
+    direkt neben dem Entwurfstext platziert statt in der Seitenleiste.
+- **`get_review_engine()`** in `app/web/service_factory.py` ergänzt (analog zu
+  `get_drafting_service`), wirft denselben `WritingProviderNotConfiguredError` bei fehlendem
+  Claude-API-Key - bewusst derselbe Fehlertyp wie bei der Entwurfsproduktion, kein zweiter,
+  praktisch identischer Fehlertyp.
+
+### Getestet
+
+23 neue Tests: `tests/test_drafting_service.py` (+5, Quellen-/Wissens-Link-Persistenz),
+`tests/test_web_drafts_prompt24.py` (neu, 18 - Liste, Original-Split, Panels, alle vier
+Aktionsleisten-Endpunkte inkl. Fehlerpfade ohne API-Key). 485/485 Tests gesamt grün. Migration
+in beide Richtungen getestet. Per Playwright-Screenshot visuell verifiziert; Aktionsleiste
+zusätzlich per curl End-to-End bestätigt (Freigeben ändert `status` nachweislich in der DB).
+
+### Offene Punkte
+
+1. **Kein UI-Trigger im Posteingang**, um aus einer eingehenden Nachricht direkt einen Entwurf
+   zu erstellen (`draft.message_id` bleibt dadurch in der Praxis meist `None`) - Entwürfe
+   entstehen aktuell nur programmatisch/direkt über `matter_id`. Empfohlen als kleine Ergänzung
+   entweder zur Inbox (Prompt 22) oder zur noch fehlenden Akte-Ansicht.
+2. Kein echter Seite-an-Seite-DIFF zwischen zwei Versionen (nur die Versions-Zeitleiste zum
+   Wechseln zwischen Ständen) - bewusst zurückgestellt, da im Konzept nicht explizit gefordert
+   und mit spürbarem zusätzlichem Aufwand verbunden; bei Bedarf nachrüstbar.
+3. Weiterhin kein Session-/Auth-System (unverändert aus Prompt 21/23) - "Ihr Kürzel/E-Mail" in
+   jedem Formular bleibt manueller Actor-Platzhalter bis Prompt 26.
+4. Offener Punkt aus Prompt 23 (ob die Neugenerierung den bisherigen Entwurfstext als Kontext
+   erhalten soll) bleibt unverändert offen - keine Änderung daran vorgenommen.

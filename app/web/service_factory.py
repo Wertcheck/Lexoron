@@ -24,6 +24,9 @@ from app.drafting.service import DraftingService
 from app.feedback.service import DraftFeedbackService
 from app.privacy.gateway import ClaudePrivacyGateway
 from app.research.service import LegalResearchService
+from app.review.anthropic_review_provider import AnthropicClaudeReviewProvider
+from app.review.engine import ReviewEngine
+from app.review.provider import ClaudeReviewProvider
 from app.search.embeddings import FastEmbedProvider
 from app.search.service import DocumentSearchService
 
@@ -93,6 +96,48 @@ def _build_writing_provider(settings) -> ClaudeWritingProvider:  # noqa: ANN001
 
 def get_feedback_service() -> DraftFeedbackService:
     return DraftFeedbackService()
+
+
+def get_review_engine() -> ReviewEngine:
+    """Baut eine funktionsfähige `ReviewEngine` mit ECHTEM Claude-Review-
+    Provider - wirft `WritingProviderNotConfiguredError` (derselbe Fehler-
+    typ wie bei der Entwurfsproduktion, bewusst wiederverwendet statt
+    einen zweiten, praktisch identischen Fehlertyp einzuführen), wenn kein
+    `ANTHROPIC_API_KEY` hinterlegt ist."""
+    settings = get_settings()
+    search_service = get_document_search_service()
+    research_service = LegalResearchService(
+        search_service,
+        min_score_for_sufficient=settings.research_min_score_for_sufficient,
+    )
+    review_provider = _build_review_provider(settings)
+
+    return ReviewEngine(
+        RuleBasedLocalAIProvider(search_service),
+        research_service,
+        ClaudePrivacyGateway(),
+        review_provider,
+        model_name=settings.claude_model_name,
+    )
+
+
+def _build_review_provider(settings) -> ClaudeReviewProvider:  # noqa: ANN001
+    api_key = (
+        settings.anthropic_api_key.get_secret_value()
+        if settings.anthropic_api_key is not None
+        else None
+    )
+    if not api_key or not api_key.strip():
+        raise WritingProviderNotConfiguredError(
+            "ANTHROPIC_API_KEY ist nicht konfiguriert - die Entwurfsprüfung "
+            "(Review-Engine) ist erst nach Hinterlegen des Schlüssels in "
+            "der .env-Datei möglich."
+        )
+    return AnthropicClaudeReviewProvider(
+        api_key=api_key,
+        model=settings.claude_model_name,
+        max_tokens=settings.claude_max_tokens,
+    )
 
 
 def get_attorney_instruction_service() -> AttorneyInstructionService:

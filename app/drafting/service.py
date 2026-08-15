@@ -28,7 +28,7 @@ from app.ai_providers.claude_writing_provider import ClaudeWritingProvider
 from app.ai_providers.local_ai_provider import LocalAIProvider
 from app.drafting.schema import DraftingResult, KnowledgeItemReference, SourceReference
 from app.drafting.versioning import create_new_draft_version
-from app.models import Deadline, Draft, KnowledgeItem, Matter
+from app.models import Deadline, Draft, DraftKnowledgeItemLink, DraftSourceLink, KnowledgeItem, Matter
 from app.privacy.api_logger import ApiCallLogger
 from app.privacy.gateway import ClaudePrivacyGateway
 from app.research.service import LegalResearchService
@@ -168,6 +168,7 @@ class DraftingService:
             actor=actor,
             previous_draft=previous_draft,
         )
+        self._persist_reference_links(draft, source_list, knowledge_items_used, db)
         uncertainties = self._gather_uncertainties(matter_id, db)
 
         return DraftingResult(
@@ -266,6 +267,28 @@ class DraftingService:
             event_type=event_type,
             details=details,
         )
+
+    def _persist_reference_links(
+        self,
+        draft: Draft,
+        source_list: list[SourceReference],
+        knowledge_items_used: list[KnowledgeItemReference],
+        db: Session,
+    ) -> None:
+        """Hält fest, welche Quellen/Wissenselemente TATSÄCHLICH für genau
+        DIESE Version verwendet wurden (Prompt 24) - siehe Moduldocstring
+        in app/models/draft_reference_links.py für die Begründung, warum
+        das persistiert statt nur transient zurückgegeben wird."""
+        for source_ref in source_list:
+            db.add(DraftSourceLink(draft_id=draft.id, source_id=source_ref.source_id))
+        for knowledge_ref in knowledge_items_used:
+            db.add(
+                DraftKnowledgeItemLink(
+                    draft_id=draft.id, knowledge_item_id=knowledge_ref.knowledge_item_id
+                )
+            )
+        if source_list or knowledge_items_used:
+            db.commit()
 
     def _gather_uncertainties(self, matter_id: str, db: Session) -> list[str]:
         uncertainties: list[str] = []

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.ai_providers.claude_writing_provider import ClaudeWritingResult
 from app.ai_providers.local_ai_provider import RuleBasedLocalAIProvider
 from app.drafting.service import DraftingService
-from app.models import ApiCallLog, AuditEvent, Client, Deadline, Draft, KnowledgeItem, Matter, Source
+from app.models import ApiCallLog, AuditEvent, Client, Deadline, Draft, DraftKnowledgeItemLink, DraftSourceLink, KnowledgeItem, Matter, Source
 from app.models.base import Base
 from app.privacy.gateway import ClaudePrivacyGateway
 from app.privacy.gateway_schema import ClaudeRequestPayload
@@ -140,6 +140,92 @@ def test_knowledge_items_used_contains_matching_approved_item(db_session: Sessio
     result = service.create_draft(matter.id, "formulate_draft", db_session)
 
     assert any(k.knowledge_item_id == knowledge_item.id for k in result.knowledge_items_used)
+
+
+def test_used_source_is_persisted_as_draft_source_link(db_session: Session) -> None:
+    """Prompt 24: die tatsaechliche Verwendung wird persistiert, nicht nur
+    transient im DraftingResult zurueckgegeben (Grundlage fuer das
+    Quellen-Panel im Dashboard)."""
+    matter = _matter(db_session, title="Einspruch Steuerbescheid")
+    service, search_service = _service(min_score=0.0)
+    source = Source(
+        title="Einspruch Steuerbescheid Regelung",
+        source_type="Gesetz",
+        reference="§ 355 AO",
+        approval_level="freigegeben",
+    )
+    db_session.add(source)
+    db_session.commit()
+    search_service.index_source(source, db_session)
+
+    result = service.create_draft(matter.id, "formulate_draft", db_session)
+
+    links = db_session.query(DraftSourceLink).filter_by(draft_id=result.draft_id).all()
+    assert len(links) == 1
+    assert links[0].source_id == source.id
+
+
+def test_used_knowledge_item_is_persisted_as_draft_knowledge_item_link(
+    db_session: Session,
+) -> None:
+    matter = _matter(db_session, title="Einspruch Steuerbescheid")
+    service, search_service = _service()
+    knowledge_item = KnowledgeItem(
+        title="Einspruch Steuerbescheid Baustein",
+        content="Textbaustein Einspruch Steuerbescheid",
+        approval_status="approved",
+    )
+    db_session.add(knowledge_item)
+    db_session.commit()
+    search_service.index_knowledge_item(knowledge_item, db_session)
+
+    result = service.create_draft(matter.id, "formulate_draft", db_session)
+
+    links = (
+        db_session.query(DraftKnowledgeItemLink).filter_by(draft_id=result.draft_id).all()
+    )
+    assert len(links) == 1
+    assert links[0].knowledge_item_id == knowledge_item.id
+
+
+def test_reference_links_are_not_shared_across_versions(db_session: Session) -> None:
+    """Jede Version bekommt EIGENE Links - keine Wiederverwendung."""
+    matter = _matter(db_session, title="Einspruch Steuerbescheid")
+    service, search_service = _service(min_score=0.0)
+    source = Source(
+        title="Einspruch Steuerbescheid Regelung",
+        source_type="Gesetz",
+        reference="§ 355 AO",
+        approval_level="freigegeben",
+    )
+    db_session.add(source)
+    db_session.commit()
+    search_service.index_source(source, db_session)
+
+    first = service.create_draft(matter.id, "formulate_draft", db_session)
+    first_draft = db_session.query(Draft).filter_by(id=first.draft_id).first()
+    second = service.create_draft(
+        matter.id, "improve_draft", db_session, previous_draft=first_draft
+    )
+
+    first_links = db_session.query(DraftSourceLink).filter_by(draft_id=first.draft_id).all()
+    second_links = db_session.query(DraftSourceLink).filter_by(draft_id=second.draft_id).all()
+    assert len(first_links) == 1
+    assert len(second_links) == 1
+    assert first_links[0].id != second_links[0].id
+
+
+def test_no_sources_or_knowledge_items_means_no_links(db_session: Session) -> None:
+    matter = _matter(db_session, title="Völlig unbekanntes Thema ohne Treffer xyz123")
+    service, _ = _service()
+
+    result = service.create_draft(matter.id, "formulate_draft", db_session)
+
+    assert db_session.query(DraftSourceLink).filter_by(draft_id=result.draft_id).count() == 0
+    assert (
+        db_session.query(DraftKnowledgeItemLink).filter_by(draft_id=result.draft_id).count()
+        == 0
+    )
 
 
 def test_insufficient_research_becomes_open_review_point(db_session: Session) -> None:
