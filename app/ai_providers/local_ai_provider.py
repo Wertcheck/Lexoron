@@ -25,6 +25,12 @@ from app.search.service import DocumentSearchService
 from app.search.utils import build_snippet
 
 _MAX_DOCUMENT_EXCERPT_CHARS = 500
+# Sicherheitsergänzung (Prompt 28): ohne Obergrenze könnte eine Akte mit
+# sehr vielen (z. B. absichtlich zugeschickten) kleinen Anhängen den
+# Sachverhalt und damit die Kosten/Tokenzahl jeder Claude-Anfrage
+# unbegrenzt aufblähen. Begrenzung auf die neuesten N Dokumente -
+# konsistent mit der bereits bestehenden Pro-Dokument-Zeichenbegrenzung.
+_MAX_DOCUMENTS_IN_SACHVERHALT = 30
 
 # Grobe, tolerante Rollen-Zuordnung fuer Party.role (Freitext, Prompt 04).
 _OPPONENT_ROLE_KEYWORDS = ("gegner", "gegenseite", "beklagte", "beklagter")
@@ -81,6 +87,8 @@ class RuleBasedLocalAIProvider:
             db.query(Document)
             .filter(Document.matter_id == matter_id)
             .filter(Document.extracted_text.isnot(None))
+            .order_by(Document.created_at.desc())
+            .limit(_MAX_DOCUMENTS_IN_SACHVERHALT)
             .all()
         )
         for document in documents:

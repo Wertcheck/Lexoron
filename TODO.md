@@ -313,7 +313,17 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       keiner blockiert einen internen Pilotbetrieb, mehrere sind vor echtem
       Produktiv-/Mehrkanzlei-Einsatz zwingend. 12 neue Angriffssimulationstests, 553/553
       gesamt grün. Siehe SECURITY_REVIEW.md für die vollständige Bewertung.
-- [ ] Prompt-Injection-Schutz + Tests mit manipulierten Dokumenten
+- [x] Prompt-Injection-Schutz + Tests mit manipulierten Dokumenten – Prompt 28, 15.08.
+      Baut auf Prompt 27 auf: End-to-End-Beweis mit einer ECHTEN, per PyMuPDF erzeugten PDF-
+      Datei mit eingebettetem Injection-Text (nicht nur ein simulierter String) durch die
+      tatsächliche Extraktions-/Kontext-/Gateway-Pipeline. Positiver Nebenfund: laute,
+      grossgeschriebene Injection-Versuche werden bereits von der bestehenden PII-Heuristik
+      abgefangen (fail-closed, bevor Claude erreicht wird). Zusätzlich gefunden+behoben:
+      keine Obergrenze für die Anzahl der in den Sachverhalt einbezogenen Dokumente (Kosten-/
+      DoS-Amplifikation über viele kleine Anhänge möglich) - auf 30 neueste Dokumente
+      begrenzt. OCR-Artefakt-Simulation, manipulierte externe Quelle, kombinierter E-Mail-
+      Body+Anhang-Angriff ebenfalls getestet. 12 neue Tests, 565/565 gesamt grün. Siehe
+      SECURITY_REVIEW.md, Abschnitt 2.1 und "Ergänzung Prompt 28".
 - [ ] Synthetischer Testdaten-Simulator
 - [ ] End-to-End-Test
 - [ ] Fehler-/Retry-System

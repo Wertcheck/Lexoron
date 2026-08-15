@@ -129,6 +129,22 @@ verifizieren. Empfehlung: vor einem Pilotbetrieb einmalig mit 5-10 realistischen
 Injection-Versuchen (z. B. aus bekannten Prompt-Injection-Testsammlungen) gegen die echte
 API gegentesten.
 
+**Ergänzung Prompt 28 (Tests mit echten manipulierten Dokumenten):** Der End-to-End-Beweis
+wurde mit einer ECHTEN, per PyMuPDF erzeugten PDF-Datei mit eingebettetem Injection-Text
+geführt (nicht nur einem simulierten String) – siehe
+`tests/test_prompt_injection_documents.py`. Dabei ein positiver Nebenfund: laute,
+durchgehend großgeschriebene Injection-Versuche ("IGNORIERE ALLE VORHERIGEN ANWEISUNGEN")
+werden bereits von der BESTEHENDEN Security-Check-Heuristik für unerkannte Namen abgefangen
+(mehrere aufeinanderfolgende großgeschriebene Wörter sehen wie ein potenzieller Name aus) –
+die Anfrage wird komplett blockiert, BEVOR sie Claude erreicht (fail-closed). Das ist kein
+gezielt gebauter Injection-Filter, aber ein nützlicher zusätzlicher Verteidigungslayer.
+Zusätzlich gefunden und behoben: `_build_sachverhalt` (`app/ai_providers/local_ai_provider.py`)
+hatte keine Obergrenze für die Anzahl einbezogener Dokumente – eine Akte mit sehr vielen
+kleinen (potenziell absichtlich zugesandten) Anhängen hätte den Sachverhalt und damit die
+Tokenkosten jeder Claude-Anfrage unbegrenzt wachsen lassen können. Begrenzung auf die
+neuesten 30 Dokumente ergänzt, per Test bewiesen
+(`test_document_count_in_sachverhalt_is_capped`).
+
 - **Prototyp-Risiko: niedrig** (kein Internetzugriff, synthetische Testdaten, geringes
   Schadenspotenzial selbst bei erfolgreicher Injektion).
 - **Produktiv-Risiko: mittel.** Der Entwurf wird ohnehin **immer** von einem Anwalt geprüft,
