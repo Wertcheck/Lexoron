@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Postausgang{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">Postausgang</h1>
+    <div class="topbar__meta">
+      <strong>{{ entries|length }}</strong> Einträge in dieser Ansicht
+    </div>
+    <div class="filters">
+      {% for key, label in [("pending", "Wartend"), ("sent", "Versendet"), ("", "Alle")] %}
+        <a class="filter-tab{% if active_status == key %} filter-tab--active{% endif %}"
+           href="/dashboard/outbox{% if key %}?status={{ key }}{% endif %}">
+          {{ label }}
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="draft-page">
+    {% if error %}
+      <div class="banner banner--error">{{ error }}</div>
+    {% endif %}
+    <p class="form-hint" style="margin-bottom: 16px;">
+      Dieses System versendet nichts automatisch. "Als versendet markieren" bestätigt lediglich,
+      dass Sie das Schreiben bereits außerhalb dieses Systems (z. B. über Ihr E-Mail-Programm)
+      versendet haben.
+    </p>
+
+    {% if entries %}
+      <table class="draft-table">
+        <thead>
+          <tr>
+            <th>Akte</th>
+            <th>Status</th>
+            <th>Freigegeben</th>
+            <th>Versendet</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in entries %}
+            <tr>
+              <td>
+                <a href="/dashboard/drafts/{{ entry.draft_id }}">
+                  {{ entry.draft.matter.title if entry.draft and entry.draft.matter else entry.matter_id }}
+                </a>
+              </td>
+              <td>
+                <span class="tag {% if entry.status == 'sent' %}tag--matched{% else %}tag--unmatched{% endif %}">
+                  {{ entry.status }}
+                </span>
+              </td>
+              <td class="mono">{{ entry.created_at.strftime("%d.%m.%Y, %H:%M") }}</td>
+              <td class="mono">
+                {% if entry.sent_at %}
+                  {{ entry.sent_at.strftime("%d.%m.%Y, %H:%M") }} ({{ entry.sent_by }})
+                {% else %}
+                  –
+                {% endif %}
+              </td>
+              <td>
+                {% if entry.status == "pending" %}
+                  <form method="post" action="/dashboard/outbox/{{ entry.id }}/mark-sent" style="display:inline;">
+                    <input type="text" name="actor" required placeholder="Ihr Kürzel/E-Mail" style="width:150px;" />
+                    <button type="submit" class="btn btn--primary">Als versendet markieren</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="empty-state">Keine Einträge in dieser Ansicht.</div>
+    {% endif %}
+  </div>
+{% endblock %}

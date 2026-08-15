@@ -23,6 +23,7 @@ from app.models.embedding import Embedding
 from app.models.knowledge_item import KnowledgeItem
 from app.models.matter import Matter
 from app.models.message import Message
+from app.models.outbox_entry import VALID_OUTBOX_STATUSES, OutboxEntry
 from app.models.party import Party
 from app.models.policy import Policy
 from app.models.review_finding import ReviewFinding
@@ -54,6 +55,8 @@ __all__ = [
     "KnowledgeItem",
     "WorkflowRun",
     "VALID_WORKFLOW_STATUSES",
+    "OutboxEntry",
+    "VALID_OUTBOX_STATUSES",
     "AuditEvent",
     "AuditLogImmutableError",
     "ApiCallLog",

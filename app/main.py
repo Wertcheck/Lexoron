@@ -23,6 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api import api_router
 from app.config import get_settings
 from app.web.drafts_router import router as drafts_web_router
+from app.web.outbox_router import router as outbox_web_router
 from app.web.router import router as web_router
 
 
@@ -60,6 +61,7 @@ def health() -> dict[str, str]:
 app.include_router(api_router)
 app.include_router(web_router)
 app.include_router(drafts_web_router)
+app.include_router(outbox_web_router)
 app.mount(
     "/dashboard/static",
     StaticFiles(directory="app/web/static"),

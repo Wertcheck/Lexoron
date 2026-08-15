@@ -1320,3 +1320,74 @@ zusätzlich per curl End-to-End bestätigt (Freigeben ändert `status` nachweisl
    jedem Formular bleibt manueller Actor-Platzhalter bis Prompt 26.
 4. Offener Punkt aus Prompt 23 (ob die Neugenerierung den bisherigen Entwurfstext als Kontext
    erhalten soll) bleibt unverändert offen - keine Änderung daran vorgenommen.
+
+## 37. Postausgang – Warteschlange mit manueller Sende-Bestätigung (Prompt 25)
+
+Letzter Baustein von Phase 6. Setzt dieselbe architektonische Grundregel wie beim `MailProvider`
+(Prompt 07, `app/mail/base.py`) konsequent fort: **strukturell keine Versandfähigkeit**, nicht
+nur per Konfiguration deaktiviert. `OutboxService` (`app/outbox/service.py`) hat genau zwei
+Methoden (`add_to_outbox`, `mark_as_sent`) - keine davon importiert `smtplib`, `requests`,
+`httpx` oder eine Versand-API; per Test strukturell abgesichert
+(`test_outbox_service_module_has_no_send_capability`), nicht nur behauptet.
+
+### Datenmodell
+
+**`OutboxEntry`** (`app/models/outbox_entry.py`): `matter_id` (redundant zu `draft.matter_id`,
+gleiches Muster wie `AttorneyInstruction`), `draft_id` (UNIQUE - ein Draft bekommt genau einen
+Eintrag), `status` (pending/sent), `sent_at`, `sent_by`.
+
+### Kombinierte Aktion "Freigeben & Postausgang übergeben"
+
+Wie in der Design-Referenz des Anwalts als EINE Aktion vorgesehen - `approve_draft`
+(`app/web/drafts_router.py`) ruft jetzt sowohl `DraftFeedbackService.record_feedback(approved)`
+als auch `OutboxService.add_to_outbox(draft)` auf. Löst damit den in Prompt 24 offen gelassenen
+Punkt ("Freigeben & Postausgang übergeben markiert nur den Status - eine echte
+Postausgang-Übergabe folgt erst Prompt 25"). Idempotent abgesichert: erneutes Freigeben eines
+bereits im Postausgang befindlichen Entwurfs wirft keinen Fehler (`OutboxEntryAlreadyExistsError`
+wird im Router abgefangen), da ein Anwalt versehentlich zweimal auf "Freigeben" klicken können
+muss, ohne dass die Seite abstürzt.
+
+### Web-Oberfläche
+
+`GET /dashboard/outbox` (Filter: Wartend/Versendet/Alle) + `POST /dashboard/outbox/{id}/mark-sent`.
+Expliziter Hinweistext in der Ansicht: "Dieses System versendet nichts automatisch." Sidebar-
+Link "Postausgang" jetzt aktiv - damit sind alle 8 im Konzept vorgesehenen Dashboard-Bereiche
+erreichbar (Dashboard selbst bleibt als reine Übersichtsseite offen, "Akten" ebenfalls, beide
+außerhalb des ursprünglichen 45-Prompt-Umfangs für Phase 6).
+
+### Gefundener und behobener Bug
+
+Ein zweiter Versuch, denselben `OutboxEntry` als versendet zu markieren (Doppelklick, zwei
+parallel geöffnete Tabs), ließ die `ValueError` aus `OutboxService.mark_as_sent` ungefangen bis
+zum Client durchschlagen (500-Fehler statt sauberer Rückmeldung). Behoben: `mark_sent`
+(`app/web/outbox_router.py`) fängt `ValueError` ab und leitet mit Fehlermeldung zurück, statt
+abzustürzen - gleiches Muster wie bei `WritingProviderNotConfiguredError` an anderer Stelle im
+Dashboard.
+
+### Getestet
+
+19 neue Tests: `tests/test_outbox_service.py` (9 - inkl. der strukturellen
+Keine-Versandfähigkeit-Prüfung), `tests/test_web_outbox.py` (10 - Listenansicht, Freigeben-
+Integration inkl. Idempotenz, Als-versendet-markieren inkl. Doppel-Klick-Fehlerpfad). 504/504
+Tests gesamt grün. Migration in beide Richtungen getestet. Per Playwright-Screenshot visuell
+verifiziert (Wartend-/Versendet-Ansicht).
+
+### Bewusst nicht umgesetzt / offene Punkte
+
+1. **Keine Verknüpfung zu `WorkflowRun`/`OUTBOX_READY`**: die Workflow-State-Machine (Prompt 20)
+   sieht den Zustand `OUTBOX_READY` bereits vor, aber `WorkflowRun` hat bis heute kein
+   `draft_id`-Feld (bereits in Prompt 23 als Lücke notiert). `OutboxEntry` ist deshalb bewusst
+   ein eigenständiges, einfaches Modell statt in `WorkflowRun` integriert - vermeidet, die
+   Workflow-State-Machine nachträglich anzufassen. Eine spätere Vereinheitlichung ist möglich,
+   aber nicht Teil dieses Prompts.
+2. Keine "mailto:"-Komfortfunktion (Öffnen im E-Mail-Programm des Anwalts) - wäre technisch
+   unproblematisch (löst selbst keinen Versand aus, der Anwalt müsste in seinem eigenen
+   Programm weiterhin selbst auf "Senden" klicken), aber nicht Teil dieses Prompts; einfache
+   spätere Ergänzung bei Bedarf.
+3. Kein Schutz auf UI-Ebene gegen doppeltes "Als versendet markieren" außer dem Verschwinden
+   aus der Standardansicht - der zugrunde liegende Fehlerfall ist abgefangen (siehe oben), aber
+   es gibt keinen serverseitigen Zwischenzustand ("wird markiert...").
+4. Weiterhin kein Session-/Auth-System - "Ihr Kürzel/E-Mail" bleibt manueller Actor-Platzhalter
+   bis Prompt 26.
+
+**Mit Prompt 25 ist Phase 6 (Dashboard, Prompts 21–25) vollständig abgeschlossen.**

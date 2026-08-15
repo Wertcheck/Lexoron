@@ -42,6 +42,7 @@ from app.models import (
     Message,
     ReviewFinding,
 )
+from app.outbox.service import OutboxEntryAlreadyExistsError, OutboxService
 from app.web.service_factory import (
     WritingProviderNotConfiguredError,
     get_attorney_instruction_service,
@@ -334,15 +335,12 @@ def approve_draft(
     db: Session = Depends(get_db),
     service: DraftFeedbackService = Depends(get_feedback_service),
 ) -> RedirectResponse:
-    """"Freigeben & Postausgang übergeben" (Design-Referenz des Anwalts).
-
-    WICHTIG, ehrlich benannt: die tatsächliche Übergabe an einen
-    Postausgang ist erst Prompt 25 - diese Aktion markiert den Entwurf
-    über `DraftFeedbackService` als freigegeben (`status="approved"`),
-    löst aber KEINEN Versand und KEINE Postausgang-Zuordnung aus (die es
-    als Konzept noch nicht gibt). Kein automatischer Versand ohne
-    anwaltliche Freigabe UND ohne Postausgang - Grundregel unverändert
-    eingehalten."""
+    """"Freigeben & Postausgang übergeben" (Design-Referenz des Anwalts) -
+    EINE kombinierte Aktion, seit Prompt 25 auch technisch: Freigabe über
+    `DraftFeedbackService` UND Übergabe an den Postausgang über
+    `OutboxService.add_to_outbox` (siehe app/outbox/, KEINE Versand-
+    fähigkeit - reine Warteschlange mit späterer manueller Bestätigung).
+    Kein automatischer Versand, Grundregel unverändert eingehalten."""
     draft = get_or_404(db, Draft, draft_id, "Entwurf")
     service.record_feedback(
         draft,
@@ -350,6 +348,13 @@ def approve_draft(
         db,
         actor=actor.strip(),
     )
+    try:
+        OutboxService().add_to_outbox(draft, db, actor=actor.strip())
+    except OutboxEntryAlreadyExistsError:
+        # Erneutes Freigeben eines bereits im Postausgang befindlichen
+        # Entwurfs darf nicht scheitern - der Eintrag existiert bereits,
+        # nichts weiter zu tun.
+        pass
     return RedirectResponse(url=f"/dashboard/drafts/{draft_id}", status_code=303)
 
 

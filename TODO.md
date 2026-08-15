@@ -273,7 +273,17 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       entstehen bisher nur programmatisch/direkt); "Freigeben & Postausgang übergeben" markiert
       nur den Status - eine echte Postausgang-Übergabe folgt erst Prompt 25. Siehe
       ARCHITECTURE.md §36.
-- [ ] Postausgang (kein automatischer Versand)
+- [x] Postausgang (kein automatischer Versand) – Prompt 25, 15.08. Neues Modell `OutboxEntry`
+      (Warteschlange, status pending/sent) + `OutboxService` (add_to_outbox/mark_as_sent) -
+      dieselbe architektonische Grundregel wie beim `MailProvider` (Prompt 07): STRUKTURELL
+      keine Versandfähigkeit (kein SMTP, kein Aufruf einer Versand-API im gesamten Modul, per
+      Test abgesichert). "Freigeben & Postausgang übergeben" (Prompt 24) übergibt jetzt
+      automatisch in den Postausgang; "Als versendet markieren" bestätigt nur eine bereits
+      AUSSERHALB des Systems erfolgte manuelle Handlung. Listenansicht `/dashboard/outbox`
+      (Wartend/Versendet/Alle), Sidebar verlinkt. Ein echter Bug beim Bauen gefunden+behoben:
+      zweifaches "Als versendet markieren" (z. B. Doppelklick) crashte zunächst mit 500 statt
+      sauber abzufangen. 19 neue Tests (9 Service, 10 Web-Router), 504/504 gesamt grün. Siehe
+      ARCHITECTURE.md §37. **Phase 6 (Dashboard) damit vollständig abgeschlossen.**
 
 ## Phase 7 – Sicherheit und Produktisierung (Prompts 26–35)
 - [ ] Rollen/Berechtigungen (Admin, Anwalt, Mitarbeiter)
