@@ -28,6 +28,19 @@ nicht Tests einer gemeinsamen Datenbank mit tenant_id-Filterung, die es in diese
 gibt. Lizenz-/Auslieferungsmodell (wie eine neue Installation praktisch verteilt wird) bleibt
 weiterhin offen, wird bei Bedarf gesondert geklärt.
 
+**Zurückgestellte Überlegung (16.08.): macOS-Version.** Für eine mögliche künftige Kanzlei
+(nicht die aktuelle Pilot-Kanzlei) wurde die Frage nach einer nativen Version für Apple-
+Rechner (macOS, nicht iOS) aufgeworfen. Einschätzung: technisch deutlich weniger Aufwand als
+eine native iOS-App (die Anwendung selbst - FastAPI, SQLAlchemy, alle Abhängigkeiten - läuft
+bereits plattformübergreifend ohne Codeänderung), aber ein eigener, dem Windows-Installer
+(Prompt 36) vergleichbar aufwendiger Verpackungsweg: PyInstaller für macOS (muss auf einem
+echten Mac laufen, kein Cross-Build aus Linux), `.app`-Bundle statt `.exe`, Code-Signierung/
+Notarisierung durch Apple (erfordert eine kostenpflichtige Apple-Developer-Mitgliedschaft),
+ggf. `.dmg`-Paketierung. Bewusst NICHT Teil des aktuellen Plans - wird erst relevant, wenn
+tatsächlich eine Kanzlei mit Mac-Arbeitsplätzen ansteht, dann als eigener Prompt/eigene
+Sitzung analog zu Prompt 36 (auf einem echten Mac, nicht in der Linux-Sandbox oder hier im
+Chat).
+
 ## Phase 0 – Projektstart (dieser Schritt)
 - [x] Umgebung geprüft (Python 3.12, git vorhanden, Repo leer)
 - [x] ARCHITECTURE.md angelegt
