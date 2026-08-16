@@ -8,11 +8,25 @@ abgestimmt ist.
 Test in dieser ersten Kanzlei auch anderen Kanzleien angeboten werden. Aktuelle Architektur- und
 Datenmodell-Entscheidungen gehen weiterhin von EINER Kanzlei pro Installation/Deployment aus
 (kein `tenant_id`/Kanzlei-Entität im Datenmodell) - das ist bewusst so belassen, um die erste
-Kanzlei nicht durch verfrühte Multi-Tenancy-Komplexität zu verzögern. **Offene Entscheidung für
-eine spätere Phase (voraussichtlich vor Prompt 36, Phase 8 "Kanzlei-Produkt"):** Mandantentrennung
-zwischen mehreren Kanzleien (separate Datenbank pro Kanzlei vs. gemeinsame DB mit `tenant_id`),
-Konfigurierbarkeit pro Kanzlei (Klassifikationsschlüsselwörter, Policies, Branding), Lizenz-/
-Auslieferungsmodell. Wird rechtzeitig vor Phase 8 explizit mit dem Anwalt abgestimmt.
+Kanzlei nicht durch verfrühte Multi-Tenancy-Komplexität zu verzögern.
+
+**Entscheidung zur Mehr-Kanzlei-Fähigkeit (16.08., vor Beginn Phase 8 abgestimmt):**
+**Getrennte Installation je Kanzlei** - jede Kanzlei erhält eine eigene, unabhängige Installation
+mit eigener Datenbank (kein `tenant_id`, kein gemeinsam genutzter Datenbestand zwischen
+Kanzleien). Begründung: konsistent mit der bisherigen Architektur (SQLite als eingebettete
+Datei, Windows-Installer als Zielformat, kein SaaS-/Cloud-Bezug); strukturell ausgeschlossenes
+Cross-Tenant-Datenleck, da keine gemeinsame Infrastruktur zwischen Kanzleien existiert - kein
+Mandantentrennungs-Fehler ist überhaupt möglich, wenn es keine gemeinsame gemeinsame
+Datenschicht gibt. Folgen für Phase 8: "Multi-Kanzlei-Profile + Cross-Tenant-Tests" (weiter
+unten) bedeutet in diesem Modell konkret: der Setup-/Konfigurationsassistent (Prompt 37)
+unterstützt das einfache Aufsetzen einer NEUEN, unabhängigen Instanz für eine neue Kanzlei
+(Branding, Klassifikationsschlüsselwörter, Policies als Installationszeit-Konfiguration) - NICHT
+Laufzeit-Mandantentrennung innerhalb einer einzigen laufenden Anwendung. "Cross-Tenant-Tests"
+werden entsprechend zu Tests, die beweisen, dass zwei unabhängige Installationen sich nicht
+gegenseitig beeinflussen können (z. B. getrennte Datenverzeichnisse, keine geteilten Ressourcen) -
+nicht Tests einer gemeinsamen Datenbank mit tenant_id-Filterung, die es in diesem Modell nicht
+gibt. Lizenz-/Auslieferungsmodell (wie eine neue Installation praktisch verteilt wird) bleibt
+weiterhin offen, wird bei Bedarf gesondert geklärt.
 
 ## Phase 0 – Projektstart (dieser Schritt)
 - [x] Umgebung geprüft (Python 3.12, git vorhanden, Repo leer)
