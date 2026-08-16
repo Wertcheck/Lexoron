@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Backup & Export{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">Backup &amp; Export</h1>
+    <div class="topbar__meta">Nur für Administratoren sichtbar</div>
+  </div>
+
+  <div class="draft-page">
+    <div class="instructions-panel">
+      <h2 class="panel-title">Vollständige Systemsicherung</h2>
+      <p class="form-hint">
+        Erzeugt ein ZIP-Archiv mit einem konsistenten Datenbank-Snapshot und allen
+        Dokumentenspeicher-Verzeichnissen. Enthält vollständige, unpseudonymisierte
+        Mandanteninhalte - wie die Produktionsdatenbank selbst zu behandeln
+        (verschlüsselt und zugriffsbeschränkt aufbewahren).
+      </p>
+      <form method="post" action="/dashboard/backup/full">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <button type="submit" class="btn btn--primary">Backup erstellen &amp; herunterladen</button>
+      </form>
+    </div>
+
+    <div class="instructions-panel">
+      <h2 class="panel-title">Aktenexport (einzelne Akte)</h2>
+      <p class="form-hint">
+        Exportiert alle Daten einer einzelnen Akte (Nachrichten, Dokumente, Entwürfe,
+        Anmerkungen, Fristen, Audit-Trail) als ZIP - relevant für Auskunftsersuchen oder
+        Aktenschließung.
+      </p>
+      {% if matters %}
+        <table class="draft-table">
+          <thead>
+            <tr>
+              <th>Akte</th>
+              <th>Aktenzeichen</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for matter in matters %}
+              <tr>
+                <td>{{ matter.title }}</td>
+                <td class="mono">{{ matter.reference_number or "–" }}</td>
+                <td>
+                  <form method="post" action="/dashboard/backup/matter/{{ matter.id }}" style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                    <button type="submit" class="btn">Exportieren</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="empty-state">Keine Akten vorhanden.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

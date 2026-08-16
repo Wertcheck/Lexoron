@@ -434,7 +434,23 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       Importen/Tests nötig. 9 neue Tests, 679/679 gesamt grün. Siehe ARCHITECTURE.md §43.
       **Bewusst NICHT umgesetzt:** ein zweiter, echter Provider (Ollama) - bleibt weiterhin
       eine offene Entscheidung, siehe unten "Offene Entscheidung: Ollama".
-- [ ] Export/Backup
+- [x] Export/Backup – Prompt 35, 16.08. Zwei getrennte, komplementäre Funktionen:
+      `app/backup/` (`BackupService`) - vollständige Systemsicherung als ZIP: konsistenter
+      SQLite-Snapshot (über die native `sqlite3`-Backup-API, nicht bloßes Dateikopieren -
+      garantiert Konsistenz auch bei einer theoretisch gleichzeitig laufenden Schreib-
+      transaktion) + beide Dokumentenspeicher-Verzeichnisse (Intake, Mail-Anhänge).
+      `app/export/` (`MatterExportService`) - strukturierter Export EINER Akte (Nachrichten,
+      Dokumente, alle Entwurfsversionen, Anmerkungen, Fristen, Postausgang-Status,
+      Audit-Trail) als ZIP mit menschenlesbarem JSON-Manifest + Original-Dokumentkopien -
+      relevant für DSGVO-Auskunftsersuchen (Art. 15/20) und Aktenschließung. Beide
+      Archivtypen ausdrücklich als "genauso schützenswert wie die Produktionsdatenbank"
+      gekennzeichnet (unpseudonymisierte Inhalte). CLI-Skript `scripts/create_backup.py`
+      + Admin-only Dashboard-Seite `/dashboard/backup` mit Download-Buttons für beide
+      Funktionen - per echtem Browser-Download-Klick verifiziert (nicht nur Backend-Test).
+      29 neue Tests (15 Service-Ebene inkl. Konsistenz-Wiederherstellungsprobe, 14 Web-Ebene),
+      708/708 gesamt grün. Siehe ARCHITECTURE.md §44.
+
+**Phase 7 (Sicherheit und Produktisierung, Prompts 26-35) damit vollständig abgeschlossen.**
 
 ## Phase 8 – Kanzlei-Produkt (Prompts 36–45)
 - [ ] Windows-Installer

@@ -1866,3 +1866,83 @@ Modellname/Max-Tokens, `ProviderNotConfiguredError` bei fehlendem/leerem API-Key
 Settings-Validierung, Rückwärtskompatibilität des alten Exception-Namens. 679/679 Tests gesamt
 grün - keine Regression an den bestehenden Drafting-/Review-/Dashboard-Tests, obwohl die
 Konstruktionslogik verschoben wurde.
+
+## 44. Export/Backup (Prompt 35)
+
+Zwei getrennte, komplementäre Funktionen mit unterschiedlichem Zweck - bewusst NICHT
+vermischt:
+
+### `app/backup/` – vollständige Systemsicherung
+
+Erzeugt EIN ZIP mit dem gesamten Systemzustand: einer konsistenten Kopie der SQLite-
+Datenbankdatei + beiden Dokumentenspeicher-Verzeichnissen (`intake_storage_dir`,
+`mail_attachment_storage_dir`). Nutzt bewusst `sqlite3.Connection.backup()` (die native
+SQLite-Backup-API) statt eines rohen Dateisystem-Kopiervorgangs - garantiert einen
+konsistenten Snapshot auch bei einer theoretisch gleichzeitig aktiven Schreibtransaktion,
+was ein einfaches `shutil.copy()` nicht zusichern könnte. Per Test bewiesen: die im Archiv
+enthaltene Datenbankdatei ist nach Wiederherstellung tatsächlich lesbar und konsistent
+(`test_backup_contains_consistent_database_snapshot`).
+
+Unterstützt aktuell ausschließlich SQLite (`database_url` muss mit `sqlite:///` beginnen) -
+passend zur bestehenden Ein-Datenbank-Architektur des Projekts; ein anderer
+Datenbanktreiber würde `BackupError` auslösen statt still falsche Daten zu sichern.
+
+### `app/export/` – strukturierter Export EINER Akte
+
+Anders als das technische Systemsicherung deckt dieser Export GEZIELT eine einzelne Akte
+ab - relevant für:
+- **DSGVO Art. 15 (Auskunftsrecht) / Art. 20 (Datenübertragbarkeit)**: ein Mandant kann
+  verlangen, alle über ihn gespeicherten Daten zu erhalten.
+- **Aktenschließung/Archivierung**: vollständige Dokumentation eines abgeschlossenen Falls
+  in einem einzigen, portablen Archiv.
+
+Erzeugt ein ZIP mit `manifest.json` (Akte, Mandant, Nachrichten, ALLE Entwurfsversionen,
+anwaltliche Anmerkungen, Fristen, Postausgang-Status, vollständiger Audit-Trail - menschen-
+UND maschinenlesbar) + `documents/` (Kopien der Original-Dokumentdateien dieser Akte). Ein
+fehlendes/gelöschtes physisches Dokument bricht den Export NICHT ab - wird einfach
+ausgelassen, per Test abgesichert (`test_export_gracefully_skips_missing_document_files`).
+Cross-Matter-Isolation per Test bewiesen: der Export einer Akte enthält nachweislich keine
+Daten einer anderen Akte (`test_export_manifest_has_no_cross_matter_leakage`).
+
+### Sensibilität beider Archivtypen
+
+Beide enthalten VOLLSTÄNDIGE, unpseudonymisierte Mandanteninhalte (Pseudonymisierung
+passiert erst beim Verlassen des Systems Richtung Claude API, nicht innerhalb der eigenen
+Datenbank) - ausdrücklich als genauso schützenswert wie die Produktionsdatenbank selbst
+gekennzeichnet, sowohl im Archiv selbst (`BACKUP_INFO.txt`/`EXPORT_INFO.txt`) als auch in
+der Dashboard-Oberfläche. Keine Sonderbehandlung, keine Reduzierung der Sensibilität nur
+weil es sich um einen "Export" statt der Live-Datenbank handelt.
+
+### Zugriffswege
+
+- **CLI**: `scripts/create_backup.py --output-dir backups/` - für periodischen Aufruf ohne
+  eingebauten Scheduler (z. B. Windows-Aufgabenplanung), konsistent mit dem bereits in
+  Prompt 31 etablierten Muster (`retry_failed_items.py`).
+- **Dashboard**: `/dashboard/backup` (NUR Admin, wie Nutzerverwaltung/Systemstatus) - ein
+  Button für die vollständige Sicherung, eine Tabelle mit Export-Button je Akte. Beide lösen
+  einen direkten Datei-Download aus (`FileResponse`). Per echtem Playwright-Download-Klick
+  verifiziert (nicht nur ein Backend-Funktionstest) - Datei kommt nachweislich im Browser an,
+  korrekter Dateiname, gültiges ZIP.
+
+### Getestet
+
+29 neue Tests: `tests/test_backup_and_export.py` (15 - inkl. Konsistenz-Wiederherstellungs-
+probe, fehlende Datenbank/nicht unterstützter Datenbanktyp, keine Dateinamen-Kollision bei
+wiederholten Backups, Cross-Matter-Isolation), `tests/test_web_backup.py` (14 - Admin-only-
+Zugriff auf beide Aktionen, CSRF-Schutz, 404 bei unbekannter Akte, gültiges ZIP im Download).
+708/708 Tests gesamt grün. Migration nicht nötig (keine Datenbankänderung in diesem Prompt).
+
+### Offene Punkte
+
+1. Kein automatischer Wiederherstellungs-("Restore")-Mechanismus - nur das Erzeugen von
+   Archiven. Eine Wiederherstellung würde aktuell manuell erfolgen (Datenbank-Datei
+   ersetzen, Ordner entpacken) - bewusst nicht Teil dieses Prompts.
+2. Kein automatisches Löschen alter Backups/Exporte (weder im konfigurierbaren
+   `--output-dir` noch im Dashboard-Download-Staging-Verzeichnis) - liegt in der
+   Verantwortung des Betreibers (Windows-Aufgabenplanung könnte z. B. eine Aufräum-Aktion
+   ergänzen).
+3. Keine Verschlüsselung der erzeugten Archive selbst - liegt ebenfalls beim Betreiber
+   (z. B. verschlüsseltes Zielverzeichnis, verschlüsselter USB-Stick für Offline-Aufbewahrung).
+
+**Mit Prompt 35 ist Phase 7 (Sicherheit und Produktisierung, Prompts 26-35) vollständig
+abgeschlossen.**

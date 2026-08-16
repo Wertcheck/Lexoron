@@ -32,6 +32,7 @@ from app.auth.permissions import ForcePasswordChangeError, NotAuthenticatedError
 from app.config import get_settings
 from app.observability import configure_logging
 from app.web.auth_router import router as auth_web_router
+from app.web.backup_router import router as backup_web_router
 from app.web.drafts_router import router as drafts_web_router
 from app.web.errors_router import router as errors_web_router
 from app.web.monitoring_router import router as monitoring_web_router
@@ -100,6 +101,7 @@ app.include_router(auth_web_router)
 app.include_router(users_web_router)
 app.include_router(errors_web_router)
 app.include_router(monitoring_web_router)
+app.include_router(backup_web_router)
 app.mount(
     "/dashboard/static",
     StaticFiles(directory="app/web/static"),
