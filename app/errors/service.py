@@ -20,11 +20,14 @@ sich nicht in Sekunden).
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
 from app.models import AuditEvent, ProcessingError
+
+logger = logging.getLogger(__name__)
 
 _BACKOFF_BASE_SECONDS = 120  # 2 Minuten
 _BACKOFF_FACTOR = 4
@@ -94,6 +97,23 @@ class RetryService:
             db.add(processing_error)
 
         db.flush()
+        # SICHERHEITSKRITISCH (Prompt 32): `entity_id` ist bei
+        # `entity_type="IntakeFile"` der volle Quelldateipfad im
+        # überwachten Scan-Ordner - anders als bei einem `Document`
+        # (immer eine UUID) trägt dieser Pfad den UNVERÄNDERTEN
+        # ursprünglichen Dateinamen und kann daher einen echten
+        # Personen-/Mandantennamen enthalten. Nur bei UUID-artigen
+        # entity_ids (kein "/" enthalten) wird der Wert geloggt.
+        safe_entity_id = entity_id if "/" not in entity_id and "\\" not in entity_id else "***"
+        logger.warning(
+            "%s fehlgeschlagen: %s %s (Versuch %d/%d, Status %s)",
+            operation,
+            entity_type,
+            safe_entity_id,
+            processing_error.attempt_count,
+            processing_error.max_attempts,
+            processing_error.status,
+        )
         db.add(
             AuditEvent(
                 entity_type="ProcessingError",
@@ -101,7 +121,7 @@ class RetryService:
                 event_type="processing_failed",
                 actor=actor,
                 details=(
-                    f"{operation} fehlgeschlagen für {entity_type} {entity_id} "
+                    f"{operation} fehlgeschlagen für {entity_type} {safe_entity_id} "
                     f"(Versuch {processing_error.attempt_count}/{processing_error.max_attempts})"
                 ),
             )

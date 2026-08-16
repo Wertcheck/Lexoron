@@ -387,7 +387,23 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       gesamte Verarbeitung unkontrolliert abstürzen lassen statt sie dem neuen Fehler-/Retry-
       System zu übergeben. 38 neue Tests (25 Service-Ebene, 13 Web-Ebene), 632/632 gesamt grün.
       Siehe ARCHITECTURE.md §40.
-- [ ] Logging/Monitoring (ohne sensible Inhalte)
+- [x] Logging/Monitoring (ohne sensible Inhalte) – Prompt 32, 16.08. Zentrale Logging-
+      Konfiguration (`app/observability/logging_config.py`, in `app/main.py`-Lifespan
+      eingebunden) - vorher konfigurierte KEIN Modul das Python-Logging zentral (INFO-Logs
+      gingen schlicht verloren). Konsole immer, optionale rotierende Log-Datei
+      (`LOG_FILE_PATH`), Drittanbieter-Logger (watchdog/urllib3/httpx) auf WARNING gedrosselt.
+      Admin-only Systemstatus-Seite `/dashboard/monitoring` (Fehler-/Retry-Zähler, Nutzerzahlen,
+      Audit-Aktivität 24h, reine Ja/Nein-Konfigurationsstatus - nie Secrets). Operative Log-
+      Zeilen ergänzt (Login-Rate-Limit-Sperren, RetryService). **Zwei echte PII-Lecks
+      gefunden+behoben:** `ProcessingError`/`AuditEvent` für `IntakeFile`-Fehler nutzten den
+      vollen Quelldateipfad als `entity_id` - anders als bei `Document` (UUID) trägt dieser
+      Pfad den unveränderten ursprünglichen Dateinamen und könnte einen echten Namen enthalten;
+      betraf sowohl das neue operative Log als auch rückwirkend den bereits aus Prompt 31
+      bestehenden Audit-Text. Neue strukturelle Regressionswache
+      (`test_no_logging_call_interpolates_known_sensitive_variable_names`) durchsucht
+      dauerhaft alle `logger.*`-Aufrufe im Quellcode nach riskanten Variablennamen. 22 neue
+      Tests (7 Logging-Konfiguration, 3 PII-Schutzwache, 6 Monitoring-Web-Layer, plus indirekt
+      abgedeckte Retry-Service-Anpassungen), 648/648 gesamt grün. Siehe ARCHITECTURE.md §41.
 - [ ] KI-Kostenkontrolle
 - [ ] ModelProvider-Abstraktion
 - [ ] Export/Backup

@@ -1659,3 +1659,79 @@ ohne Pfad-/Dateiname-Leck).
 2. Der Backoff-Zähler ist rein In-Memory-unabhängig (in der Datenbank persistiert, nicht im
    Prozessspeicher) - läuft daher über Neustarts hinweg korrekt weiter, im Unterschied zum
    Login-Rate-Limiter (Prompt 29-Nachtrag), der bewusst prozesslokal ist.
+
+## 41. Logging/Monitoring ohne sensible Inhalte (Prompt 32)
+
+Bis zu diesem Prompt konfigurierte KEIN Modul das Python-Logging zentral - nur
+`app/ingestion/watcher.py` rief `logging.getLogger(__name__)` auf, ohne dass jemals ein
+Handler/Format/Level gesetzt wurde (INFO-Logs gingen dadurch faktisch verloren, Python zeigt
+in diesem Fall nur minimale Fallback-Warnungen).
+
+### Zentrale Konfiguration
+
+`app/observability/logging_config.py: configure_logging()` - aufgerufen aus der
+`lifespan`-Funktion in `app/main.py`, einmalig beim Start:
+
+- **Immer**: Konsole (stdout) - ausreichend für Entwicklung/Container-Betrieb.
+- **Optional** (`LOG_FILE_PATH`): rotierende lokale Log-Datei (5 MB, 5 Generationen) -
+  sinnvoll für einen dauerhaft laufenden Windows-Dienst ohne externe Log-Aggregation.
+- **Log-Level** konfigurierbar (`LOG_LEVEL`, Default `INFO`), validiert gegen die bekannten
+  Python-Standardstufen.
+- Drittanbieter-Bibliotheken (watchdog, urllib3, httpx, httpcore) standardmäßig auf WARNING
+  gedrosselt - verhindert, dass technisches Rauschen die für den Kanzleibetrieb relevanten
+  Logs überdeckt.
+
+### Grundregel: keine personenbezogenen/vertraulichen Inhalte in Logs
+
+Durchgängig seit dem Security Review (Prompt 27) und dem Fehler-/Retry-System (Prompt 31)
+verfolgt. Dieser Prompt ergänzt eine **dauerhafte, automatisierte Regressionsprüfung**
+(`tests/test_logging_pii_guard.py`): durchsucht jeden `logger.*`-Aufruf im gesamten
+`app/`-Quellcode nach Variablennamen, die typischerweise Mandanten-/Dokumentinhalte tragen
+(`body_text`, `extracted_text`, `sachverhalt`, `content`, `instruction_text` u. Ä.). Ein neuer
+Logging-Aufruf, der versehentlich eine dieser Variablen direkt interpoliert, lässt diesen Test
+fehlschlagen. Ehrlich benannt: das ist eine Heuristik (Namensmuster-Suche), kein
+Laufzeit-Schutz und keine Garantie gegen jede Form von PII-Leck (siehe die beiden unten
+gefundenen Lecks, die diese Heuristik NICHT erfasst hätte, da sie nicht über verbotene
+Variablennamen liefen).
+
+### Zwei echte PII-Lecks gefunden und behoben
+
+`ProcessingError`/`AuditEvent` für Fehler mit `entity_type="IntakeFile"` (Prompt 31) nutzen
+den vollen Quelldateipfad im überwachten Scan-Ordner als `entity_id` - anders als bei einem
+`Document` (immer eine UUID) trägt dieser Pfad den **unveränderten ursprünglichen
+Dateinamen**, der einen echten Personen-/Mandantennamen enthalten kann (z. B.
+`Max_Mustermann_Scan.pdf`, wie er im Ordner abgelegt wurde). Betraf sowohl das neue operative
+Log (`RetryService.record_failure`, Prompt 32) als auch rückwirkend den bereits aus Prompt 31
+bestehenden `AuditEvent.details`-Text. Behoben durch eine einfache Heuristik: wird
+`entity_id` als potenzieller Dateipfad erkannt (enthält `/` oder `\`), wird er in Logs/Audit-
+Text durch `***` ersetzt - UUIDs (Document-Fehler) bleiben unverändert sichtbar, da sie nie
+personenbezogen sind.
+
+### Systemstatus-Ansicht (`/dashboard/monitoring`, NUR Admin)
+
+Bewusst NICHT auf `/health` (bleibt absichtlich unauthentifiziert und minimal, reiner
+Infrastruktur-Healthcheck) - zeigt mehr operatives Detail und ist daher an Login + Admin-Rolle
+gebunden, um auch geringfügige Informationspreisgabe zu vermeiden: Anzahl wartender/dauerhaft
+fehlgeschlagener Fehler-/Retry-Einträge (Prompt 31), aktive/gesamte Nutzerzahl, Audit-
+Aktivität der letzten 24 Stunden, sowie reine Ja/Nein-Konfigurationsstatus (OCR aktiviert,
+E-Mail-Abruf konfiguriert, Claude-API-Schlüssel hinterlegt, Session-Cookie-Secure-Flag) -
+**niemals die tatsächlichen Werte/Schlüssel selbst**, per Test abgesichert
+(`test_monitoring_page_never_shows_actual_secret_values`).
+
+### Getestet
+
+22 neue Tests: `tests/test_logging_config.py` (7 - Handler-Aufbau, Idempotenz, Datei-Rotation,
+Drittanbieter-Drosselung, Settings-Validierung), `tests/test_logging_pii_guard.py` (3 -
+strukturelle Regressionswache), `tests/test_web_monitoring.py` (6 - Admin-only-Zugriff,
+keine Secrets in der Ausgabe, korrekte Zählung). 648/648 Tests gesamt grün. Per Playwright-
+Screenshot visuell verifiziert; Startup-Log-Zeile am laufenden Server bestätigt.
+
+### Offene Punkte
+
+1. Kein externes Log-Aggregations-/Monitoring-System (Prometheus, ELK o. Ä.) angebunden -
+   bewusst nicht Teil dieses Prompts, passend zur Ein-Prozess-/Einzelkanzlei-Architektur des
+   aktuellen Entwicklungsstands. Die rotierende lokale Log-Datei ist die pragmatische
+   Zwischenlösung für einen Windows-Betrieb ohne zusätzliche Infrastruktur.
+2. Die PII-Schutzwache ist eine Heuristik (siehe oben) - ersetzt kein sorgfältiges
+   Code-Review bei neuen Logging-Aufrufen, insbesondere bei Fehlermeldungen aus
+   Drittbibliotheken, die selbst Pfade/Inhalte einbetten können (wie in Prompt 31 gefunden).

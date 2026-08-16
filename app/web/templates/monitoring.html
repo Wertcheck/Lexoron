@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Systemstatus{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">Systemstatus</h1>
+    <div class="topbar__meta">Nur für Administratoren sichtbar &middot; Umgebung: <strong>{{ app_env }}</strong></div>
+  </div>
+
+  <div class="draft-page">
+    <div class="instructions-panel">
+      <h2 class="panel-title">Fehler &amp; Wiederholungen</h2>
+      <p class="form-hint">
+        <strong>{{ pending_error_count }}</strong> wartend auf Wiederholung &middot;
+        <strong>{{ failed_permanent_error_count }}</strong> dauerhaft fehlgeschlagen
+        (siehe <a href="/dashboard/errors">Fehler-Übersicht</a>)
+      </p>
+    </div>
+
+    <div class="instructions-panel">
+      <h2 class="panel-title">Nutzer</h2>
+      <p class="form-hint">
+        <strong>{{ active_users }}</strong> aktiv von <strong>{{ total_users }}</strong> insgesamt
+        (siehe <a href="/dashboard/admin/users">Nutzerverwaltung</a>)
+      </p>
+    </div>
+
+    <div class="instructions-panel">
+      <h2 class="panel-title">Aktivität</h2>
+      <p class="form-hint">
+        <strong>{{ recent_audit_count_24h }}</strong> Audit-Ereignisse in den letzten 24 Stunden
+      </p>
+    </div>
+
+    <div class="instructions-panel">
+      <h2 class="panel-title">Konfiguration</h2>
+      <table class="draft-table">
+        <tbody>
+          <tr>
+            <td>OCR aktiviert</td>
+            <td><span class="tag {% if ocr_enabled %}tag--matched{% else %}tag--unmatched{% endif %}">{{ "ja" if ocr_enabled else "nein" }}</span></td>
+          </tr>
+          <tr>
+            <td>E-Mail-Abruf konfiguriert</td>
+            <td><span class="tag {% if mail_configured %}tag--matched{% else %}tag--unmatched{% endif %}">{{ "ja" if mail_configured else "nein" }}</span></td>
+          </tr>
+          <tr>
+            <td>Claude-API-Schlüssel hinterlegt</td>
+            <td><span class="tag {% if claude_api_configured %}tag--matched{% else %}tag--unmatched{% endif %}">{{ "ja" if claude_api_configured else "nein" }}</span></td>
+          </tr>
+          <tr>
+            <td>Session-Cookie "Secure"-Flag</td>
+            <td><span class="tag {% if session_cookie_secure %}tag--matched{% else %}tag--unmatched{% endif %}">{{ "ja" if session_cookie_secure else "nein (nur für lokale Entwicklung geeignet)" }}</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="form-hint" style="margin-top: 10px;">
+        Es werden ausschließlich Ja/Nein-Statuswerte angezeigt - niemals Schlüssel, Passwörter
+        oder sonstige geheime Werte.
+      </p>
+    </div>
+  </div>
+{% endblock %}

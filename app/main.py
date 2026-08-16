@@ -21,6 +21,7 @@ zugrunde liegenden Exception-Klassen.
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
@@ -29,27 +30,35 @@ from fastapi.staticfiles import StaticFiles
 from app.api import api_router
 from app.auth.permissions import ForcePasswordChangeError, NotAuthenticatedError
 from app.config import get_settings
+from app.observability import configure_logging
 from app.web.auth_router import router as auth_web_router
 from app.web.drafts_router import router as drafts_web_router
 from app.web.errors_router import router as errors_web_router
+from app.web.monitoring_router import router as monitoring_web_router
 from app.web.outbox_router import router as outbox_web_router
 from app.web.router import router as web_router
 from app.web.users_router import router as users_web_router
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Laedt die validierte Konfiguration beim Start.
+    """Laedt die validierte Konfiguration beim Start und konfiguriert das
+    zentrale Logging (Prompt 32).
 
     Bewusst werden hier keine Werte geloggt, die Secrets enthalten koennten
     (mail_password, anthropic_api_key, session_secret_key). Nur
     unkritische Metadaten wie app_env werden zu Diagnosezwecken in
-    app.state abgelegt.
+    app.state abgelegt UND geloggt.
     """
     settings = get_settings()
+    configure_logging(log_level=settings.log_level, log_file_path=settings.log_file_path)
     app.state.settings = settings
     app.state.app_env = settings.app_env
+    logger.info("Anwendung gestartet (app_env=%s)", settings.app_env)
     yield
+    logger.info("Anwendung wird beendet")
 
 
 app = FastAPI(
@@ -90,6 +99,7 @@ app.include_router(outbox_web_router)
 app.include_router(auth_web_router)
 app.include_router(users_web_router)
 app.include_router(errors_web_router)
+app.include_router(monitoring_web_router)
 app.mount(
     "/dashboard/static",
     StaticFiles(directory="app/web/static"),

@@ -6,6 +6,8 @@ eingemischt - Authentifizierung ist eine eigene Zuständigkeit.
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -16,6 +18,8 @@ from app.auth.rate_limit import login_rate_limiter
 from app.auth.service import AuthService, UserService
 from app.auth.session import SESSION_COOKIE_NAME, create_session_token
 from app.config import Settings, get_settings
+
+logger = logging.getLogger(__name__)
 from app.db.session import get_db
 from app.models import User
 
@@ -69,6 +73,13 @@ def login_submit(
     if login_rate_limiter.is_locked_out(email_key) or login_rate_limiter.is_locked_out(
         ip_key
     ):
+        # Operatives Log fuer Betriebsueberwachung (Prompt 32) - bewusst
+        # NUR die IP, NIEMALS die E-Mail-Adresse (waere personenbezogen).
+        # Das AuditEvent (login_failed, siehe AuthService.authenticate)
+        # bleibt die massgebliche, vollstaendige Nachvollziehbarkeitsquelle -
+        # dieses Log dient nur der schnellen operativen Sicht (z. B. beim
+        # Live-Mitlesen der Konsole), nicht als Ersatz.
+        logger.warning("Login-Sperre aktiv fuer IP %s (zu viele Fehlversuche)", client_ip)
         return RedirectResponse(
             url=(
                 "/dashboard/login?error=Zu viele Fehlversuche - bitte in 15 Minuten "

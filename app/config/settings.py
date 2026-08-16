@@ -194,6 +194,24 @@ class Settings(BaseSettings):
             object.__setattr__(self, "_dev_session_secret", secrets.token_urlsafe(48))
         return self._dev_session_secret
 
+    # --- Logging/Monitoring (Prompt 32) ---
+    # Python-Standard-Log-Level-Namen ("DEBUG"/"INFO"/"WARNING"/"ERROR").
+    log_level: str = "INFO"
+    # None = nur Konsole (Standard, ausreichend für Entwicklung/Container-
+    # Betrieb, wo stdout ohnehin gesammelt wird). Gesetzt = zusätzlich
+    # eine rotierende lokale Log-Datei (sinnvoll für einen dauerhaft
+    # laufenden Windows-Dienst ohne externe Log-Aggregation).
+    log_file_path: str | None = None
+
+    @field_validator("log_level")
+    @classmethod
+    def log_level_must_be_valid(cls, value: str) -> str:
+        valid = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        upper = value.upper()
+        if upper not in valid:
+            raise ValueError(f"log_level muss einer von {sorted(valid)} sein, war: {value!r}")
+        return upper
+
     # --- Vorlagen (Platzhalter, echte Logik erst Prompt 39) ---
     templates_dir: str = "data/templates"
 
