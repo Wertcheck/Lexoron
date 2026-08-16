@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Integer, String
+from sqlalchemy import DateTime, Float, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, UUIDPrimaryKeyMixin
@@ -39,6 +39,18 @@ class ApiCallLog(UUIDPrimaryKeyMixin, Base):
     model: Mapped[str] = mapped_column(String(64), nullable=False)
     purpose: Mapped[str] = mapped_column(String(64), nullable=False)
     token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Prompt 33: getrennte Input-/Output-Zaehlung, wo verfuegbar - erlaubt
+    # eine genauere Kostenschaetzung als die reine Gesamtzahl (siehe
+    # app/cost_control/pricing.py). Nullable, da nicht jeder Provider/
+    # jeder aeltere Log-Eintrag diese Aufteilung kennt.
+    input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Zum Zeitpunkt des Log-Eintrags geschaetzte Kosten in USD (siehe
+    # app/cost_control/pricing.py) - bewusst zum Schreibzeitpunkt berechnet
+    # und gespeichert (nicht bei jeder Abfrage neu berechnet), damit sich
+    # eine spaetere Preislisten-Aktualisierung nicht rueckwirkend auf
+    # bereits geloggte, historische Auftraege auswirkt.
+    estimated_cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     # Nicht-umkehrbarer Hash der Payload - erlaubt Nachvollziehbarkeit
     # ("war das derselbe Aufruf wie in Log X"), ohne den Inhalt zu speichern.
     anonymized_prompt_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

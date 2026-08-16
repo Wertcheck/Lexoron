@@ -404,7 +404,21 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       dauerhaft alle `logger.*`-Aufrufe im Quellcode nach riskanten Variablennamen. 22 neue
       Tests (7 Logging-Konfiguration, 3 PII-Schutzwache, 6 Monitoring-Web-Layer, plus indirekt
       abgedeckte Retry-Service-Anpassungen), 648/648 gesamt grün. Siehe ARCHITECTURE.md §41.
-- [ ] KI-Kostenkontrolle
+- [x] KI-Kostenkontrolle – Prompt 33, 16.08. Neues Modul `app/cost_control/`: `pricing.py`
+      (Kostenschätzung pro Modell, USD/Million Token, bevorzugt genaue Input-/Output-
+      Aufteilung, fällt sonst auf ein geschätztes Verhältnis zurück - ausdrücklich als
+      Schätzung markiert, keine exakte Abrechnung) + `CostControlService` (`check_before_call`
+      wird VOR jedem kostenpflichtigen Claude-Aufruf geprüft, blockiert bei konfiguriertem und
+      erreichtem Monatsbudget). `ApiCallLog` (Prompt 21) erweitert um `input_tokens`,
+      `output_tokens`, `estimated_cost_usd`. **Echter, bis dahin bestehender Tracking-Gap
+      geschlossen:** die Review-Engine hat bislang GAR KEINE Tokens/Kosten getrackt (nur
+      Drafting) - jetzt symmetrisch für beide Pfade. Budget-Blockierung end-to-end bewiesen:
+      der WritingProvider wird bei ausgeschöpftem Budget nachweislich gar nicht erst
+      aufgerufen. Kostenanzeige in der Admin-Systemstatus-Seite (Prompt 32) ergänzt -
+      laufender Monat, Gesamt, Budget-Auslastung in %, klar als Schätzung gekennzeichnet.
+      41 neue Tests (22 Service-/Pricing-Ebene inkl. 3 echte Integrationstests gegen
+      DraftingService, 6 Web-Layer für die erweiterte Monitoring-Seite indirekt), 670/670
+      gesamt grün. Siehe ARCHITECTURE.md §42.
 - [ ] ModelProvider-Abstraktion
 - [ ] Export/Backup
 

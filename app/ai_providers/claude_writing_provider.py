@@ -71,6 +71,11 @@ class ClaudeWritingResult:
     # "sofern verfügbar" (Architekturvorgabe Punkt 10) - None, falls die
     # konkrete Implementierung keine Token-Zählung liefert.
     token_count: int | None = None
+    # Prompt 33: getrennte Zaehlung fuer eine genauere Kostenschaetzung
+    # (siehe app/cost_control/pricing.py) - optional, da nicht jeder
+    # Provider (z. B. Fakes in Tests) diese Aufteilung liefert.
+    input_tokens: int | None = None
+    output_tokens: int | None = None
 
 
 class ClaudeWritingProvider(Protocol):

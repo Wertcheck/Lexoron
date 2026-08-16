@@ -17,6 +17,26 @@
     </div>
 
     <div class="instructions-panel">
+      <h2 class="panel-title">KI-Kosten (geschätzt)</h2>
+      <p class="form-hint">
+        <strong>{{ "%.2f"|format(current_month_spend_usd) }} USD</strong> im laufenden Monat
+        &middot; <strong>{{ "%.2f"|format(total_spend_usd) }} USD</strong> insgesamt
+      </p>
+      {% if monthly_budget_usd %}
+        <p class="form-hint">
+          Monatliches Budget: <strong>{{ "%.2f"|format(monthly_budget_usd) }} USD</strong>
+          ({{ budget_percent_used }}% verbraucht)
+        </p>
+      {% else %}
+        <p class="form-hint">Kein monatliches Budget konfiguriert - Aufrufe werden verfolgt, aber nicht blockiert.</p>
+      {% endif %}
+      <p class="form-hint" style="margin-top: 6px;">
+        Schätzung auf Basis öffentlicher Preislisten - keine exakte Abrechnung. Die
+        tatsächliche Abrechnung erfolgt ausschließlich durch Anthropic.
+      </p>
+    </div>
+
+    <div class="instructions-panel">
       <h2 class="panel-title">Nutzer</h2>
       <p class="form-hint">
         <strong>{{ active_users }}</strong> aktiv von <strong>{{ total_users }}</strong> insgesamt

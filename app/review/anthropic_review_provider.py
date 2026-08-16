@@ -54,4 +54,10 @@ class AnthropicClaudeReviewProvider:
                 "Review-Engine: Antwort war kein valides JSON"
             ) from exc
 
-        return ReviewResult(**parsed)
+        input_tokens = None
+        output_tokens = None
+        if response.usage is not None:
+            input_tokens = response.usage.input_tokens
+            output_tokens = response.usage.output_tokens
+
+        return ReviewResult(**parsed, input_tokens=input_tokens, output_tokens=output_tokens)

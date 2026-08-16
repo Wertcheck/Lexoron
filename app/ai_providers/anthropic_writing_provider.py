@@ -51,9 +51,16 @@ class AnthropicClaudeWritingProvider:
         )
 
         token_count = None
+        input_tokens = None
+        output_tokens = None
         if response.usage is not None:
-            token_count = (
-                response.usage.input_tokens + response.usage.output_tokens
-            )
+            input_tokens = response.usage.input_tokens
+            output_tokens = response.usage.output_tokens
+            token_count = input_tokens + output_tokens
 
-        return ClaudeWritingResult(text=text, token_count=token_count)
+        return ClaudeWritingResult(
+            text=text,
+            token_count=token_count,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )

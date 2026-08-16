@@ -1735,3 +1735,78 @@ Screenshot visuell verifiziert; Startup-Log-Zeile am laufenden Server bestätigt
 2. Die PII-Schutzwache ist eine Heuristik (siehe oben) - ersetzt kein sorgfältiges
    Code-Review bei neuen Logging-Aufrufen, insbesondere bei Fehlermeldungen aus
    Drittbibliotheken, die selbst Pfade/Inhalte einbetten können (wie in Prompt 31 gefunden).
+
+## 42. KI-Kostenkontrolle (Prompt 33)
+
+Baut auf `ApiCallLog` (Prompt 21) und der Privacy-Gateway-Architektur auf - jeder Claude-Aufruf
+lief bereits durch einen zentralen Logging-Punkt, dieser Prompt ergänzt Kostenschätzung UND
+eine echte Vorab-Kontrolle, die einen Aufruf verhindern kann, BEVOR er tatsächlich Kosten
+verursacht.
+
+### Preisschätzung (`app/cost_control/pricing.py`)
+
+Ehrlich als **Schätzung, keine exakte Abrechnung** dokumentiert - die tatsächliche Abrechnung
+erfolgt ausschließlich durch Anthropic. `estimate_cost_usd(model, input_tokens=, output_tokens=,
+total_tokens=)`: bevorzugt die genaue Input-/Output-Aufteilung (unterschiedliche Preise pro
+Token-Art), fällt bei nur bekannter Gesamtzahl auf ein angenommenes Verhältnis (75 % Input /
+25 % Output, realistisch für Schreibaufgaben mit langem Sachverhalt) zurück. Unbekannte
+Modellnamen fallen auf einen bewusst KONSERVATIVEN (hohen, Opus-Niveau) Default zurück - eine
+Kostenkontrolle soll im Zweifel eher vorsichtig warnen als Kosten unterschätzen.
+
+### Geschlossener Tracking-Gap: Review-Engine hatte gar kein Token-Tracking
+
+Bei der Umsetzung entdeckt: `ReviewResult` (Prompt 18) hatte bislang **überhaupt keine**
+Token-Felder - jeder Review-Aufruf wurde zwar in `ApiCallLog` geloggt, aber ohne
+`token_count`/Kosten, während Drafting-Aufrufe das schon länger taten. Das bedeutete: die
+bisherige Kostenverfolgung war strukturell unvollständig, nicht nur ungenau. Behoben:
+`ReviewResult` um `input_tokens`/`output_tokens` ergänzt, `AnthropicClaudeReviewProvider`
+befüllt sie aus `response.usage` (analog zum bereits bestehenden Writing-Provider-Muster).
+
+### `ApiCallLog`-Erweiterung
+
+`input_tokens`, `output_tokens` (Prompt 33, nullable - nicht jeder Provider/ältere Eintrag
+kennt die Aufteilung), `estimated_cost_usd` - bewusst **zum Schreibzeitpunkt berechnet und
+gespeichert**, nicht bei jeder Abfrage neu ermittelt, damit eine spätere
+Preislisten-Aktualisierung sich nicht rückwirkend auf bereits geloggte, historische Aufträge
+auswirkt.
+
+### `CostControlService` (`app/cost_control/service.py`)
+
+- `get_current_month_spend_usd`/`get_total_spend_usd`: summieren `estimated_cost_usd` NUR über
+  `result_status="success"`-Einträge (blockierte/fehlgeschlagene Aufrufe haben nie tatsächlich
+  gekostet).
+- `check_before_call`: wird von `DraftingService.create_draft` UND `ReviewEngine.review_draft`
+  **nach** der Datenschutzprüfung (Gateway), aber **vor** dem eigentlichen, kostenpflichtigen
+  Aufruf ausgeführt. Ohne konfiguriertes `monthly_budget_usd` (Standard `None`) wird NIE
+  blockiert - nur verfolgt. Bei erreichtem/überschrittenem Budget wird der Aufruf gar nicht
+  erst ausgeführt; per Test end-to-end bewiesen (der `WritingProvider`/`ReviewProvider` wird
+  nachweislich nicht aufgerufen - kein zusätzlicher Kostenanfall).
+- Neue Block-Kategorie `"budget_exceeded"` im bestehenden Kategoriesystem
+  (`app/privacy/api_logger.py`, Prompt 27) - erscheint dem Anwalt als verständliche Meldung,
+  konsistent mit dem PII-sicheren Redirect-Muster.
+
+### Systemstatus-Ansicht (Erweiterung, Prompt 32)
+
+`/dashboard/monitoring` zeigt jetzt zusätzlich: geschätzte Kosten im laufenden Monat und
+insgesamt, Budget-Auslastung in Prozent (falls ein Budget konfiguriert ist), und einen
+expliziten Hinweis, dass es sich um eine Schätzung handelt.
+
+### Getestet
+
+41 neue Tests: `tests/test_cost_control.py` (22, davon 3 echte Integrationstests gegen
+`DraftingService` mit einer Provider-Attrappe, die bei einer Ausführung sofort fehlschlägt -
+beweist, dass der teure Aufruf bei ausgeschöpftem Budget wirklich nie stattfindet), plus
+Regressionsläufe der bestehenden Drafting-/Review-/ApiLogger-Tests. 670/670 Tests gesamt grün.
+Migration in beide Richtungen getestet. Per Playwright-Screenshot visuell verifiziert
+(Kostenanzeige mit zwei synthetischen Log-Einträgen, korrekte Summierung).
+
+### Offene Punkte
+
+1. Die Preisliste (`_PRICING_USD_PER_MILLION`) ist statisch im Code - bei einer künftigen
+   Preisänderung durch Anthropic muss sie manuell aktualisiert werden. Bewusst so belassen
+   (kein externer Preis-Feed), passend zur Einfachheit des restlichen Projekts.
+2. Kein Kosten-Reporting pro Akte/Mandant in dieser Ansicht (nur global) - `ApiCallLog.
+   workflow_id` (= `matter_id`) wäre die Grundlage dafür, aber nicht Teil dieses Prompts.
+3. Die Schätzung bei nur bekannter Gesamt-Tokenzahl (kein Input-/Output-Split) nutzt ein
+   pauschales 75/25-Verhältnis - kann bei stark abweichenden tatsächlichen Aufträgen (sehr
+   kurzer Sachverhalt, sehr langer Entwurf) ungenauer sein.

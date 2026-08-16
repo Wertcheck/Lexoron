@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from app.ai_providers.claude_writing_provider import ClaudeWritingProvider
 from app.ai_providers.local_ai_provider import LocalAIProvider
+from app.cost_control import CostControlService
 from app.drafting.schema import DraftingResult, KnowledgeItemReference, SourceReference
 from app.drafting.versioning import create_new_draft_version
 from app.models import Deadline, Draft, DraftKnowledgeItemLink, DraftSourceLink, KnowledgeItem, Matter
@@ -45,6 +46,7 @@ class DraftingService:
         writing_provider: ClaudeWritingProvider,
         *,
         api_logger: ApiCallLogger | None = None,
+        cost_control: CostControlService | None = None,
         model_name: str = "unknown",
     ) -> None:
         self.local_ai = local_ai
@@ -53,6 +55,7 @@ class DraftingService:
         self.gateway = gateway
         self.writing_provider = writing_provider
         self.api_logger = api_logger if api_logger is not None else ApiCallLogger()
+        self.cost_control = cost_control if cost_control is not None else CostControlService()
         self.model_name = model_name
 
     def create_draft(
@@ -131,6 +134,25 @@ class DraftingService:
                 open_review_points=open_review_points,
             )
 
+        # Kostenkontrolle (Prompt 33) - NACH der Datenschutzprüfung (die
+        # ist immer zuerst relevant), aber VOR dem tatsächlichen,
+        # kostenpflichtigen Aufruf. Ohne konfiguriertes Budget
+        # (settings.monthly_budget_usd=None, Standard) wird nie blockiert.
+        budget_check = self.cost_control.check_before_call(db)
+        if not budget_check.allowed:
+            self.api_logger.log_blocked(
+                db,
+                workflow_id=matter_id,
+                model=self.model_name,
+                purpose=purpose,
+                reasons=[budget_check.reason or "Kostenlimit erreicht"],
+            )
+            return DraftingResult(
+                success=False,
+                blocked_reasons=[budget_check.reason or "Kostenlimit erreicht"],
+                open_review_points=open_review_points,
+            )
+
         try:
             writing_result = self.writing_provider.write(gateway_result.payload)
         except Exception:
@@ -154,6 +176,8 @@ class DraftingService:
             purpose=purpose,
             payload=gateway_result.payload,
             token_count=writing_result.token_count,
+            input_tokens=writing_result.input_tokens,
+            output_tokens=writing_result.output_tokens,
         )
 
         reconstructed_text = self.gateway.reconstruct_response(

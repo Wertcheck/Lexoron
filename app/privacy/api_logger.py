@@ -22,6 +22,7 @@ import json
 
 from sqlalchemy.orm import Session
 
+from app.cost_control.pricing import estimate_cost_usd
 from app.models import ApiCallLog
 from app.privacy.gateway_schema import ClaudeRequestPayload
 
@@ -32,6 +33,7 @@ _BLOCK_CATEGORIES = (
     ("weiterhin erkennbare Muster", "residual_pii_detected"),
     ("Platzhalter", "mapping_inconsistency"),
     ("nicht erkannte Namen", "unrecognized_entity_suspected"),
+    ("Kostenlimit", "budget_exceeded"),
 )
 
 
@@ -64,6 +66,10 @@ _FRIENDLY_BLOCK_MESSAGES: dict[str, str] = {
     "mapping_inconsistency": "Interner Konsistenzfehler bei der Pseudonymisierung.",
     "unrecognized_entity_suspected": (
         "Im Text wurden möglicherweise nicht erkannte Namen/Daten gefunden."
+    ),
+    "budget_exceeded": (
+        "Das monatliche Kostenlimit für KI-Aufrufe wurde erreicht. Bitte einen Administrator "
+        "kontaktieren."
     ),
     "unknown_block_reason": "Die Anfrage wurde aus Datenschutzgründen blockiert.",
 }
@@ -116,12 +122,26 @@ class ApiCallLogger:
         purpose: str,
         payload: ClaudeRequestPayload,
         token_count: int | None = None,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
     ) -> ApiCallLog:
+        # Kostenschaetzung (Prompt 33) - bevorzugt die genaue Input-/
+        # Output-Aufteilung, faellt sonst auf die Gesamtzahl zurueck
+        # (siehe app/cost_control/pricing.py).
+        estimate = estimate_cost_usd(
+            model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=token_count,
+        )
         log_entry = ApiCallLog(
             workflow_id=workflow_id,
             model=model,
             purpose=purpose,
             token_count=token_count,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            estimated_cost_usd=estimate.usd if estimate is not None else None,
             anonymized_prompt_id=compute_anonymized_prompt_id(payload),
             result_status="success",
             error_status=None,

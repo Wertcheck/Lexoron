@@ -212,6 +212,25 @@ class Settings(BaseSettings):
             raise ValueError(f"log_level muss einer von {sorted(valid)} sein, war: {value!r}")
         return upper
 
+    # --- KI-Kostenkontrolle (Prompt 33) ---
+    # None = kein Limit (Kosten werden weiterhin verfolgt/angezeigt, aber
+    # kein Aufruf wird deswegen blockiert) - sicherer Default fuer den
+    # Prototyp-Betrieb, wo eine unerwartete Sperre eher stoert als nuetzt.
+    # Gesetzt = harte Obergrenze fuer die Summe geschaetzter Kosten aller
+    # Claude-Aufrufe im laufenden Kalendermonat (USD, geschaetzt - siehe
+    # app/cost_control/pricing.py fuer die Grundlage der Schaetzung).
+    monthly_budget_usd: float | None = None
+    # Ab diesem Anteil des Budgets (Prozent) wird eine Warnung im
+    # Dashboard angezeigt, auch wenn noch nicht blockiert wird.
+    budget_warning_threshold_percent: int = 80
+
+    @field_validator("budget_warning_threshold_percent")
+    @classmethod
+    def budget_warning_threshold_must_be_valid_percent(cls, value: int) -> int:
+        if not (0 < value <= 100):
+            raise ValueError("budget_warning_threshold_percent muss zwischen 1 und 100 liegen")
+        return value
+
     # --- Vorlagen (Platzhalter, echte Logik erst Prompt 39) ---
     templates_dir: str = "data/templates"
 

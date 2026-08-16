@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.permissions import PermissionDeniedError, require_login
 from app.config import get_settings
+from app.cost_control import CostControlService
 from app.db.session import get_db
 from app.models import AuditEvent, ProcessingError, User
 
@@ -62,6 +63,16 @@ def monitoring_page(
         .scalar()
     )
 
+    cost_control = CostControlService()
+    current_month_spend = cost_control.get_current_month_spend_usd(db)
+    total_spend = cost_control.get_total_spend_usd(db)
+    monthly_budget = settings.monthly_budget_usd
+    budget_percent_used = (
+        round((current_month_spend / monthly_budget) * 100, 1)
+        if monthly_budget and monthly_budget > 0
+        else None
+    )
+
     context = {
         "request": request,
         "active_nav": "Systemstatus",
@@ -76,5 +87,9 @@ def monitoring_page(
         "total_users": total_users,
         "active_users": active_users,
         "recent_audit_count_24h": recent_audit_count,
+        "current_month_spend_usd": current_month_spend,
+        "total_spend_usd": total_spend,
+        "monthly_budget_usd": monthly_budget,
+        "budget_percent_used": budget_percent_used,
     }
     return templates.TemplateResponse(request, "monitoring.html", context)

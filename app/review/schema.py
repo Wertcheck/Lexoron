@@ -55,6 +55,14 @@ class ReviewResult(BaseModel):
 
     findings: list[Finding] = Field(default_factory=list)
     overall_assessment: str
+    # Prompt 33: getrennte Token-Zaehlung fuer die Kostenschaetzung (siehe
+    # app/cost_control/pricing.py) - werden NICHT aus der von Claude
+    # zurückgegebenen JSON-Struktur geparst (kommen aus `response.usage`,
+    # siehe app/review/anthropic_review_provider.py), sondern nachträglich
+    # gesetzt. Optional, da nicht jeder Provider (z. B. Fakes in Tests)
+    # diese Aufteilung liefert.
+    input_tokens: int | None = None
+    output_tokens: int | None = None
 
 
 class ReviewOutcome(BaseModel):

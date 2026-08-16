@@ -14,6 +14,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.ai_providers.local_ai_provider import LocalAIProvider
+from app.cost_control import CostControlService
 from app.models import AuditEvent, Draft, Matter, ReviewFinding
 from app.privacy.api_logger import ApiCallLogger
 from app.privacy.gateway import ClaudePrivacyGateway
@@ -33,6 +34,7 @@ class ReviewEngine:
         review_provider: ClaudeReviewProvider,
         *,
         api_logger: ApiCallLogger | None = None,
+        cost_control: CostControlService | None = None,
         model_name: str = "unknown",
     ) -> None:
         self.local_ai = local_ai
@@ -40,6 +42,7 @@ class ReviewEngine:
         self.gateway = gateway
         self.review_provider = review_provider
         self.api_logger = api_logger if api_logger is not None else ApiCallLogger()
+        self.cost_control = cost_control if cost_control is not None else CostControlService()
         self.model_name = model_name
 
     def review_draft(
@@ -84,6 +87,21 @@ class ReviewEngine:
                 success=False, draft_id=draft_id, blocked_reasons=gateway_result.reasons
             )
 
+        budget_check = self.cost_control.check_before_call(db)
+        if not budget_check.allowed:
+            self.api_logger.log_blocked(
+                db,
+                workflow_id=matter.id,
+                model=self.model_name,
+                purpose=_REVIEW_PURPOSE,
+                reasons=[budget_check.reason or "Kostenlimit erreicht"],
+            )
+            return ReviewOutcome(
+                success=False,
+                draft_id=draft_id,
+                blocked_reasons=[budget_check.reason or "Kostenlimit erreicht"],
+            )
+
         try:
             review_result = self.review_provider.review(gateway_result.payload)
         except Exception:
@@ -106,6 +124,8 @@ class ReviewEngine:
             model=self.model_name,
             purpose=_REVIEW_PURPOSE,
             payload=gateway_result.payload,
+            input_tokens=review_result.input_tokens,
+            output_tokens=review_result.output_tokens,
         )
 
         reconstructed_findings = [
