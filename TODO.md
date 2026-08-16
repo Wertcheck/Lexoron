@@ -419,7 +419,21 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       41 neue Tests (22 Service-/Pricing-Ebene inkl. 3 echte Integrationstests gegen
       DraftingService, 6 Web-Layer für die erweiterte Monitoring-Seite indirekt), 670/670
       gesamt grün. Siehe ARCHITECTURE.md §42.
-- [ ] ModelProvider-Abstraktion
+- [x] ModelProvider-Abstraktion – Prompt 34, 16.08. Neues Modul `app/ai_providers/factory.py`:
+      einzige Stelle im Projekt, die `settings.llm_provider` tatsächlich zur Provider-AUSWAHL
+      nutzt. **Echte, seit Prompt 03 bestehende Lücke geschlossen:** `llm_provider` existierte
+      bereits als Konfigurationsfeld, wurde aber nie ausgewertet - `app/web/service_factory.py`
+      baute `AnthropicClaudeWritingProvider`/`AnthropicClaudeReviewProvider` fest verdrahtet,
+      unabhängig vom Einstellungswert (faktisch nur ein Anzeigefeld in der Settings-API).
+      `DraftingService`/`ReviewEngine` kennen weiterhin nur die bestehenden Protokolle - ein
+      künftiger zweiter Provider (z. B. lokales Modell via Ollama, weiterhin bewusst NICHT
+      umgesetzt, siehe unten) würde ausschließlich in der neuen Factory ergänzt, ohne
+      Drafting-/Review-Schicht oder Dashboard-Router anzufassen. `service_factory.py` auf
+      2 Zeilen Aufruf statt dupliziertem Konstruktionscode reduziert; alter Exception-Name
+      (`WritingProviderNotConfiguredError`) als Alias erhalten - keine Änderung an bestehenden
+      Importen/Tests nötig. 9 neue Tests, 679/679 gesamt grün. Siehe ARCHITECTURE.md §43.
+      **Bewusst NICHT umgesetzt:** ein zweiter, echter Provider (Ollama) - bleibt weiterhin
+      eine offene Entscheidung, siehe unten "Offene Entscheidung: Ollama".
 - [ ] Export/Backup
 
 ## Phase 8 – Kanzlei-Produkt (Prompts 36–45)

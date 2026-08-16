@@ -9,14 +9,18 @@ Nutzung instanziiert. Diese Factory schließt die Lücke, DAMIT die neue
 
 Der teure Teil (Embedding-Modell) wird über `lru_cache` genau EINMAL pro
 Prozess geladen, nicht bei jeder Anfrage neu.
+
+Seit Prompt 34: die eigentliche Provider-AUSWAHL (welcher Claude-Provider
+gebaut wird) liegt nicht mehr hier, sondern in
+`app/ai_providers/factory.py` (ModelProvider-Abstraktion) - diese Datei
+ruft nur noch `build_writing_provider`/`build_review_provider` auf.
 """
 
 from __future__ import annotations
 
 from functools import lru_cache
 
-from app.ai_providers.anthropic_writing_provider import AnthropicClaudeWritingProvider
-from app.ai_providers.claude_writing_provider import ClaudeWritingProvider
+from app.ai_providers.factory import ProviderNotConfiguredError, build_review_provider, build_writing_provider
 from app.ai_providers.local_ai_provider import RuleBasedLocalAIProvider
 from app.attorney_instructions.service import AttorneyInstructionService
 from app.config import get_settings
@@ -24,21 +28,16 @@ from app.drafting.service import DraftingService
 from app.feedback.service import DraftFeedbackService
 from app.privacy.gateway import ClaudePrivacyGateway
 from app.research.service import LegalResearchService
-from app.review.anthropic_review_provider import AnthropicClaudeReviewProvider
 from app.review.engine import ReviewEngine
-from app.review.provider import ClaudeReviewProvider
 from app.search.embeddings import FastEmbedProvider
 from app.search.service import DocumentSearchService
 
-
-class WritingProviderNotConfiguredError(Exception):
-    """Wird ausgelöst, wenn keine Claude-API-Zugangsdaten hinterlegt sind.
-
-    Bewusst eine EIGENE, klar erkennbare Exception statt der rohen
-    `ValueError` aus `AnthropicClaudeWritingProvider.__init__` - der
-    Dashboard-Router fängt genau diese ab, um dem Anwalt eine
-    verständliche Meldung statt eines Stacktrace zu zeigen.
-    """
+# Rückwärtskompatibler Alias (Prompt 34 verallgemeinert die vorher hier
+# lokal definierte `WritingProviderNotConfiguredError` zu
+# `ProviderNotConfiguredError` in app/ai_providers/factory.py - der alte
+# Name bleibt als Alias importierbar, damit bestehender Code
+# (app/web/drafts_router.py, mehrere Testdateien) unverändert funktioniert).
+WritingProviderNotConfiguredError = ProviderNotConfiguredError
 
 
 @lru_cache(maxsize=1)
@@ -52,10 +51,12 @@ def get_document_search_service() -> DocumentSearchService:
 
 
 def get_drafting_service() -> DraftingService:
-    """Baut einen funktionsfähigen `DraftingService` mit ECHTEM Claude-
-    Writing-Provider. Wirft `WritingProviderNotConfiguredError`, wenn kein
-    `ANTHROPIC_API_KEY` hinterlegt ist - der Router zeigt dann eine
-    freundliche Meldung statt eines Serverfehlers."""
+    """Baut einen funktionsfähigen `DraftingService` mit dem konfigurierten
+    Schreib-Provider (Prompt 34: `settings.llm_provider`, aktuell immer
+    "anthropic" - siehe app/ai_providers/factory.py). Wirft
+    `ProviderNotConfiguredError`, wenn keine Zugangsdaten hinterlegt sind -
+    der Router zeigt dann eine freundliche Meldung statt eines
+    Serverfehlers."""
     settings = get_settings()
     search_service = get_document_search_service()
     research_service = LegalResearchService(
@@ -63,7 +64,7 @@ def get_drafting_service() -> DraftingService:
         min_score_for_sufficient=settings.research_min_score_for_sufficient,
     )
 
-    writing_provider = _build_writing_provider(settings)
+    writing_provider = build_writing_provider(settings)
 
     return DraftingService(
         RuleBasedLocalAIProvider(search_service),
@@ -75,34 +76,14 @@ def get_drafting_service() -> DraftingService:
     )
 
 
-def _build_writing_provider(settings) -> ClaudeWritingProvider:  # noqa: ANN001
-    api_key = (
-        settings.anthropic_api_key.get_secret_value()
-        if settings.anthropic_api_key is not None
-        else None
-    )
-    if not api_key or not api_key.strip():
-        raise WritingProviderNotConfiguredError(
-            "ANTHROPIC_API_KEY ist nicht konfiguriert - Entwurfs-"
-            "(Neu-)Generierung ist erst nach Hinterlegen des Schlüssels "
-            "in der .env-Datei möglich."
-        )
-    return AnthropicClaudeWritingProvider(
-        api_key=api_key,
-        model=settings.claude_model_name,
-        max_tokens=settings.claude_max_tokens,
-    )
-
-
 def get_feedback_service() -> DraftFeedbackService:
     return DraftFeedbackService()
 
 
 def get_review_engine() -> ReviewEngine:
-    """Baut eine funktionsfähige `ReviewEngine` mit ECHTEM Claude-Review-
-    Provider - wirft `WritingProviderNotConfiguredError` (derselbe Fehler-
-    typ wie bei der Entwurfsproduktion, bewusst wiederverwendet statt
-    einen zweiten, praktisch identischen Fehlertyp einzuführen), wenn kein
+    """Baut eine funktionsfähige `ReviewEngine` mit dem konfigurierten
+    Review-Provider (Prompt 34) - wirft `ProviderNotConfiguredError`
+    (derselbe Fehlertyp wie bei der Entwurfsproduktion), wenn kein
     `ANTHROPIC_API_KEY` hinterlegt ist."""
     settings = get_settings()
     search_service = get_document_search_service()
@@ -110,7 +91,7 @@ def get_review_engine() -> ReviewEngine:
         search_service,
         min_score_for_sufficient=settings.research_min_score_for_sufficient,
     )
-    review_provider = _build_review_provider(settings)
+    review_provider = build_review_provider(settings)
 
     return ReviewEngine(
         RuleBasedLocalAIProvider(search_service),
@@ -121,36 +102,17 @@ def get_review_engine() -> ReviewEngine:
     )
 
 
-def _build_review_provider(settings) -> ClaudeReviewProvider:  # noqa: ANN001
-    api_key = (
-        settings.anthropic_api_key.get_secret_value()
-        if settings.anthropic_api_key is not None
-        else None
-    )
-    if not api_key or not api_key.strip():
-        raise WritingProviderNotConfiguredError(
-            "ANTHROPIC_API_KEY ist nicht konfiguriert - die Entwurfsprüfung "
-            "(Review-Engine) ist erst nach Hinterlegen des Schlüssels in "
-            "der .env-Datei möglich."
-        )
-    return AnthropicClaudeReviewProvider(
-        api_key=api_key,
-        model=settings.claude_model_name,
-        max_tokens=settings.claude_max_tokens,
-    )
-
-
 def get_attorney_instruction_service() -> AttorneyInstructionService:
     """Für Aktionen, die tatsächlich eine Neugenerierung auslösen können
     (`apply_instruction`) - baut den vollen `DraftingService` inkl.
-    Prüfung auf konfigurierten Claude-API-Key."""
+    Prüfung auf konfigurierten Provider."""
     return AttorneyInstructionService(get_drafting_service())
 
 
 def get_attorney_instruction_service_for_saving_only() -> AttorneyInstructionService:
     """Für die reine "Anmerkung speichern"-Aktion (`create_instruction`) -
     baut BEWUSST keinen `DraftingService` (kein Embedding-Modell, keine
-    Claude-Konfigurationsprüfung). Speichern einer Anmerkung darf nicht
-    daran scheitern, dass (noch) kein Claude-API-Key hinterlegt ist -
-    das wird erst relevant, wenn tatsächlich neu generiert werden soll."""
+    Provider-Konfigurationsprüfung). Speichern einer Anmerkung darf nicht
+    daran scheitern, dass (noch) kein Provider konfiguriert ist - das
+    wird erst relevant, wenn tatsächlich neu generiert werden soll."""
     return AttorneyInstructionService(drafting_service=None)

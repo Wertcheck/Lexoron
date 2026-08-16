@@ -113,7 +113,16 @@ class Settings(BaseSettings):
     # Reste faelschlich als vollstaendiger Text gewertet werden).
     min_extracted_text_length: int = 20
 
-    # --- LLM / Claude API (Platzhalter, echte Anbindung erst Prompt 17) ---
+    # --- LLM / Claude API ---
+    # Seit Prompt 34 TATSÄCHLICH zur Provider-Auswahl genutzt (siehe
+    # app/ai_providers/factory.py) - bis dahin nur ein reines Anzeigefeld
+    # (Konzept Prompt 03: "Platzhalter, echte Anbindung erst Prompt 17"),
+    # das seit Prompt 17 zwar in der Konfigurationsanzeige erschien, aber
+    # nie tatsächlich etwas auswählte (`AnthropicClaudeWritingProvider`
+    # war hart in `app/web/service_factory.py` verdrahtet). Aktuell ist
+    # "anthropic" der einzige unterstützte Wert - die Prüfung existiert
+    # trotzdem bereits jetzt, damit ein Tippfehler sofort beim Start
+    # auffällt statt erst beim ersten Entwurfsversuch.
     llm_provider: str = "anthropic"
     anthropic_api_key: SecretStr | None = None
     # Nur der Modellname fuer Protokollierungs-/Konfigurationszwecke
@@ -121,6 +130,18 @@ class Settings(BaseSettings):
     # dieser Stelle, siehe app/ai_providers/claude_writing_provider.py.
     claude_model_name: str = "claude-sonnet-5"
     claude_max_tokens: int = 2000
+
+    @field_validator("llm_provider")
+    @classmethod
+    def llm_provider_must_be_supported(cls, value: str) -> str:
+        supported = {"anthropic"}
+        if value not in supported:
+            raise ValueError(
+                f"llm_provider muss einer von {sorted(supported)} sein, war: {value!r} "
+                "(weitere Provider - z. B. ein lokales Modell via Ollama - sind eine "
+                "eigene, noch offene Entscheidung, siehe TODO.md)"
+            )
+        return value
 
     # --- Rechtsquellen (Platzhalter, echte Logik erst Prompt 14/15) ---
     # Generische Liste erlaubter Quellen-Identifier; keine architektonische

@@ -1810,3 +1810,59 @@ Migration in beide Richtungen getestet. Per Playwright-Screenshot visuell verifi
 3. Die Schätzung bei nur bekannter Gesamt-Tokenzahl (kein Input-/Output-Split) nutzt ein
    pauschales 75/25-Verhältnis - kann bei stark abweichenden tatsächlichen Aufträgen (sehr
    kurzer Sachverhalt, sehr langer Entwurf) ungenauer sein.
+
+## 43. ModelProvider-Abstraktion (Prompt 34)
+
+Schließt eine seit Prompt 03 bestehende Lücke: `settings.llm_provider` existierte bereits als
+Konfigurationsfeld (Wert `"anthropic"`), wurde aber nie tatsächlich zur Provider-**Auswahl**
+genutzt - es war faktisch nur ein Anzeigefeld, das über `/api/settings` sichtbar war (siehe
+app/api/routers/settings.py), ohne irgendeinen Codepfad zu beeinflussen.
+`app/web/service_factory.py` baute `AnthropicClaudeWritingProvider`/
+`AnthropicClaudeReviewProvider` unabhängig davon fest verdrahtet.
+
+### Neues Modul: `app/ai_providers/factory.py`
+
+Die EINZIGE Stelle im Projekt, die `settings.llm_provider` tatsächlich auswertet:
+
+- `build_writing_provider(settings) -> ClaudeWritingProvider`
+- `build_review_provider(settings) -> ClaudeReviewProvider`
+
+Beide geben weiterhin nur die bestehenden Protokolltypen zurück (`ClaudeWritingProvider`/
+`ClaudeReviewProvider`, Prompt 17/18) - `DraftingService` und `ReviewEngine` kannten schon vor
+diesem Prompt nur diese Protokolle, nie eine konkrete Implementierung. Das war also bereits
+"abstrakt genug" auf der Verbrauchsseite; die fehlende Abstraktion lag ausschließlich auf der
+Konstruktionsseite (WER entscheidet, welche konkrete Klasse gebaut wird). Ein künftiger
+zweiter Provider würde ausschließlich hier ergänzt (ein `if settings.llm_provider == "ollama":
+...`-Zweig), ohne `DraftingService`, `ReviewEngine` oder die Dashboard-Router anzufassen.
+
+`ProviderNotConfiguredError` ersetzt die vorher lokal in `service_factory.py` definierte
+`WritingProviderNotConfiguredError` als kanonische Fehlerklasse - EINE gemeinsame Exception für
+Writing UND Review (vorher bereits so gehandhabt, jetzt an der richtigen Stelle beheimatet).
+Der alte Name bleibt als Alias in `service_factory.py` exportiert (`WritingProviderNotConfiguredError
+= ProviderNotConfiguredError`) - bestehender Code (`app/web/drafts_router.py`, mehrere
+Testdateien) funktioniert unverändert, per Test bewiesen
+(`test_service_factory_reexports_provider_not_configured_error_as_old_name`).
+
+### Settings-Validierung
+
+`llm_provider` wird jetzt beim Einlesen der Konfiguration validiert (aktuell einziger gültiger
+Wert: `"anthropic"`) - ein Tippfehler in der `.env`-Datei fällt sofort beim Anwendungsstart auf,
+nicht erst beim ersten tatsächlichen Entwurfsversuch.
+
+### Bewusst NICHT umgesetzt: ein zweiter, echter Provider
+
+Diese Abstraktion nimmt KEINE zweite, unfertige Implementierung vorweg. Die bereits an
+mehreren Stellen dokumentierte offene Entscheidung "Ollama als lokales Open-Source-Modell"
+bleibt unverändert offen - dieser Prompt schafft nur die saubere Erweiterungsstelle
+("smallest sensible step"), an der eine künftige Entscheidung ohne Umbau der Fachschicht
+umgesetzt werden könnte. Wichtig zur Einordnung: die Ollama-Diskussion betraf ursprünglich vor
+allem `LocalAIProvider` (Dokumentverständnis, Prompt 08) - eine ANDERE Komponente als die hier
+abstrahierten Claude-Writing-/Review-Provider. Beide Achsen bleiben getrennt.
+
+### Getestet
+
+9 neue Tests (`tests/test_ai_provider_factory.py`): korrekte Provider-Auswahl, Weitergabe von
+Modellname/Max-Tokens, `ProviderNotConfiguredError` bei fehlendem/leerem API-Key,
+Settings-Validierung, Rückwärtskompatibilität des alten Exception-Namens. 679/679 Tests gesamt
+grün - keine Regression an den bestehenden Drafting-/Review-/Dashboard-Tests, obwohl die
+Konstruktionslogik verschoben wurde.
