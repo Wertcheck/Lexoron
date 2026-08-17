@@ -1946,3 +1946,220 @@ Zugriff auf beide Aktionen, CSRF-Schutz, 404 bei unbekannter Akte, gültiges ZIP
 
 **Mit Prompt 35 ist Phase 7 (Sicherheit und Produktisierung, Prompts 26-35) vollständig
 abgeschlossen.**
+
+## 45. Windows-Installer (Prompt 36)
+
+Umgesetzt auf der Windows-Zielmaschine (Claude Code, nicht im Chat) - siehe
+HANDOFF_PROMPT36_37_WINDOWS.md für den Übergabekontext. Die dort dokumentierte Entscheidung
+"getrennte Installation je Kanzlei" gilt unverändert: der Installer installiert EINE Instanz
+für EINE Kanzlei, keine Mandanten-/Tenant-Auswahl.
+
+### Entscheidung: Datenverzeichnis (`app/setup/paths.py`)
+
+`%PROGRAMDATA%\KanzleiAI` für ALLES, was über die reine Programminstallation hinausgeht -
+`.env`, SQLite-Datenbank, Dokumentenspeicher (Intake + Mail-Anhänge), Log-Datei. Begründung
+(im Handoff-Dokument als offene Frage markiert, hier entschieden und dokumentiert):
+
+- **Nicht `Program Files`** (Installationsziel des Programmcodes selbst): nur für
+  Administratoren beschreibbar, kein sinnvoller Ort für sich laufend ändernde
+  Mandantendaten - ein normaler Anwalts-/Mitarbeiter-Nutzeraccount dürfte dort zur Laufzeit
+  nicht einmal die Datenbankdatei anlegen.
+- **Nicht `%APPDATA%`/Dokumente/Desktop** (nutzerprofilgebunden): erstens an ein einzelnes
+  Windows-Benutzerkonto gebunden, obwohl mehrere Kanzleimitarbeiter dieselbe Installation
+  nutzen können; zweitens genau die Ordner, die Windows' "OneDrive - Bekannte Ordner
+  sichern" standardmäßig überwacht und in die Cloud synchronisiert - unpseudonymisierte
+  Mandanteninhalte (siehe §44) dürfen nicht versehentlich in einen synchronisierten
+  Cloud-Speicher wandern, ohne dass das bewusst entschieden wurde.
+- **`%PROGRAMDATA%`**: Standard-Windows-Konvention für maschinenweite, nicht
+  profilgebundene Anwendungsdaten, per Voreinstellung von normalen Nutzerkonten
+  beschreibbar (im Gegensatz zu `Program Files`), NICHT Teil des OneDrive-"Bekannte
+  Ordner"-Satzes.
+
+`KANZLEI_AI_DATA_DIR` überschreibt den Pfad explizit (Tests, künftiger Portable-Modus).
+
+### Gefundenes Problem: Templates/statische Assets relativ zum Arbeitsverzeichnis
+
+Bei der Umsetzung entdeckt: `Jinja2Templates(directory="app/web/templates")` und
+`StaticFiles(directory="app/web/static")` standen an ALLEN neun Verwendungsstellen als
+relativer String - aufgelöst gegen das Arbeitsverzeichnis des Prozesses. Da der neue
+Windows-Entry-Point (`run.py`) das Arbeitsverzeichnis beim Start bewusst in das
+Datenverzeichnis wechselt (siehe unten), wäre das gesamte Dashboard dort funktionslos
+gewesen (404 auf jede Seite/jedes statische Asset) - ein Fund, der ohne den echten
+End-to-End-Build-Test (siehe "Getestet" unten) nicht aufgefallen wäre. Behoben durch
+`app/web/template_paths.py`: `TEMPLATES_DIR`/`STATIC_DIR` als absolute, an
+`Path(__file__)` verankerte Pfade, an allen neun Stellen eingesetzt. Funktioniert
+unverändert im Entwicklungsbetrieb; im gebündelten Build extrahiert PyInstaller die
+Verzeichnisse unter demselben relativen Pfad (siehe `windows/kanzlei_ai.spec`, `datas`),
+sodass dieselbe `Path(__file__)`-Berechnung dort ebenfalls korrekt auflöst.
+
+### `run.py` - dünner Entry-Point mit vier Subkommandos
+
+`serve` (Standard), `setup`, `migrate`, `create-admin` - siehe §46 für den Setup-Assistenten
+selbst. Wechselt VOR jedem Subkommando bedingungslos in das Datenverzeichnis
+(`os.chdir`), unabhängig davon, wie/von wo die `.exe` gestartet wird (Startmenü-Verknüpfung,
+Doppelklick im Installationsordner, Windows-Aufgabenplanung) - der einzige Mechanismus, der
+sicherstellt, dass relative Settings-Pfade (`DATABASE_URL` etc.) immer im Datenverzeichnis
+landen. `serve` führt vor dem Start automatisch `alembic upgrade head` aus ("muss beim
+ersten Start und bei jedem Update laufen", Handoff-Doku wörtlich) - idempotent, kein Effekt
+bei bereits aktueller Datenbank.
+
+### PyInstaller (`windows/kanzlei_ai.spec`)
+
+"onedir"-Build (bewusst KEIN "onefile" - das würde sich bei jedem Start neu in ein
+temporäres Verzeichnis entpacken, spürbar langsamerer Start, schwerer nachvollziehbare
+Pfadprobleme). `console=True`: bewusst KEINE grafische Oberfläche - der Setup-Assistent
+fragt interaktiv über die Konsole, passend dazu, dass das gesamte Projekt bislang keinerlei
+GUI-Framework verwendet (das Dashboard selbst läuft im Browser). Die Anwendung läuft damit
+als Konsolenprozess im Vordergrund, NICHT als registrierter Windows-Dienst - ein Dienst
+(Autostart, Absturz-Neustart, Hintergrundbetrieb ohne offenes Konsolenfenster) wäre ein
+deutlich größerer, hier bewusst NICHT umgesetzter Schritt, siehe "Offene Punkte".
+
+### Inno Setup (`windows/installer.iss`)
+
+Installiert ausschließlich den Programmordner unter `{autopf}\KanzleiAI` (Admin-Rechte
+erforderlich, Standard für `Program Files`) - explizit KEIN `[UninstallDelete]` für
+`%PROGRAMDATA%\KanzleiAI`: eine Deinstallation darf unpseudonymisierte Mandanteninhalte
+niemals automatisch löschen (dieselbe Sensibilitätseinstufung wie bei Backup/Export, §44).
+
+### Getestet
+
+**Automatisiert (pytest):** 22 neue Tests - `tests/test_setup_paths.py` (5, Datenverzeichnis-
+Auflösung inkl. Override), `tests/test_setup_env_writer.py` (6, inkl. eines echten
+Integrationstests: der erzeugte `.env`-Inhalt wird tatsächlich durch `Settings` eingelesen
+und ergibt die erwarteten Werte - kein reiner String-Vergleich), `tests/test_setup_wizard.py`
+(7, Orchestrierung mit injizierten Fake-Callables statt echten Subprozessen),
+`tests/test_run_entrypoint.py` (9, reine Dispatch-/Pfadlogik von `run.py`, Subprozess-Aufrufe
+selbst bewusst ausgeklammert), `tests/test_web_template_paths.py` (2, Regressionswache für den
+oben gefundenen Fund), plus 3 neue Tests für `HOST`/`PORT` in `tests/test_config.py`.
+739/747 Tests gesamt grün (siehe "Offene Punkte" zu den 4 nicht bestehbaren OCR-Tests + 1
+Symlink-Test, plus 1 bereits vorher übersprungener Test - beides Umgebungslimitierungen der
+Windows-Testmaschine, keine Regression durch diesen Prompt).
+
+**Echter End-to-End-Build-Test (nicht nur behauptet):** `pyinstaller windows/kanzlei_ai.spec`
+tatsächlich ausgeführt (184 MB Bundle) und die entstandene `kanzlei_ai.exe` gegen ein
+temporäres `KANZLEI_AI_DATA_DIR` gestartet: `migrate` (alle 17 Migrationen liefen durch),
+`create-admin` (Admin-Nutzer inkl. generiertem Passwort angelegt), `serve` (Server startete,
+`/health` → 200, `/dashboard/login` → 200 mit korrekt gerendertem Template, `/dashboard/
+static/css/app.css` → 200, vollständiger Login-POST → 303-Redirect). Genau dieser Test hat
+den oben beschriebenen Templates/Static-Fund aufgedeckt. Zusätzlich `windows/installer.iss`
+tatsächlich mit dem Inno-Setup-Compiler (6.7.3, für diesen Zweck lokal installiert)
+kompiliert - ergab eine 65 MB `KanzleiAI-Setup-0.1.0.exe` (gültige PE32-Windows-Executable).
+
+**Nicht getestet, mit Begründung:** die eigentliche ELEVATED Installation (Doppelklick auf
+den Installer, UAC-Bestätigung, tatsächliche Installation unter `Program Files` +
+Registry-Eintrag in "Programme und Features") - erfordert eine interaktive UAC-Bestätigung,
+die über die verfügbaren Automatisierungswerkzeuge dieser Sitzung nicht auslösbar ist, und
+ist ein deutlich invasiverer, schwerer rückgängig zu machender Systemeingriff als der bereits
+durchgeführte Bau+Start-Test. Empfehlung: einmal manuell durchklicken, um den letzten Schritt
+zu schließen.
+
+### Offene Punkte
+
+1. Kein registrierter Windows-Dienst (Autostart, Absturz-Neustart, Hintergrundbetrieb ohne
+   offenes Konsolenfenster) - die Anwendung läuft als Vordergrund-Konsolenprozess. Ein Dienst
+   wäre ein separater, deutlich größerer Schritt (Dienstkonto, Installations-/
+   Deinstallationslogik für den Dienst selbst) - nicht Teil dieses Prompts, war im Handoff
+   auch nicht gefordert.
+2. Windows-reservierte Gerätenamen (`CON`, `PRN`, `AUX`, `COM1`-`9`, `LPT1`-`9`, siehe
+   SECURITY_REVIEW.md, offener Punkt aus §2.6/Handoff-Punkt 10) - wie gefordert kurz
+   geprüft: sowohl `app/ingestion/intake.py` als auch `app/mail/service.py` stellen JEDEM
+   gespeicherten Dateinamen bereits ein `uuid4()`-Präfix voran
+   (`f"{uuid.uuid4()}_{source_path.name}"`). Ein Original-Dateiname `CON.pdf` wird dadurch
+   nie als exakter Dateiname auf die Platte geschrieben, sondern nur als Bestandteil eines
+   längeren, eindeutigen Namens (`<uuid>_CON.pdf`) - Windows blockt nur EXAKTE reservierte
+   Namen, keine Namen, die einen reservierten Namen nur als Teilstring enthalten. **Praktisch
+   also kein Problem**, unabhängig entstanden (die UUID-Präfixierung existierte bereits zur
+   Kollisionsvermeidung, nicht als Schutz hiergegen). Bewusst nicht als "behoben" markiert,
+   da keine explizite Prüfung/kein Test dafür existiert - falls künftig ein Code-Pfad
+   Originaldateinamen OHNE UUID-Präfix persistiert, wäre die Frage neu zu stellen.
+3. Kein automatischer Update-Mechanismus (neue Installer-Version über eine bestehende
+   Installation drüber installieren funktioniert über Inno Setup grundsätzlich, wurde aber
+   nicht getestet) - Migrationslogik (`serve` führt `alembic upgrade head` bei jedem Start
+   aus) ist darauf vorbereitet, ein Update-Workflow selbst ist nicht Teil dieses Prompts.
+4. Die vier OCR-Tests/der eine Symlink-Test aus der Gesamt-Testsuite schlagen auf dieser
+   konkreten Windows-Maschine fehl (kein installiertes Tesseract-Binary;
+   Benutzerkonto ohne `SeCreateSymbolicLinkPrivilege`) - Umgebungslimitierungen dieser
+   Maschine, keine Regression durch diesen Prompt, nicht behoben (liegt außerhalb des
+   Scopes, beträfe Prompt-fremden Code).
+
+## 46. Setup-/Konfigurationsassistent (Prompt 37)
+
+Direkt mit Prompt 36 zusammen umgesetzt (derselbe `run.py`-Entry-Point, dieselbe Windows-
+Sitzung) - siehe §45 für Installer/PyInstaller/Inno-Setup-Kontext, hier der Setup-Assistent
+selbst.
+
+### `app/setup/` - drei bewusst getrennte, unabhängig testbare Bausteine
+
+- `paths.py`: `resolve_data_dir()` - siehe §45.
+- `env_writer.py`: `build_env_content()` (reine Funktion, kein Dateizugriff) +
+  `write_env_file()` (einziger schreibender Aufruf, verweigert per Default das
+  Überschreiben einer bestehenden `.env` ohne `force=True` - eine bestehende
+  Konfiguration enthält den aktiven `SESSION_SECRET_KEY`, ein versehentliches
+  Überschreiben würde alle laufenden Sessions ungültig machen).
+- `wizard.py`: `run_setup_wizard()` orchestriert beides plus Migration + Admin-Anlage -
+  beide als Callables INJIZIERT statt hier direkt aufgerufen (siehe nächster Abschnitt für
+  die Begründung). Macht die komplette Ablauflogik (Verzeichnisse anlegen, `.env` schreiben,
+  E-Mail-Validierung, Reihenfolge) ohne Subprozess-Start und ohne `input()`-Mocking testbar.
+
+### Warum Migration/Admin-Anlage als SEPARATER Subprozess laufen (nicht als Funktionsaufruf)
+
+Kernentscheidung dieses Prompts, im Code ausführlich begründet (`run.py`/`app/setup/
+wizard.py`): `app.config.get_settings()` ist `@lru_cache`d, und `app/db/session.py` erzeugt
+die SQLAlchemy-Engine bereits beim MODUL-IMPORT unter Verwendung der zu diesem Zeitpunkt
+gecachten Settings. Der Setup-Assistent schreibt die `.env`-Datei aber ERST WÄHREND seines
+Laufs - jeder nachfolgende Schritt (Migration, Admin-Anlage), der `app.db.session`
+importiert, müsste in einem GARANTIERT frischen Prozess laufen, um die neue `.env` sicher zu
+sehen, statt sich auf eine fragile Cache-Invalidierungs-Reihenfolge zu verlassen. Lösung:
+`setup` startet sich selbst erneut als Subprozess (`kanzlei_ai.exe migrate` /
+`kanzlei_ai.exe create-admin`, siehe `_self_command`/`_run_migrate_subprocess`/
+`_run_create_admin_subprocess` in `run.py`) - funktioniert sowohl im Entwicklungsbetrieb
+(`python run.py ...`) als auch gebündelt (`kanzlei_ai.exe ...`, via `sys.frozen`-Erkennung).
+
+### `scripts/create_admin.py` wird AUFGERUFEN, nicht dupliziert
+
+Wie im Handoff-Dokument gefordert: `run.py`s `create-admin`-Subkommando importiert
+`scripts.create_admin.main` und ruft es auf (liest `ADMIN_EMAIL`/`ADMIN_INITIAL_PASSWORD`
+aus der Prozessumgebung, wie schon seit Prompt 26). Einzige Änderung an `scripts/`: eine
+leere `scripts/__init__.py`, damit das Verzeichnis als Package importierbar ist - das
+bisherige Verhalten (`python scripts/create_admin.py` direkt ausführen) bleibt unverändert.
+
+### Ablauf beim allerersten Start
+
+`kanzlei_ai.exe serve` (Standard-Subkommando) prüft, ob `<Datenverzeichnis>\.env` existiert.
+Falls nicht: startet automatisch denselben interaktiven Assistenten wie `kanzlei_ai.exe
+setup` (fragt Admin-E-Mail + optionales Passwort über die Konsole ab, generiert
+`SESSION_SECRET_KEY` via `secrets.token_urlsafe(48)`, schreibt die `.env`, führt Migration +
+Admin-Anlage aus) und startet danach direkt den Server - EIN Konsolenfenster, keine
+Notwendigkeit, den Assistenten separat manuell aufzurufen. Bei bereits vorhandener `.env`
+wird der Assistent übersprungen und direkt serviert.
+
+### `HOST`/`PORT` (`app/config/settings.py`)
+
+Neue Settings-Felder, Default `127.0.0.1`/`8000` - sicherer Default (nur lokal erreichbar,
+passend zum Einzelinstallations-Modell: Anwalt/Mitarbeiter greifen im Browser auf demselben
+Rechner zu). Netzwerkweite Erreichbarkeit (`HOST=0.0.0.0`, falls mehrere Arbeitsplätze
+dieselbe Installation nutzen sollen) ist eine bewusst nicht vorgenommene, offene
+Entscheidung für später - siehe SECURITY_REVIEW.md-artige Vorsicht bei sicherheitsrelevanten
+Defaults.
+
+### Getestet
+
+Siehe §45 (gemeinsamer Testabschnitt für Prompt 36+37, da beide über denselben Build-Test
+liefen) - hervorzuheben: der End-to-End-Build-Test hat den vollständigen Setup-Ablauf
+(inkl. `.env`-Erzeugung über `app/setup/env_writer.py`, Migration, Admin-Anlage) tatsächlich
+im gebündelten Build durchlaufen lassen, nicht nur die Unit-Tests der einzelnen Bausteine.
+
+### Offene Punkte
+
+1. Kein "Re-Setup"/"Neu konfigurieren"-Dialog im Dashboard selbst - eine erneute
+   Konfiguration läuft ausschließlich über `kanzlei_ai.exe setup --force` (Konsole,
+   Admin-Zugriff auf die Maschine vorausgesetzt), nicht über die Web-Oberfläche. Bewusst so
+   belassen (kleinstmöglicher Schritt, keine neue Dashboard-Fläche für einen seltenen
+   Vorgang).
+2. Keine Validierung der eingegebenen Admin-E-Mail über "enthält @" hinaus (kein
+   vollständiger RFC-5322-Check) - ausreichend für diesen Zweck, `scripts/create_admin.py`
+   selbst validiert beim tatsächlichen Anlegen ohnehin über die bestehende
+   Datenbank-/Service-Schicht.
+3. Der Setup-Assistent bietet keine Möglichkeit, aus einem bestehenden Backup
+   wiederherzustellen (siehe §44, offener Punkt 1 - "kein Restore-Mechanismus") - wie im
+   Handoff-Dokument ausdrücklich verlangt NICHT ungefragt ergänzt, sondern zurückgestellt.

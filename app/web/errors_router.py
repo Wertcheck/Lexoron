@@ -20,9 +20,10 @@ from app.auth.permissions import require_login, require_role
 from app.db.session import get_db
 from app.errors import ProcessingError, RetryService
 from app.models import User
+from app.web.template_paths import TEMPLATES_DIR
 
 router = APIRouter(prefix="/dashboard/errors", tags=["dashboard-errors"])
-templates = Jinja2Templates(directory="app/web/templates")
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
 @router.get("", response_class=HTMLResponse)

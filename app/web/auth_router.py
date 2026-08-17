@@ -22,9 +22,10 @@ from app.config import Settings, get_settings
 logger = logging.getLogger(__name__)
 from app.db.session import get_db
 from app.models import User
+from app.web.template_paths import TEMPLATES_DIR
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard-auth"])
-templates = Jinja2Templates(directory="app/web/templates")
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
 def _set_session_cookie(response, token: str, settings: Settings) -> None:

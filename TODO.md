@@ -480,8 +480,39 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
 **Phase 7 (Sicherheit und Produktisierung, Prompts 26-35) damit vollständig abgeschlossen.**
 
 ## Phase 8 – Kanzlei-Produkt (Prompts 36–45)
-- [ ] Windows-Installer
-- [ ] Setup-/Konfigurations-Assistent
+- [x] Windows-Installer – Prompt 36, 17.08. (Claude Code, Windows-Zielmaschine, siehe
+      HANDOFF_PROMPT36_37_WINDOWS.md). Entscheidung getroffen und dokumentiert:
+      Datenverzeichnis = `%PROGRAMDATA%\KanzleiAI` (Programminstallation bleibt getrennt
+      unter `Program Files`) - weder für normale Nutzer unbeschreibbar noch Teil des
+      OneDrive-"Bekannte Ordner sichern"-Satzes, siehe ARCHITECTURE.md §45.
+      Neuer dünner Entry-Point `run.py` (vier Subkommandos: serve/setup/migrate/
+      create-admin, PyInstaller-Ziel), `windows/kanzlei_ai.spec` (onedir-Build),
+      `windows/installer.iss` (Inno Setup). **Echter Fund beim End-to-End-Build-Test:**
+      alle neun Jinja2Templates/StaticFiles-Verwendungsstellen nutzten einen relativen
+      Pfad, der nach dem für den Installer nötigen Arbeitsverzeichniswechsel ins
+      Datenverzeichnis das gesamte Dashboard funktionslos gemacht hätte (404 auf jede
+      Seite) - behoben durch `app/web/template_paths.py` (absolute, am Modulpfad
+      verankerte Pfade). 22 neue Tests, 739/747 gesamt grün (4 OCR-Tests + 1 Symlink-Test
+      scheitern an Umgebungslimitierungen dieser konkreten Windows-Testmaschine, keine
+      Regression). PyInstaller-Build UND Inno-Setup-Installer tatsächlich gebaut und der
+      gebündelte Server per echtem HTTP-Aufruf (inkl. Login) verifiziert - nicht nur
+      Unit-Tests. Siehe ARCHITECTURE.md §45.
+- [x] Setup-/Konfigurations-Assistent – Prompt 37, 17.08. Neues Paket `app/setup/`
+      (`paths.py`/`env_writer.py`/`wizard.py`) - erzeugt bei Ersteinrichtung die
+      Produktions-`.env` (inkl. per `secrets.token_urlsafe(48)` generiertem
+      `SESSION_SECRET_KEY`), führt `alembic upgrade head` aus und ruft
+      `scripts/create_admin.py` AUF (nicht dupliziert, wie im Handoff gefordert - dafür
+      `scripts/__init__.py` als Package importierbar gemacht). Migration/Admin-Anlage
+      laufen bewusst als SEPARATER Subprozess derselben `.exe`, nicht als Funktionsaufruf
+      im selben Prozess - Begründung: `get_settings()` (`@lru_cache`) und die
+      SQLAlchemy-Engine-Erzeugung in `app/db/session.py` lesen die Konfiguration beim
+      ERSTEN Modul-Import, die `.env` entsteht aber erst während des Assistenten-Laufs.
+      `kanzlei_ai.exe serve` erkennt eine fehlende `.env` automatisch und startet den
+      Assistenten selbst, bevor der Server hochfährt - kein separater manueller Aufruf
+      beim allerersten Start nötig. Neue `HOST`/`PORT`-Settings (Default `127.0.0.1:8000`,
+      sicherer lokaler Default). Vollständiger Ablauf (E-Mail-Erzeugung, Migration,
+      Admin-Anlage, Serverstart, Login) im echten PyInstaller-Build durchgespielt. Siehe
+      ARCHITECTURE.md §46.
 - [ ] Multi-Kanzlei-Profile + Cross-Tenant-Tests
 - [ ] Dokumentvorlagen (validierte Platzhalter)
 - [ ] Production Readiness Review

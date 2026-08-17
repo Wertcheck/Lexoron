@@ -63,10 +63,11 @@ from app.web.service_factory import (
     get_feedback_service,
     get_review_engine,
 )
+from app.web.template_paths import TEMPLATES_DIR
 
 router = APIRouter(prefix="/dashboard/drafts", tags=["dashboard-drafts"])
 
-templates = Jinja2Templates(directory="app/web/templates")
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 # Fest verdrahteter Schreibauftrag fuer "Aenderungen uebernehmen & neu
 # formulieren" - siehe SecurityCheckService.ALLOWED_PURPOSES. Kein

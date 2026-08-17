@@ -252,6 +252,24 @@ class Settings(BaseSettings):
             raise ValueError("budget_warning_threshold_percent muss zwischen 1 und 100 liegen")
         return value
 
+    # --- Server-Bindung (Prompt 36, Windows-Installer) ---
+    # Sicherer Default: nur lokal erreichbar (127.0.0.1), passend zum
+    # Einzelinstallations-Modell ("getrennte Installation je Kanzlei", siehe
+    # TODO.md) - der Anwalt/die Kanzleimitarbeiter greifen über den
+    # Browser auf demselben Rechner zu. Netzwerkweite Erreichbarkeit
+    # (HOST=0.0.0.0) ist eine bewusste, hier NICHT vorgenommene
+    # Entscheidung, falls mehrere Arbeitsplaetze eine gemeinsame
+    # Installation nutzen sollen.
+    host: str = "127.0.0.1"
+    port: int = 8000
+
+    @field_validator("port")
+    @classmethod
+    def port_must_be_in_valid_range(cls, value: int) -> int:
+        if not (1 <= value <= 65535):
+            raise ValueError("port muss zwischen 1 und 65535 liegen")
+        return value
+
     # --- Vorlagen (Platzhalter, echte Logik erst Prompt 39) ---
     templates_dir: str = "data/templates"
 

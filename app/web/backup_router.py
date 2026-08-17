@@ -22,9 +22,10 @@ from app.config import get_settings
 from app.db.session import get_db
 from app.export import MatterExportService
 from app.models import Matter, User
+from app.web.template_paths import TEMPLATES_DIR
 
 router = APIRouter(prefix="/dashboard/backup", tags=["dashboard-backup"])
-templates = Jinja2Templates(directory="app/web/templates")
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 # Eigenes, temporäres Verzeichnis für über das Dashboard erzeugte
 # Archive - getrennt von einem evtl. per CLI-Skript befüllten

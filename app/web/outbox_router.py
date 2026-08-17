@@ -30,10 +30,11 @@ from app.auth.permissions import (
 from app.db.session import get_db
 from app.models import Draft, OutboxEntry, User
 from app.outbox.service import OutboxService
+from app.web.template_paths import TEMPLATES_DIR
 
 router = APIRouter(prefix="/dashboard/outbox", tags=["dashboard-outbox"])
 
-templates = Jinja2Templates(directory="app/web/templates")
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
 @router.get("", response_class=HTMLResponse)

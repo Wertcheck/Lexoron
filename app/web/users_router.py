@@ -19,9 +19,10 @@ from app.auth.permissions import PermissionDeniedError, require_login, require_r
 from app.auth.service import UserAlreadyExistsError, UserService
 from app.db.session import get_db
 from app.models import Role, User
+from app.web.template_paths import TEMPLATES_DIR
 
 router = APIRouter(prefix="/dashboard/admin/users", tags=["dashboard-admin-users"])
-templates = Jinja2Templates(directory="app/web/templates")
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
 def _require_admin_read(current_user: User = Depends(require_login)) -> User:

@@ -24,9 +24,10 @@ from app.config import get_settings
 from app.cost_control import CostControlService
 from app.db.session import get_db
 from app.models import AuditEvent, ProcessingError, User
+from app.web.template_paths import TEMPLATES_DIR
 
 router = APIRouter(prefix="/dashboard/monitoring", tags=["dashboard-monitoring"])
-templates = Jinja2Templates(directory="app/web/templates")
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 
 def _require_admin(current_user: User = Depends(require_login)) -> User:

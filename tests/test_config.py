@@ -93,6 +93,37 @@ def test_secrets_are_not_exposed_in_str_or_repr(monkeypatch: pytest.MonkeyPatch)
     assert settings.anthropic_api_key.get_secret_value() == "sk-super-secret-value"
 
 
+def test_host_and_port_default_to_localhost_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Sicherer Default (Prompt 36): keine Netzwerkweite Erreichbarkeit ohne
+    ausdrückliche Konfiguration."""
+    monkeypatch.delenv("HOST", raising=False)
+    monkeypatch.delenv("PORT", raising=False)
+
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+
+    assert settings.host == "127.0.0.1"
+    assert settings.port == 8000
+
+
+def test_host_and_port_can_be_overridden(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HOST", "0.0.0.0")
+    monkeypatch.setenv("PORT", "9090")
+
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+
+    assert settings.host == "0.0.0.0"
+    assert settings.port == 9090
+
+
+@pytest.mark.parametrize("invalid_port", ["0", "-1", "70000"])
+def test_invalid_port_is_rejected(
+    monkeypatch: pytest.MonkeyPatch, invalid_port: str
+) -> None:
+    monkeypatch.setenv("PORT", invalid_port)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)  # type: ignore[call-arg]
+
+
 def test_require_human_approval_defaults_true_and_is_explicit_when_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -35,6 +35,12 @@ dev = [
     "pytest>=8.0",
     "httpx>=0.27",
 ]
+# Nur fuer das Erzeugen des Windows-Installers (Prompt 36) benoetigt -
+# bewusst getrennt von "dev", damit ein normaler Entwicklungs-/Testlauf
+# PyInstaller nicht mitinstallieren muss.
+build = [
+    "pyinstaller>=6.10",
+]
 
 [build-system]
 requires = ["setuptools>=68"]
