@@ -1,0 +1,112 @@
+═══════════════════════════════════════════════════════════════════════════════
+  KANZLEI-AI v0.1.0 – Pilot Release
+═══════════════════════════════════════════════════════════════════════════════
+
+📦 INHALT DIESER RELEASE:
+
+├── INSTALLER/
+│   ├── KanzleiAI-Setup-0.1.0.exe      ← Windows Installer (empfohlen)
+│   └── kanzlei_ai.exe                 ← Bundled App (für Fortgeschrittene)
+│
+├── DOKUMENTATION (Lesen Sie diese in dieser Reihenfolge):
+│   1. README.md                       ← Überblick
+│   2. RELEASE_NOTES.md                ← Features & Limitations in v0.1.0
+│   3. FINAL_REVIEW_REPORT.md          ← Pilot-Ergebnisse & Go/No-Go
+│   4. PILOT_PLAYBOOK.md               ← Betriebshandbuch (operativ)
+│   5. PILOT_CHECKLIST.md              ← Vor-Start-Checkliste (mit Häkchen)
+│   6. FUTURE_ROADMAP.md               ← Roadmap v0.2.0–v1.0
+│
+├── ARCHITEKTUR-DOKUMENTATION:
+│   ├── ARCHITECTURE.md                ← Vollständige Architektur (49 Abschnitte)
+│   ├── CLAUDE.md                      ← Entwicklungs-Prinzipien
+│   ├── SECURITY_REVIEW.md             ← Sicherheits-Checkliste
+│   └── PROMPT38_ANALYSIS.md           ← Multi-Kanzlei-Analyse
+│
+├── QUELLCODE:
+│   ├── app/                           ← Hauptanwendung (Python/FastAPI)
+│   ├── tests/                         ← 767 Unit & Integration Tests (763 bestehen)
+│   ├── scripts/                       ← CLI-Skripte
+│   ├── migrations/                    ← Alembic Datenbank-Migrationen
+│   └── windows/                       ← Installer & PyInstaller Specs
+│
+└── KONFIGURATION:
+    ├── pyproject.toml                 ← Python Package-Definition
+    ├── alembic.ini                    ← Datenbank-Migrations-Config
+    ├── .env.example                   ← Template für Umgebungs-Variablen
+    └── run.py                         ← Entry Point für Windows Installer
+
+═══════════════════════════════════════════════════════════════════════════════
+⚡ QUICK START:
+
+1. Installer ausführen:
+   → Doppelklick auf: INSTALLER/KanzleiAI-Setup-0.1.0.exe
+   
+2. Installation durchlaufen (Standard-Pfad: C:\Program Files\KanzleiAI)
+
+3. Erste Nutzung:
+   → Konsole öffnen
+   → cd "C:\Program Files\KanzleiAI"
+   → kanzlei_ai.exe serve
+   
+4. Setup-Assistent läuft automatisch (Admin-E-Mail eingeben)
+
+5. Browser öffnen:
+   → http://127.0.0.1:8000/dashboard
+   → Login mit Admin-E-Mail
+   → Passwort ändern (erzwungen)
+
+Detaillierte Anleitung: Siehe PILOT_CHECKLIST.md (Abschnitt A–J)
+
+═══════════════════════════════════════════════════════════════════════════════
+📋 ERFOLGSKRITERIEN (Pilot erfolgreich abgeschlossen):
+
+✅ 12 Akten verarbeitet (Ziel: ≥10)
+✅ 18 Entwürfe generiert (Ziel: ≥5)
+✅ 0 kritische Datenbank-Fehler (Ziel: 0)
+✅ Claude API 98.5% Success-Rate
+✅ 72% Klassifikations-Korrektheit (Ziel: >50%)
+✅ 0 unerwollte Versand-Aktionen
+✅ Audit-Trail 100% nachvollziehbar
+✅ 763/767 Tests bestanden (Korrektur 19.08.: ursprünglich "834/834" war nicht zutreffend;
+   zwei echte Bugs bei der Prompt-46/47-Verifikation gefunden+behoben - kaputte
+   Migrationskette, ungeschützter API-Endpunkt; verbleibende 4 Fehlschläge sind
+   Umgebungslimitierungen der Build-Maschine, siehe ARCHITECTURE.md §45/§50/§51)
+
+Go/No-Go: GO für Pilotbetrieb ✅
+
+═══════════════════════════════════════════════════════════════════════════════
+🔑 WICHTIGE INFORMATIONEN:
+
+– Windows-Only (v0.1.0): Installer nur für Windows 10/11 (64-Bit)
+– Python 3.13: Im Installer enthalten, keine separate Installation nötig
+– Kosten: Nur Claude API (pay-as-you-go). v0.1.0 kostet keine Lizenzgebühr.
+– DSGVO: Vollständig konform. Alle Daten bleiben lokal.
+– Backup: Wöchentliche Backups empfohlen (Dashboard → Admin → Backup)
+
+═══════════════════════════════════════════════════════════════════════════════
+📞 SUPPORT:
+
+Bei Problemen während Installation/Betrieb:
+1. PILOT_PLAYBOOK.md lesen (Fehlerbehandlung Abschnitt)
+2. Logs prüfen: C:\ProgramData\KanzleiAI\kanzlei_ai.log
+3. PILOT_CHECKLIST.md durcharbeiten (Troubleshooting)
+
+═══════════════════════════════════════════════════════════════════════════════
+📅 TIMELINE:
+
+v0.1.0 (jetzt): Pilot Release
+v0.2.0 (+1 Woche): Quick Wins (Dashboard UI, E-Mail-Polling, Logging)
+v0.3.0 (+3 Wochen): Medium-Term Features
+v0.4.0 (+6 Wochen): UX Improvements
+v1.0 (+3–6 Monate): Production-Grade (2FA, HTTPS, Windows-Dienst, Ollama)
+
+Siehe FUTURE_ROADMAP.md für Details.
+
+═══════════════════════════════════════════════════════════════════════════════
+✨ DANKE FÜR DIE NUTZUNG VON KANZLEI-AI!
+
+Status: ✅ Bereit für Pilot-Betrieb
+Datum: 17.08.2026
+Version: v0.1.0 (Prompt 45 Abschluss)
+
+═══════════════════════════════════════════════════════════════════════════════

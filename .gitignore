@@ -18,6 +18,9 @@ __pycache__/
 .ruff_cache/
 build/
 dist/
+# Gebuendelte Installer-Artefakte (.exe) - Build-Ausgabe, kein Quellcode,
+# jederzeit per windows/build.ps1 aus dem Quellcode neu erzeugbar (Prompt 47).
+INSTALLER/
 
 # Virtuelle Umgebungen
 .venv/

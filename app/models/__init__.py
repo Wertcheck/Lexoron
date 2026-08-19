@@ -18,6 +18,7 @@ from app.models.deadline import Deadline
 from app.models.document import Document
 from app.models.draft import Draft
 from app.models.draft_feedback import DraftFeedback
+from app.models.draft_quality_rating import DraftQualityRating
 from app.models.draft_reference_links import DraftKnowledgeItemLink, DraftSourceLink
 from app.models.embedding import Embedding
 from app.models.knowledge_item import KnowledgeItem
@@ -51,6 +52,7 @@ __all__ = [
     "Deadline",
     "Draft",
     "DraftFeedback",
+    "DraftQualityRating",
     "DraftSourceLink",
     "DraftKnowledgeItemLink",
     "AttorneyInstruction",

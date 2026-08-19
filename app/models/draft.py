@@ -58,3 +58,6 @@ class Draft(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     previous_version: Mapped["Draft | None"] = relationship(
         remote_side="Draft.id", foreign_keys=[previous_version_id]
     )
+    quality_ratings: Mapped[list["DraftQualityRating"]] = relationship(
+        back_populates="draft", cascade="all, delete-orphan"
+    )

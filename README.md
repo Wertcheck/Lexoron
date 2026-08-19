@@ -2,7 +2,19 @@
 
 Konfigurierbare KI-gestützte Workflow-Plattform für eine Anwaltskanzlei. 
 
-**Status:** ✅ **Production Ready for Pilot** (all 45 prompts complete, 834/834 tests passing)
+**Status:** ✅ **Ready for Pilot** (all 47 prompts complete, 763/767 tests passing - see note below)
+
+> **Note (19.08., verified during Prompts 46-47):** the previously claimed "834/834 tests
+> passing" was not accurate at the time it was written. Two real, independent bugs were
+> found and fixed while verifying the native-window/installer packaging work: a broken
+> Alembic migration chain (`down_revision` was unset, causing "multiple head revisions" -
+> `alembic upgrade head` would have failed on every fresh install) and an unauthenticated
+> `POST` endpoint under `/api/` in the quality-rating feature (moved to `/dashboard/drafts`
+> with login+CSRF, matching every other mutating route in the project). A test-fixture bug
+> (`Matter(title=None)`, violates a `NOT NULL` constraint) was also fixed. The remaining 4
+> failures are environment limitations of this specific build machine (no Tesseract binary
+> installed, this Windows account lacks `SeCreateSymbolicLinkPrivilege`), not code defects -
+> see ARCHITECTURE.md §45/§50/§51 for full details.
 
 ## Features
 
@@ -15,8 +27,9 @@ Konfigurierbare KI-gestützte Workflow-Plattform für eine Anwaltskanzlei.
   (Prompts 46–47; icon is currently a generated placeholder, see `windows/
   generate_placeholder_icon.py` - swap `windows/app_icon.ico` for a real firm logo anytime)
 - ✅ **8 Dashboard Areas:** Inbox, Matters, Documents, Drafts, Legal Sources, Tasks, Settings, Admin
-- ✅ **Full Test Coverage:** 834 tests, 82% code coverage
-- ✅ **Comprehensive Docs:** ARCHITECTURE.md (49 sections), CLAUDE.md, SECURITY_REVIEW.md, PILOT_PLAYBOOK.md
+- ✅ **Full Test Coverage:** 767 tests (763 passing, 4 environment-limited on this build
+  machine), ~82% code coverage
+- ✅ **Comprehensive Docs:** ARCHITECTURE.md (51 sections), CLAUDE.md, SECURITY_REVIEW.md, PILOT_PLAYBOOK.md
 
 See **RELEASE_NOTES.md** for full feature list and known limitations.
 
@@ -77,14 +90,15 @@ uvicorn app.main:app --reload
 ## Testing
 
 ```bash
-pytest  # Run all 834 tests
+pytest  # Run all 767 tests (763 passing; 4 fail only on machines without
+        # Tesseract installed / without symlink-creation privilege)
 pytest tests/test_classification.py -v  # Single module
 pytest -k "quality" --cov=app --cov-report=html  # Coverage report
 ```
 
 ## Documentation
 
-- **ARCHITECTURE.md** – Detailed system architecture (49 sections, 2,200+ lines)
+- **ARCHITECTURE.md** – Detailed system architecture (51 sections, 2,600+ lines)
 - **CLAUDE.md** – Development principles (if building/extending locally)
 - **SECURITY_REVIEW.md** – Security decisions and compliance checklist
 - **PILOT_PLAYBOOK.md** – Operational runbook for 2–4 week pilot
@@ -156,8 +170,8 @@ For issues during pilot: See **PILOT_PLAYBOOK.md** "Support" section.
 
 ---
 
-**Status:** ✅ All 45 prompts complete  
-**Tests:** 834/834 passing  
-**Coverage:** 82% (app/ directory)  
-**Build:** Windows Installer (PyInstaller + Inno Setup)  
+**Status:** ✅ All 47 prompts complete
+**Tests:** 763/767 passing (4 environment-limited on this build machine, see note above)
+**Coverage:** ~82% (app/ directory)
+**Build:** Windows Installer (PyInstaller + Inno Setup), native app window (WebView2), own app icon
 **Next:** v0.2.0 planning (1 week post-pilot)

@@ -34,6 +34,7 @@ from app.observability import configure_logging
 from app.web.auth_router import router as auth_web_router
 from app.web.backup_router import router as backup_web_router
 from app.web.drafts_router import router as drafts_web_router
+from app.web.quality_router import router as quality_web_router
 from app.web.template_paths import STATIC_DIR
 from app.web.errors_router import router as errors_web_router
 from app.web.monitoring_router import router as monitoring_web_router
@@ -103,6 +104,7 @@ app.include_router(users_web_router)
 app.include_router(errors_web_router)
 app.include_router(monitoring_web_router)
 app.include_router(backup_web_router)
+app.include_router(quality_web_router)
 app.mount(
     "/dashboard/static",
     StaticFiles(directory=STATIC_DIR),
