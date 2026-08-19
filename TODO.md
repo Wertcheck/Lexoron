@@ -569,6 +569,29 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       Zeitpunkt dieses Prompts nicht zutreffend (14 zusätzliche Fehlschläge in
       `tests/test_quality_service.py`, eigener Fixture-Bug, unangetastet gelassen) - bitte
       vor einer echten Pilot-Freigabe verifizieren. Siehe ARCHITECTURE.md §50.
+- [x] Fixture-Bug in tests/test_quality_service.py behoben – 19.08. (separater Fix, auf
+      Zuruf). Beide `Matter(...)`-Fixtures fehlte das Pflichtfeld `title`
+      (`nullable=False`) - `IntegrityError` bei allen 14 Tests der Datei. Ergänzt, im Stil
+      der übrigen Testsuite. 763/767 Tests grün, nur noch die vier bekannten
+      Umgebungslimitierungen (Tesseract/Symlink-Recht) offen.
+
+## Nachtrag – Prompt 47 (eigenes App-Icon + Packaging-Feinschliff), 19.08.
+
+- [x] Eigenes App-Icon eingebunden – Prompt 47, 19.08. Kein echtes Kanzlei-/Produktlogo im
+      Projekt vorhanden - Platzhalter generiert (`windows/generate_placeholder_icon.py`,
+      Pillow, Farben aus `app/web/static/css/app.css` übernommen: `--seal-green`
+      `#2f6f62`/`--paper-000` `#fbfbf9`, Motiv: Wachssiegel-Kreis + Initialen "KA").
+      `windows/kanzlei_ai.spec` (`EXE(icon=...)`) und `windows/installer.iss`
+      (`SetupIconFile`, Start-Menü- + neue Opt-in-Desktop-Verknüpfung mit `IconFilename`)
+      entsprechend ergänzt. **Gefundene Pfad-Falle vermieden:** Inno Setup löst relative
+      Pfade relativ zum Skript-Speicherort auf (`windows/`), nicht zum Projekt-Root - der
+      ursprünglich im Prompt genannte Pfad `windows\app_icon.ico` hätte beim Kompilieren
+      fehlgeschlagen, korrekt ist `app_icon.ico`. PyInstaller-Build UND Inno-Setup-Installer
+      neu erzeugt, Icon-Einbettung per `windows/verify_icon_embedding.ps1` (extrahiert das
+      tatsächlich eingebettete Icon aus beiden `.exe`-Dateien) ECHT verifiziert statt nur
+      behauptet - beide tragen sichtbar das eigene Siegel-Icon. Reine Packaging-Änderung,
+      `app/web/`/Kern-Logik nicht angefasst (763/767 Tests weiterhin unverändert grün).
+      Siehe ARCHITECTURE.md §51.
 
 ## Wiederkehrende Grundregeln (gelten für jede Phase)
 - Keine echten Mandantendaten in Tests/Entwicklung.

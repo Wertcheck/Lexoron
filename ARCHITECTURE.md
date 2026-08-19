@@ -2599,3 +2599,86 @@ Browser".
    wurden gezielt auf Zuruf gefixt - der Rest des uncommitted Prompt-38-45-Stands
    (insbesondere die "834/834 Tests grün"/"production ready"-Behauptungen in README.md/
    TODO.md) wurde NICHT auf Richtigkeit geprüft und ist nicht Teil dieses Prompts.
+
+**Nachtrag (separater Fix, siehe eigener Commit):** der in Punkt 5 genannte Fixture-Bug in
+`tests/test_quality_service.py` (`Matter(title=None)`, `title` ist `nullable=False`) wurde
+auf ausdrücklichen Wunsch nachträglich behoben (`title="Testakte 1"`/`"Testakte 2"` ergänzt)
+- 763/767 Tests grün, nur noch die vier bekannten Umgebungslimitierungen dieser
+Windows-Testmaschine (Tesseract/Symlink-Recht) offen.
+
+## 51. Eigenes App-Icon + Packaging-Feinschliff (Prompt 47)
+
+### Ausgangslage: kein echtes Logo im Projekt
+
+Es existierte zu keinem Zeitpunkt eine `.ico`-/Logo-Datei im Repository (weder im
+Arbeitsverzeichnis noch in der Git-Historie) - `windows/kanzlei_ai.spec` (Prompt 36) und
+`windows/installer.iss` verwendeten bislang PyInstaller-/Inno-Setup-Standardicons. Diesen
+Prompt AUSDRÜCKLICH als Packaging-Feinschliff behandelt (kein Kern-Code, kein `app/web/`
+angefasst, wie vorgegeben) - ein generierter PLATZHALTER, kein echtes Kanzlei-/Produktlogo.
+
+### `windows/generate_placeholder_icon.py` - Herkunft des Platzhalters
+
+Reines Erzeugungsskript (Pillow, bereits Projektabhängigkeit seit Prompt 08), keine neue
+Abhängigkeit nötig. Farben DIREKT aus `app/web/static/css/app.css` übernommen
+(`--seal-green` `#2f6f62`, `--paper-000` `#fbfbf9`) - passend zur bestehenden
+Wachssiegel-Ästhetik des Dashboards, kein beliebig gewähltes Fremdmotiv. Motiv: abgerundetes
+Quadrat in Siegel-Grün, Kreisring, Initialen "KA". Erzeugt `windows/app_icon.ico` mit den
+unter Windows üblichen Auflösungsstufen (16/24/32/48/64/128/256 px). **Austausch:** sobald
+ein echtes Kanzlei-/Produktlogo vorliegt, genügt es, `windows/app_icon.ico` zu ersetzen -
+weder `windows/kanzlei_ai.spec` noch `windows/installer.iss` müssten geändert werden (beide
+referenzieren nur den Dateipfad).
+
+### `windows/kanzlei_ai.spec`
+
+`EXE(..., icon=str(PROJECT_ROOT / "windows" / "app_icon.ico"))` ergänzt - PyInstaller bettet
+das Icon direkt als Windows-Ressource in `kanzlei_ai.exe` ein (Datei-Explorer-Symbol,
+Taskleiste, UND - da nicht anders angegeben - automatisch auch für alle Verknüpfungen ohne
+eigene `IconFilename`-Angabe in `windows/installer.iss`).
+
+### `windows/installer.iss`
+
+`SetupIconFile=app_icon.ico` (Installer-Datei-Icon selbst) ergänzt. **Gefundene
+Pfad-Falle vermieden:** Inno Setup löst relative Pfade relativ zum Speicherort DES SKRIPTS
+auf (`windows/`), nicht relativ zum Projekt-Root - `SetupIconFile=windows\app_icon.ico`
+(wie ursprünglich im Prompt-Text formuliert) hätte `windows\windows\app_icon.ico` gesucht
+und wäre beim Kompilieren fehlgeschlagen; korrekt ist der bereits an `[Files]` erkennbare
+Pfadstil (`app_icon.ico`, ohne Präfix, da direkt neben dem Skript liegend). Neue
+`[Tasks]`/`[Icons]`-Ergänzungen:
+
+- Startmenü-Verknüpfung (bereits seit Prompt 36 vorhanden) bekommt jetzt explizit
+  `IconFilename` gesetzt (identisches Ergebnis zum bisherigen impliziten Verhalten, hier
+  aber dokumentiert statt implizit).
+- NEUE Desktop-Verknüpfung ergänzt (vorher nicht vorhanden) - bewusst als **Opt-in-Task**
+  (`Flags: unchecked`), nicht jeder Anwalt/jede Kanzleimitarbeiterin möchte einen weiteren
+  Desktop-Eintrag; Startmenü bleibt der verbindliche Standardweg.
+
+### `windows/verify_icon_embedding.ps1` - echte Verifikation statt Behauptung
+
+Extrahiert das tatsächlich eingebettete Icon aus `kanzlei_ai.exe` UND
+`KanzleiAI-Setup-0.1.0.exe` per `System.Drawing.Icon.ExtractAssociatedIcon` und speichert es
+als PNG - lässt sich visuell (oder künftig automatisiert per Pixel-/Hash-Vergleich mit
+`windows/app_icon.ico`) prüfen, dass wirklich das eigene Icon eingebettet ist, nicht nur ein
+PyInstaller-/Inno-Setup-Standardsymbol.
+
+### Getestet
+
+PyInstaller-Build UND Inno-Setup-Installer tatsächlich neu erzeugt (nicht nur die
+Spec-/Skript-Änderungen behauptet). `windows/verify_icon_embedding.ps1` ausgeführt und die
+extrahierten Icons per Bildschirm-Ansicht geprüft: beide Artefakte (`kanzlei_ai.exe` UND
+`KanzleiAI-Setup-0.1.0.exe`) tragen sichtbar das eigene grüne "KA"-Siegel, kein
+Standardsymbol. Volle Testsuite erneut gelaufen (763/767 grün, unverändert gegenüber vor
+diesem Prompt - reine Packaging-Änderung, keine Code-Berührung) - bestätigt, dass `app/web/`
+und die Kern-Logik tatsächlich unangetastet blieben.
+
+### Offene Punkte
+
+1. `windows/app_icon.ico` bleibt ein Platzhalter, kein echtes Kanzlei-/Produktlogo - sollte
+   vor einer echten Kanzlei-Auslieferung durch ein professionelles Logo ersetzt werden
+   (reiner Dateiaustausch, siehe oben).
+2. Kein Icon für das native `pywebview`-Fenster selbst gesetzt (siehe §50, offener Punkt 3)
+   - `webview.start(..., icon=...)` würde jetzt `windows/app_icon.ico` akzeptieren, war aber
+   nicht Teil dieses ausdrücklich auf PyInstaller/Inno Setup begrenzten Prompts (Vorgabe:
+   "keine Kern-Logik anfassen" - `run.py` zählt dazu).
+3. Keine automatisierte Pixel-/Hash-Prüfung des extrahierten Icons gegen
+   `windows/app_icon.ico` (nur visuelle Prüfung durchgeführt) - für einen Platzhalter
+   ausreichend, könnte bei einem echten Logo als CI-Regressionswache sinnvoll werden.

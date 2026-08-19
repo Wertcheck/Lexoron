@@ -1,4 +1,5 @@
-; Inno-Setup-Skript für die Windows-Installation (Prompt 36).
+; Inno-Setup-Skript für die Windows-Installation (Prompt 36; App-Icon
+; Prompt 47).
 ;
 ; Voraussetzung: der PyInstaller-Build liegt bereits unter dist\kanzlei_ai\
 ; (siehe windows\kanzlei_ai.spec bzw. windows\build.ps1, das beide Schritte
@@ -7,6 +8,12 @@
 ;
 ;     iscc windows\installer.iss
 ;
+; WICHTIG zu relativen Pfaden in dieser Datei: Inno Setup löst sie relativ
+; zum Speicherort DIESES Skripts auf (windows\), nicht relativ zum
+; Projekt-Root - daher unten "app_icon.ico" (liegt direkt daneben in
+; windows\), NICHT "windows\app_icon.ico" (das würde windows\windows\...
+; suchen und fehlschlagen). Aus demselben Grund referenziert [Files] oben
+; bereits "..\dist\kanzlei_ai\*".
 ; Installiert AUSSCHLIESSLICH den Programmordner (Code, Templates,
 ; statische Assets, Migrationsskripte) unter {autopf}\KanzleiAI - KEINE
 ; Mandantendaten. Konfiguration/Datenbank/Dokumente entstehen erst beim
@@ -39,6 +46,13 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ; Setup-Assistenten selbst - der läuft unter dem Konto des Anwalts/der
 ; Kanzleimitarbeiter, nicht unter dem Installer-Administratorkonto.
 PrivilegesRequired=admin
+; Anwendungssymbol fuer den Installer selbst (Setup.exe-Datei-Icon,
+; Titelleiste, Add/Remove-Programme-Eintrag) - Prompt 47. Aktuell ein
+; generierter Platzhalter (siehe windows/generate_placeholder_icon.py),
+; kein echtes Kanzlei-/Produktlogo - siehe "Kein WizardImageFile/Branding"
+; unten, dieselbe Einordnung gilt hier: austauschbar, sobald ein echtes
+; Logo vorliegt, ohne dieses Skript sonst anzufassen.
+SetupIconFile=app_icon.ico
 ; Kein WizardImageFile/Branding an dieser Stelle - kanzleispezifisches
 ; Branding ist Teil der zurückgestellten "Multi-Kanzlei-Profile"-Frage
 ; (Prompt 38), siehe PROMPT38_ANALYSIS.md - hier bewusst NICHT vorweggenommen.
@@ -49,9 +63,21 @@ Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 [Files]
 Source: "..\dist\kanzlei_ai\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+[Tasks]
+; Startmenü-Verknüpfung ist immer da (siehe [Icons] unten, kein Task
+; nötig) - Desktop-Verknüpfung bewusst OPT-IN (unchecked), nicht jeder
+; Anwalt/jede Kanzleimitarbeiterin möchte einen weiteren Desktop-Eintrag.
+Name: "desktopicon"; Description: "Desktop-Verknüpfung anlegen"; GroupDescription: "Zusätzliche Symbole:"; Flags: unchecked
+
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
+; IconFilename explizit gesetzt (Prompt 47) statt sich auf Inno Setups
+; Standardverhalten zu verlassen (das ohne diese Angabe automatisch das in
+; kanzlei_ai.exe eingebettete Icon - siehe windows/kanzlei_ai.spec,
+; EXE(icon=...) - übernommen hätte, im Ergebnis identisch, hier aber
+; ausdrücklich dokumentiert statt implizit).
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#MyAppExeName}"
 Name: "{group}\{#MyAppName} deinstallieren"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{#MyAppName} jetzt starten (öffnet beim allerersten Start den Setup-Assistenten in einem Konsolenfenster)"; Flags: postinstall nowait skipifsilent

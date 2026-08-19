@@ -97,6 +97,13 @@ exe = EXE(  # noqa: F821
     upx=False,
     console=True,
     disable_windowed_traceback=False,
+    # Anwendungssymbol (Prompt 47) - aktuell ein generierter Platzhalter
+    # (siehe windows/generate_placeholder_icon.py), kein echtes Kanzlei-/
+    # Produktlogo. Wird als Datei-Icon von kanzlei_ai.exe UND (ohne
+    # gesonderte Einbindung, Windows liest es direkt aus der .exe) von den
+    # Verknuepfungen aus windows/installer.iss uebernommen, wo keine
+    # eigene IconFilename gesetzt ist.
+    icon=str(PROJECT_ROOT / "windows" / "app_icon.ico"),
 )
 
 coll = COLLECT(  # noqa: F821

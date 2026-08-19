@@ -11,6 +11,9 @@ Konfigurierbare KI-gestützte Workflow-Plattform für eine Anwaltskanzlei.
 - ✅ **Quality Feedback Loop:** Rate approved drafts, aggregate statistics (Prompt 43)
 - ✅ **Secure Architecture:** DSGVO-compliant, audit trail, no PII in logs
 - ✅ **Windows Installer:** One-click setup + automatic configuration (Prompts 36–37)
+- ✅ **Native App Window:** Edge WebView2 window instead of a browser tab, own app icon
+  (Prompts 46–47; icon is currently a generated placeholder, see `windows/
+  generate_placeholder_icon.py` - swap `windows/app_icon.ico` for a real firm logo anytime)
 - ✅ **8 Dashboard Areas:** Inbox, Matters, Documents, Drafts, Legal Sources, Tasks, Settings, Admin
 - ✅ **Full Test Coverage:** 834 tests, 82% code coverage
 - ✅ **Comprehensive Docs:** ARCHITECTURE.md (49 sections), CLAUDE.md, SECURITY_REVIEW.md, PILOT_PLAYBOOK.md
