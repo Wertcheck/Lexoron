@@ -1,7 +1,10 @@
-{# Basis-Layout (Prompt 22, Login/Rollen Prompt 26). Sidebar zeigt alle
-   acht Bereiche aus der Design-Referenz des Anwalts, aber nur tatsaechlich
-   gebaute Bereiche sind klickbar - der Rest ist ehrlich als "bald
-   verfuegbar" markiert statt toter Links, die 404 werfen wuerden. #}
+{# Basis-Layout (Prompt 22, Login/Rollen Prompt 26, Icon-/Navigations-
+   Ueberarbeitung Prompt 48). Alle acht Bereiche aus der Design-Referenz des
+   Anwalts sind jetzt klickbar - Bereiche ohne eigene Fachlogik (Akten,
+   Rechtsquellen, Kanzlei-Wissen, Einstellungen) fuehren bewusst auf eine
+   ehrliche Platzhalterseite (app/web/placeholder_router.py) statt auf
+   "bald"-Badges oder tote Links, die 404 werfen wuerden. #}
+{% import "_icons.html" as icons %}
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -49,46 +52,44 @@
       {% endif %}
       <div class="sidebar__nav">
         {% set nav_items = [
-          ("Dashboard", None, false),
-          ("Posteingang", "/dashboard/inbox", true),
-          ("Akten", None, false),
-          ("Entwürfe zur Prüfung", "/dashboard/drafts", true),
-          ("Rechtsquellen", None, false),
-          ("Kanzlei-Wissen", None, false),
-          ("Postausgang", "/dashboard/outbox", true),
-          ("Einstellungen", None, false),
+          ("Dashboard", "/dashboard", icons.dashboard),
+          ("Posteingang", "/dashboard/inbox", icons.envelope),
+          ("Akten", "/dashboard/matters", icons.folder),
+          ("Entwürfe zur Prüfung", "/dashboard/drafts", icons.document),
+          ("Rechtsquellen", "/dashboard/sources", icons.book),
+          ("Kanzlei-Wissen", "/dashboard/knowledge", icons.bulb),
+          ("Postausgang", "/dashboard/outbox", icons.send),
+          ("Einstellungen", "/dashboard/settings", icons.settings),
         ] %}
-        {% for label, href, available in nav_items %}
-          {% if available %}
-            <a class="sidebar__link{% if active_nav == label %} sidebar__link--active{% endif %}"
-               href="{{ href }}">
-              <span>{{ label }}</span>
-            </a>
-          {% else %}
-            <span class="sidebar__link sidebar__link--disabled">
-              <span>{{ label }}</span>
-              <span class="sidebar__soon">bald</span>
-            </span>
-          {% endif %}
+        {% for label, href, icon in nav_items %}
+          <a class="sidebar__link{% if active_nav == label %} sidebar__link--active{% endif %}"
+             href="{{ href }}">
+            {{ icon(class_="icon sidebar__link-icon") }}
+            <span class="sidebar__link-label">{{ label }}</span>
+          </a>
         {% endfor %}
         {% if current_user %}
           <a class="sidebar__link{% if active_nav == 'Fehler' %} sidebar__link--active{% endif %}"
              href="/dashboard/errors">
-            <span>Fehler</span>
+            {{ icons.warning(class_="icon sidebar__link-icon") }}
+            <span class="sidebar__link-label">Fehler</span>
           </a>
         {% endif %}
         {% if current_user and current_user.role and current_user.role.name.lower() == "admin" %}
           <a class="sidebar__link{% if active_nav == 'Nutzerverwaltung' %} sidebar__link--active{% endif %}"
              href="/dashboard/admin/users">
-            <span>Nutzerverwaltung</span>
+            {{ icons.users(class_="icon sidebar__link-icon") }}
+            <span class="sidebar__link-label">Nutzerverwaltung</span>
           </a>
           <a class="sidebar__link{% if active_nav == 'Systemstatus' %} sidebar__link--active{% endif %}"
              href="/dashboard/monitoring">
-            <span>Systemstatus</span>
+            {{ icons.chart(class_="icon sidebar__link-icon") }}
+            <span class="sidebar__link-label">Systemstatus</span>
           </a>
           <a class="sidebar__link{% if active_nav == 'Backup' %} sidebar__link--active{% endif %}"
              href="/dashboard/backup">
-            <span>Backup &amp; Export</span>
+            {{ icons.archive(class_="icon sidebar__link-icon") }}
+            <span class="sidebar__link-label">Backup &amp; Export</span>
           </a>
         {% endif %}
       </div>
@@ -97,6 +98,31 @@
       </div>
     </nav>
     <div class="main">
+      {% if current_user %}
+        {# Kopfzeilen-Icon-Leiste (Prompt 48, nach Design-Vorlage) - bewusst
+           absolut positioniert statt in jede einzelne .topbar eingebaut:
+           jede Seite hat ihre eigene .topbar mit eigenem Titel/Meta-Text
+           (siehe z. B. inbox.html), diese Leiste ergaenzt sie einheitlich
+           an EINER Stelle statt neun Templates einzeln anzufassen. Jedes
+           Icon ist ehrlich mit einer echten Funktion verknuepft, keine
+           Deko-Icons ohne Wirkung: Umschlag -> Posteingang, Glocke ->
+           Fehler-/Hinweisliste (das einzige "Dinge, die Aufmerksamkeit
+           brauchen"-Konzept, das es im System gibt), Logout -> derselbe
+           Abmelden-Endpunkt wie der Sidebar-Button. #}
+        <div class="header-icons">
+          <a href="/dashboard/inbox" class="header-icons__btn" title="Posteingang" aria-label="Posteingang">
+            {{ icons.envelope(class_="icon") }}
+          </a>
+          <a href="/dashboard/errors" class="header-icons__btn" title="Fehler &amp; Hinweise" aria-label="Fehler und Hinweise">
+            {{ icons.bell(class_="icon") }}
+          </a>
+          <form method="post" action="/dashboard/logout" class="header-icons__form">
+            <button type="submit" class="header-icons__btn" title="Abmelden" aria-label="Abmelden">
+              {{ icons.logout(class_="icon") }}
+            </button>
+          </form>
+        </div>
+      {% endif %}
       {% block content %}{% endblock %}
     </div>
   </div>

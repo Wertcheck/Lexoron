@@ -107,14 +107,31 @@ a {
 .sidebar__link {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: flex-start;
+  gap: 11px;
   padding: 9px 24px;
   text-decoration: none;
   color: rgba(243, 244, 240, 0.72);
   font-size: 13.5px;
   border-left: 2px solid transparent;
   transition: background-color 0.12s ease;
+}
+
+.sidebar__link-icon {
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+  color: rgba(243, 244, 240, 0.55);
+}
+
+.sidebar__link--active .sidebar__link-icon {
+  color: var(--seal-green);
+}
+
+.sidebar__link-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sidebar__link:hover {
@@ -126,23 +143,6 @@ a {
   background: rgba(255, 255, 255, 0.06);
   border-left-color: var(--seal-green);
   font-weight: 500;
-}
-
-.sidebar__link--disabled {
-  color: rgba(243, 244, 240, 0.32);
-  cursor: default;
-  pointer-events: none;
-}
-
-.sidebar__soon {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  border: 1px solid rgba(243, 244, 240, 0.22);
-  border-radius: var(--radius-sm);
-  padding: 1px 5px;
-  color: rgba(243, 244, 240, 0.45);
 }
 
 .sidebar__footer {
@@ -160,6 +160,56 @@ a {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+/* --- Icons (Prompt 48) --- */
+
+.icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* --- Kopfzeilen-Icon-Leiste (Prompt 48) --- */
+
+.header-icons {
+  position: absolute;
+  top: 24px;
+  right: 32px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-icons__form {
+  display: contents;
+}
+
+.header-icons__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--paper-line);
+  background: var(--paper-000);
+  color: var(--ink-700);
+  cursor: pointer;
+  text-decoration: none;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+
+.header-icons__btn:hover {
+  border-color: var(--seal-green);
+  color: var(--seal-green-dark);
+}
+
+.header-icons__btn .icon {
+  width: 17px;
+  height: 17px;
 }
 
 .topbar {
@@ -889,4 +939,191 @@ textarea:focus {
   text-decoration: underline;
   cursor: pointer;
   padding: 0;
+}
+
+/* ==========================================================================
+   Platzhalterseiten fuer noch nicht gebaute Bereiche (Prompt 48)
+   ========================================================================== */
+
+.placeholder-page {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 32px;
+}
+
+.placeholder-box {
+  max-width: 440px;
+  text-align: center;
+  background: var(--paper-000);
+  border: 1px solid var(--paper-line);
+  border-radius: var(--radius-md);
+  padding: 40px 36px;
+}
+
+.placeholder-box__icon {
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 18px;
+  color: var(--seal-green);
+}
+
+.placeholder-box__title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+
+.placeholder-box__text {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-500);
+  margin: 0 0 24px;
+}
+
+.placeholder-box__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ==========================================================================
+   Onboarding-Banner (Posteingang, Prompt 48 - nur bei leerem Posteingang)
+   ========================================================================== */
+
+.onboarding {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 32px;
+}
+
+.onboarding-box {
+  width: 100%;
+  max-width: 900px;
+  background: var(--paper-000);
+  border: 1px solid var(--paper-line);
+  border-radius: var(--radius-md);
+  padding: 40px 44px;
+}
+
+.onboarding-box__title {
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 600;
+  text-align: center;
+  margin: 0 0 8px;
+}
+
+.onboarding-box__hint {
+  font-size: 12px;
+  color: var(--ink-500);
+  text-align: center;
+  max-width: 560px;
+  margin: 0 auto 32px;
+  line-height: 1.5;
+}
+
+.onboarding-box__hint code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--paper-100);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+}
+
+.onboarding-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+}
+
+@media (max-width: 800px) {
+  .onboarding-steps {
+    grid-template-columns: 1fr;
+  }
+}
+
+.onboarding-step {
+  text-align: center;
+  padding: 0 8px;
+}
+
+.onboarding-step__icon {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background: var(--seal-green-tint);
+  color: var(--seal-green-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.onboarding-step__icon .icon {
+  width: 24px;
+  height: 24px;
+}
+
+.onboarding-step__title {
+  font-size: 13.5px;
+  font-weight: 600;
+  margin: 0 0 14px;
+  color: var(--ink-900);
+}
+
+.onboarding-step__action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-500);
+}
+
+.onboarding-step__dropzone {
+  display: block;
+  width: 100%;
+  border: 1px dashed var(--paper-line);
+  border-radius: var(--radius-md);
+  padding: 14px 10px;
+  font-size: 11.5px;
+  color: var(--ink-500);
+  background: var(--paper-100);
+  text-decoration: none;
+  text-align: center;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+
+.onboarding-step__dropzone:hover {
+  border-color: var(--seal-green);
+  color: var(--seal-green-dark);
+}
+
+.onboarding-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: var(--seal-green);
+  color: var(--paper-000);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.12s ease;
+}
+
+.onboarding-icon-btn:hover {
+  background: var(--seal-green-dark);
+}
+
+.onboarding-icon-btn .icon {
+  width: 20px;
+  height: 20px;
 }

@@ -39,6 +39,7 @@ from app.web.template_paths import STATIC_DIR
 from app.web.errors_router import router as errors_web_router
 from app.web.monitoring_router import router as monitoring_web_router
 from app.web.outbox_router import router as outbox_web_router
+from app.web.placeholder_router import router as placeholder_web_router
 from app.web.router import router as web_router
 from app.web.users_router import router as users_web_router
 
@@ -105,6 +106,7 @@ app.include_router(errors_web_router)
 app.include_router(monitoring_web_router)
 app.include_router(backup_web_router)
 app.include_router(quality_web_router)
+app.include_router(placeholder_web_router)
 app.mount(
     "/dashboard/static",
     StaticFiles(directory=STATIC_DIR),

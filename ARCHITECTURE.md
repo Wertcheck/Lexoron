@@ -2682,3 +2682,109 @@ und die Kern-Logik tatsächlich unangetastet blieben.
 3. Keine automatisierte Pixel-/Hash-Prüfung des extrahierten Icons gegen
    `windows/app_icon.ico` (nur visuelle Prüfung durchgeführt) - für einen Platzhalter
    ausreichend, könnte bei einem echten Logo als CI-Regressionswache sinnvoll werden.
+
+## 52. Icons, vollständige Navigation, Platzhalterseiten, Onboarding-Banner (Prompt 48)
+
+Design-Überarbeitung nach einer vom Anwalt bereitgestellten Bildvorlage (Screenshot des
+Ziel-Designs) - reine Web-Layer-Änderung (`app/web/templates/`, `app/web/static/css/
+app.css`, ein neuer Router für Platzhalterseiten), keine Änderung an Fachlogik/Services.
+
+### Icon-Set: selbst gebaut statt externer Bibliothek (`app/web/templates/_icons.html`)
+
+Der Auftrag nannte explizit "Heroicons oder FontAwesome" - umgesetzt wurde stattdessen ein
+kleines, selbst gebautes Set von 17 Inline-SVG-Icons im selben visuellen Stil (24×24
+Outline, `currentColor`, 1,6px Strichstärke), als Jinja2-Makros in einer einzigen Datei.
+**Bewusste Abweichung, begründet:** das Projekt hat bereits bei `htmx` (Prompt 22, siehe
+`app/web/static/js/VENDORED.md`) explizit gegen eine CDN-Einbindung entschieden, damit die
+Anwendung ohne Internetverbindung vollständig lädt - besonders relevant seit Prompt 46, wo
+die Anwendung als natives Desktop-Fenster läuft und nicht mehr "nur ein Tab in einem
+ohnehin offenen Browser" ist. Eine externe Icon-Bibliothek per CDN einzubinden wäre ein
+Rückschritt gegenüber dieser bereits getroffenen Entscheidung gewesen; die Icons lokal als
+NPM-Pakete zu vendoren (wie bei htmx) hätte eine neue Build-Toolchain (Bundler) für ein
+Projekt ohne jegliches JS-Tooling erfordert. Jedes Icon ist ein eigenständiges Jinja2-Makro
+(`{{ icons.name(class_="...") }}`), keine Laufzeitabhängigkeit, funktioniert identisch zu
+jedem anderen Template-Include.
+
+### Sidebar: alle acht Bereiche jetzt echte, klickbare Links
+
+Vorher (`base.html`, seit Prompt 22): "Dashboard", "Akten", "Rechtsquellen", "Kanzlei-
+Wissen", "Einstellungen" hatten `href=None` und zeigten statt eines Links ein "bald"-Badge
+- laut damaligem Kommentar bewusst so, um "tote Links, die 404 werfen würden" zu vermeiden.
+Diese Entscheidung wurde in Prompt 48 durch eine dritte, bessere Option ersetzt (siehe
+nächster Abschnitt): ein ECHTER Link auf eine ehrliche "in Vorbereitung"-Seite statt
+entweder eines toten Links oder eines nicht anklickbaren Badges. Jeder Sidebar-Eintrag
+bekam zusätzlich ein passendes Icon (Dashboard: Raster, Posteingang: Umschlag, Akten:
+Ordner, Entwürfe: Dokument, Rechtsquellen: Buch, Kanzlei-Wissen: Glühbirne, Postausgang:
+Papierflieger, Einstellungen: Zahnrad, Fehler: Warndreieck, Nutzerverwaltung: Personen,
+Systemstatus: Balkendiagramm, Backup: Archiv-Box).
+
+### Platzhalterseiten (`app/web/placeholder_router.py`, `placeholder.html`)
+
+Vier neue, ECHTE Routen (`/dashboard/matters`, `/dashboard/sources`, `/dashboard/knowledge`,
+`/dashboard/settings`) - bewusst NICHT die eigentlichen Fachfunktionen (das wäre ein
+deutlich größerer, hier ausdrücklich nicht beauftragter Umfang gewesen, siehe
+Rückfrage/Antwort im Gesprächsverlauf), sondern ein gemeinsames Template mit Titel,
+kurzem Beschreibungstext ("befindet sich in der finalen Vorbereitung für das
+v0.2-Update") und einem echten "Zurück zum Posteingang"-Link. Wie jede andere
+Dashboard-Seite hinter `require_login` - kein neuer, ungeschützter Zugriffsweg.
+
+### Header-Icon-Leiste (`base.html`, absolut positioniert statt pro Seite eingebaut)
+
+Jede Seite hat seit Prompt 22 ihre eigene `.topbar` mit eigenem Titel/Meta-Text (z. B.
+`inbox.html`) - statt neun bestehende Templates einzeln anzufassen, wird die Icon-Leiste
+EINMALIG in `base.html` ergänzt und per CSS (`position: absolute`, ausgerichtet auf die
+`.topbar`-Innenabstände) in dieselbe Zeile wie der jeweilige Seitentitel gelegt. Bewusst
+KEINE Deko-Icons ohne Funktion: Umschlag → Posteingang, Glocke → Fehler-/Hinweisliste (das
+einzige "Dinge, die Aufmerksamkeit brauchen"-Konzept, das im System existiert - es gibt
+keine separate Benachrichtigungs-Infrastruktur), Logout-Icon → derselbe
+`/dashboard/logout`-Endpunkt wie der bestehende Sidebar-Button (bewusste Dopplung, gängiges
+Muster für schnellen Zugriff unabhängig von der Sidebar).
+
+### Onboarding-Banner (`partials/onboarding_banner.html`, nur bei leerem Posteingang)
+
+Wird in `inbox.html` gezeigt, wenn `total_count == 0` ist (statt der leeren Split-Pane-
+Ansicht). Alle drei Schritt-Aktionen ("Scan-Ordner festlegen", "Akten & Dokumente
+hochladen", "E-Mail verknüpfen") verlinken ehrlich auf `/dashboard/settings` (die
+Platzhalterseite) - bewusst KEINE optisch interaktive Drag&Drop-Upload-Zone, die nichts
+entgegennimmt: Scan-Ordner (`INTAKE_WATCHED_FOLDERS`) und E-Mail-Abruf (`MAIL_*`) werden
+aktuell ausschließlich über die `.env`-Datei konfiguriert, es gibt noch keinen
+Dashboard-Endpunkt dafür. Ein kurzer Hinweistext unter dem Banner-Titel macht das explizit,
+statt eine nicht vorhandene Funktionalität vorzutäuschen.
+
+### Getestet
+
+24 neue/geänderte Tests: `tests/test_web_placeholder.py` (12 - alle vier Routen liefern
+200 mit korrektem Titel, Rückweg zum Posteingang, Zugriffsschutz), `tests/test_web_inbox.py`
+(2 neue Onboarding-Banner-Tests + 1 bestehender Sidebar-Test bewusst umgeschrieben, da er
+explizit das VORHERIGE Verhalten prüfte - "nur Posteingang ist ein echter Link" -, das
+durch diesen Prompt gezielt ersetzt wurde). 777/781 Tests gesamt grün (weiterhin dieselben
+4 Umgebungslimitierungen, keine Regression). Zusätzlich per echtem, im Hintergrund
+laufendem Server + instrumentiertem Browser-Tab verifiziert (nicht nur Unit-Tests): voller
+Login-Durchlauf inkl. erzwungener Passwortänderung, alle acht Sidebar-Hrefs im gerenderten
+HTML bestätigt, Platzhalterseite inhaltlich korrekt gerendert, Onboarding-Banner-Text exakt
+wie in der Vorlage, UND per JavaScript-Inspektion bestätigt: alle 17 SVG-Icons sind
+valides, sichtbares Markup (korrekte Größe, sichtbare Tintenfarbe `rgb(44,65,87)`, korrekte
+Link-Ziele) - nicht nur behauptet.
+
+**Gefundenes Datenschutzproblem während der Verifikation (nicht Teil des Auftrags, hier
+dokumentiert):** ein Versuch, einen Vollbild-Screenshot des nativen Fensters per PowerShell
+zu erstellen (Muster aus Prompt 36/46), erfasste versehentlich ein ANDERES, gleichzeitig
+geöffnetes Browser-Fenster des Nutzers mit sichtbaren echten Zugangsdaten. Der Screenshot
+wurde sofort gelöscht, der Inhalt nicht weiterverwendet, und die Verifikationsmethode auf
+gezielte Browser-Tab-Inspektion (kein Vollbild-Zugriff) umgestellt. Festgehalten als
+Lehre für künftige Prompts: Vollbild-Screenshots sind riskant, sobald andere Fenster des
+Nutzers gleichzeitig geöffnet sein könnten - vorzuziehen sind Werkzeuge, die gezielt nur
+den eigenen Tab/das eigene Fenster erfassen.
+
+### Offene Punkte
+
+1. Die vier Platzhalterseiten (Akten/Rechtsquellen/Kanzlei-Wissen/Einstellungen) sind
+   bewusst rein informativ - der tatsächliche Bau dieser vier Bereiche bleibt eine deutlich
+   größere, hier ausdrücklich nicht beauftragte Aufgabe für ein künftiges v0.2-Update.
+2. Das Icon-Set ist funktional vollständig für die aktuell genutzten Symbole, aber kein
+   vollständiges Icon-System (z. B. keine "Filled"-Variante, keine Größenstufen jenseits
+   der zwei aktuell genutzten). Bei Bedarf leicht per weiterem Makro in `_icons.html`
+   erweiterbar.
+3. Die Onboarding-Banner-Aktionen verlinken alle auf dieselbe Platzhalterseite
+   (Einstellungen) - sobald echte Konfigurationsseiten existieren, sollten die drei Links
+   auf spezifischere Ziele zeigen (z. B. einen Scan-Ordner-spezifischen Abschnitt).

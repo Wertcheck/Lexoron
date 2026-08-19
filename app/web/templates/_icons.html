@@ -1,0 +1,90 @@
+{# Kleines, selbst gebautes Icon-Set im Heroicons-Stil (24x24 Outline,
+   currentColor, 1.6px Strichstärke) - bewusst INLINE als SVG statt einer
+   externen Bibliothek per CDN eingebunden: das Projekt hat schon bei htmx
+   (app/web/static/js/htmx.min.js, siehe VENDORED.md) bewusst gegen CDN-
+   Abhängigkeiten entschieden, damit die Anwendung auch ohne Internet-
+   verbindung vollständig lädt - ein natives Desktop-Fenster (Prompt 46),
+   das bei jedem Start Icons von einem externen Server laden müsste, wäre
+   ein Rückschritt. Jedes Icon ist ein eigenes Makro, aufgerufen als
+   {{ icons.name(class_="...") }} - keine Bibliothek, keine zusätzliche
+   Laufzeitabhängigkeit, funktioniert exakt wie jedes andere Template-Makro. #}
+
+{% macro dashboard(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.2"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.2"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.2"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.2"/></svg>
+{% endmacro %}
+
+{% macro envelope(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M4 6.5l8 6.5 8-6.5"/></svg>
+{% endmacro %}
+
+{% macro folder(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 6.5a1 1 0 0 1 1-1H9l2 2.2h8.5a1 1 0 0 1 1 1V17a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1V6.5Z"/></svg>
+{% endmacro %}
+
+{% macro document(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h8l4 4V19a1.2 1.2 0 0 1-1.2 1.2H6.5A1.2 1.2 0 0 1 5.3 19V4.7A1.2 1.2 0 0 1 6.5 3.5Z"/><path d="M14 3.5V8h4.2"/><path d="M8.5 12.5h7M8.5 15.8h7M8.5 9.2h3"/></svg>
+{% endmacro %}
+
+{% macro book(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.2c-1.6-1.2-4-1.7-7.2-1.4a.8.8 0 0 0-.8.8v11.6a.7.7 0 0 0 .8.7c3-.3 5.4.2 7.2 1.6 1.8-1.4 4.2-1.9 7.2-1.6a.7.7 0 0 0 .8-.7V5.6a.8.8 0 0 0-.8-.8c-3.2-.3-5.6.2-7.2 1.4Z"/><path d="M12 6.2V19"/></svg>
+{% endmacro %}
+
+{% macro bulb(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18.2h6"/><path d="M9.5 21h5"/><path d="M12 3.3a5.7 5.7 0 0 0-3.3 10.4c.6.5 1 1.2 1 2v.3h4.6v-.3c0-.8.4-1.5 1-2A5.7 5.7 0 0 0 12 3.3Z"/></svg>
+{% endmacro %}
+
+{% macro send(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 3.5 3 10.2l7 2.8 2.8 7 7.7-16.5Z"/><path d="M20.5 3.5 10 13.9"/></svg>
+{% endmacro %}
+
+{% macro settings(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.8"/><path d="M12 3.8v2M12 18.2v2M20.2 12h-2M5.8 12h-2M17.5 6.5l-1.4 1.4M7.9 16.1l-1.4 1.4M17.5 17.5l-1.4-1.4M7.9 7.9 6.5 6.5"/></svg>
+{% endmacro %}
+
+{% macro warning(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 21.5 20h-19L12 4Z"/><path d="M12 10.3v4M12 17h.01"/></svg>
+{% endmacro %}
+
+{% macro users(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8.5" r="3"/><path d="M3.5 19c.6-3 2.8-4.7 5.5-4.7s4.9 1.7 5.5 4.7"/><circle cx="17" cy="9.5" r="2.3"/><path d="M15.8 14.5c2.2.2 3.9 1.7 4.3 4"/></svg>
+{% endmacro %}
+
+{% macro chart(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M9.5 20V5.5M15 20v-7M20 20V9"/><path d="M3.5 20.5h17"/></svg>
+{% endmacro %}
+
+{% macro archive(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4" width="17" height="4.2" rx="1"/><path d="M4.5 8.5V18a1.3 1.3 0 0 0 1.3 1.3h12.4A1.3 1.3 0 0 0 19.5 18V8.5"/><path d="M10 12.5h4"/></svg>
+{% endmacro %}
+
+{% macro bell(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10.5a6 6 0 0 1 12 0c0 3.6 1 5 1.8 5.8H4.2C5 15.5 6 14.1 6 10.5Z"/><path d="M10.2 19.5a1.9 1.9 0 0 0 3.6 0"/></svg>
+{% endmacro %}
+
+{% macro logout(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 20H5.8A1.3 1.3 0 0 1 4.5 18.7V5.3A1.3 1.3 0 0 1 5.8 4H9.5"/><path d="M15.5 16.5 20 12l-4.5-4.5"/><path d="M20 12H9.5"/></svg>
+{% endmacro %}
+
+{% macro back_arrow(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M10.5 6.5 5 12l5.5 5.5"/></svg>
+{% endmacro %}
+
+{% macro clock(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>
+{% endmacro %}
+
+{% macro printer(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 8.5V4h11v4.5"/><rect x="3.5" y="8.5" width="17" height="7.5" rx="1.3"/><rect x="6.5" y="13" width="11" height="7" rx="0.8"/></svg>
+{% endmacro %}
+
+{% macro upload(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9.5a5 5 0 0 1 9.7-1.7A4.2 4.2 0 0 1 17.5 16H16"/><path d="M12 20v-8.5"/><path d="M9 14.3 12 11l3 3.3"/><path d="M7 16a4 4 0 0 1-.4-8"/></svg>
+{% endmacro %}
+
+{% macro link(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 14.5 14.5 9.5"/><path d="M11 7.3 12.6 5.7a3.3 3.3 0 0 1 4.7 4.7l-1.6 1.6"/><path d="M13 16.7l-1.6 1.6a3.3 3.3 0 0 1-4.7-4.7L8.3 12"/></svg>
+{% endmacro %}
+
+{% macro plus(class_="icon") %}
+<svg class="{{ class_ }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+{% endmacro %}

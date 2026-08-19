@@ -593,6 +593,23 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       `app/web/`/Kern-Logik nicht angefasst (763/767 Tests weiterhin unverändert grün).
       Siehe ARCHITECTURE.md §51.
 
+## Nachtrag – Prompt 48 (Icons, vollständige Navigation, Platzhalterseiten), 20.08.
+
+- [x] Design-Überarbeitung nach Bildvorlage – Prompt 48, 20.08. Selbst gebautes 17-Icon-
+      Set (`app/web/templates/_icons.html`, Heroicons-Stil, Inline-SVG statt CDN-
+      Bibliothek - bewusste Abweichung vom Auftragstext, begründet mit der bereits in
+      Prompt 22/46 getroffenen Offline-Fähigkeits-Entscheidung). Alle acht Sidebar-Bereiche
+      sind jetzt echte, klickbare Links (vorher: "Akten"/"Rechtsquellen"/"Kanzlei-Wissen"/
+      "Einstellungen" mit `href=None` + "bald"-Badge) - vier neue, ehrliche
+      Platzhalterrouten (`app/web/placeholder_router.py`) statt toter Links oder
+      Fake-Funktionalität. Neue Header-Icon-Leiste (Posteingang/Fehler/Logout, jedes Icon
+      mit echter Funktion verknüpft) sowie ein Onboarding-Banner im Posteingang bei
+      leerem Postfach (verlinkt ehrlich auf die Einstellungen-Platzhalterseite statt eine
+      nicht existierende Upload-Funktion vorzutäuschen). 24 neue/geänderte Tests,
+      777/781 gesamt grün (unverändert 4 Umgebungslimitierungen). Per echtem Server +
+      instrumentiertem Browser-Tab verifiziert (Login-Durchlauf, alle Hrefs, SVG-Icons
+      als valides sichtbares Markup bestätigt). Siehe ARCHITECTURE.md §52.
+
 ## Wiederkehrende Grundregeln (gelten für jede Phase)
 - Keine echten Mandantendaten in Tests/Entwicklung.
 - Keine Secrets in Code/Logs/Git.

@@ -277,12 +277,46 @@ def test_sidebar_shows_all_eight_areas(client: TestClient, seeded: dict) -> None
         assert label in response.text
 
 
-def test_sidebar_marks_unbuilt_areas_as_not_clickable(
+def test_sidebar_links_all_eight_areas_to_real_pages(
     client: TestClient, seeded: dict
 ) -> None:
-    """Nur 'Posteingang' ist als echter Link (<a href>) vorhanden - alle
-    anderen Bereiche sind bewusst nicht verlinkt (kein toter Link, der
-    404 werfen wuerde), siehe base.html."""
+    """Seit Prompt 48 ist JEDER Sidebar-Bereich ein echter, klickbarer Link
+    (<a href>) - Bereiche ohne eigene Fachlogik (Akten/Rechtsquellen/
+    Kanzlei-Wissen/Einstellungen) fuehren auf eine ehrliche Platzhalterseite
+    (app/web/placeholder_router.py) statt entweder auf einen toten Link oder
+    ein nicht anklickbares "bald"-Badge (fruehere Loesung, siehe Git-
+    Historie). Es gibt daher keine `sidebar__link--disabled`-Klasse mehr."""
     response = client.get("/dashboard/inbox")
-    assert 'href="/dashboard/inbox"' in response.text
-    assert "sidebar__link--disabled" in response.text
+    for href in [
+        "/dashboard",
+        "/dashboard/inbox",
+        "/dashboard/matters",
+        "/dashboard/drafts",
+        "/dashboard/sources",
+        "/dashboard/knowledge",
+        "/dashboard/outbox",
+        "/dashboard/settings",
+    ]:
+        assert f'href="{href}"' in response.text
+    assert "sidebar__link--disabled" not in response.text
+
+
+# --- Onboarding-Banner (Prompt 48) ---
+
+
+def test_onboarding_banner_shown_when_inbox_empty(client: TestClient) -> None:
+    """Ohne jede Nachricht (total_count == 0) zeigt der Posteingang das
+    Onboarding-Banner statt der leeren Split-Pane-Ansicht."""
+    response = client.get("/dashboard/inbox")
+    assert response.status_code == 200
+    assert "Erste Schritte" in response.text
+    assert 'class="split"' not in response.text
+
+
+def test_onboarding_banner_hidden_when_messages_exist(
+    client: TestClient, seeded: dict
+) -> None:
+    response = client.get("/dashboard/inbox")
+    assert response.status_code == 200
+    assert "Erste Schritte" not in response.text
+    assert 'class="split"' in response.text

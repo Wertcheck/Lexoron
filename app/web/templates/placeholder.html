@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}{{ placeholder_title }}{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">{{ placeholder_title }}</h1>
+  </div>
+  <div class="placeholder-page">
+    <div class="placeholder-box">
+      {{ icons.clock(class_="placeholder-box__icon") }}
+      <h2 class="placeholder-box__title">In Vorbereitung</h2>
+      <p class="placeholder-box__text">{{ placeholder_description }}</p>
+      <a href="/dashboard/inbox" class="btn placeholder-box__back">
+        {{ icons.back_arrow(class_="icon") }}
+        Zurück zum Posteingang
+      </a>
+    </div>
+  </div>
+{% endblock %}
