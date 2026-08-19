@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller-Spec für die Windows-Installation (Prompt 36).
+"""PyInstaller-Spec für die Windows-Installation (Prompt 36; natives
+Fenster Prompt 46).
 
 Erzeugt einen "onedir"-Build (bewusst KEIN "onefile"): onefile extrahiert
 sich bei JEDEM Start neu in ein temporäres Verzeichnis (spürbar langsamerer
@@ -8,14 +9,19 @@ nachvollziehbare Pfadprobleme). "onedir" passt außerdem direkt zu Inno Setup
 (siehe windows/installer.iss), das den erzeugten Ordner 1:1 unter
 "Program Files" installiert.
 
-`console=True` ist bewusst gesetzt: der Setup-Assistent (Prompt 37,
-app/setup/, ausgelöst über run.py "setup"/erster "serve"-Aufruf) fragt
-interaktiv über die Konsole (`input()`/`getpass`) nach der Admin-E-Mail-
-Adresse - eine grafische Oberfläche existiert im gesamten Projekt bewusst
-nicht (das Dashboard selbst läuft im Browser). Die Anwendung läuft damit
-als Konsolenprozess im Vordergrund, NICHT als registrierter Windows-Dienst -
-letzteres wäre ein deutlich größerer Schritt (Dienstkonto, Autostart,
-Absturz-Neustart) und war nicht Teil dieses Prompts, siehe ARCHITECTURE.md.
+`console=True` bleibt bewusst auch nach Prompt 46 gesetzt: der Setup-
+Assistent (Prompt 37, app/setup/, ausgelöst über run.py "setup"/erster
+"serve"-Aufruf) fragt weiterhin interaktiv über die Konsole (`input()`/
+`getpass`) nach der Admin-E-Mail-Adresse, BEVOR das native Fenster
+(pywebview) überhaupt aufgebaut wird - ohne Konsole gäbe es dafür keine
+Eingabemöglichkeit. Der PyInstaller-`console`-Modus ist eine feste
+Build-Zeit-Einstellung für die gesamte .exe, nicht pro Aufruf umschaltbar -
+ein Umschalten (Konsole nur beim allerersten Start, danach rein
+fensterbasiert) wäre über einen separaten, versteckten Zweit-Prozess lösbar,
+aber ein deutlich größerer Schritt als hier gerechtfertigt (siehe
+ARCHITECTURE.md, offene Punkte). Nach dem allerersten Setup bleibt die
+Konsole also weiterhin sichtbar neben dem nativen Fenster - eine bewusst in
+Kauf genommene, kleinere kosmetische Einschränkung.
 
 Aufruf (aus dem Projekt-Root, mit aktivierter venv,
 `pip install -e .[build]` vorher ausgeführt):
@@ -56,6 +62,19 @@ a = Analysis(  # noqa: F821 (von PyInstaller zur Laufzeit des Specs injiziert)
         "migrations.env",
         # SQLAlchemy laedt Dialekte z. T. dynamisch nach.
         "sqlalchemy.dialects.sqlite",
+        # pywebview (Prompt 46): waehlt sein Windows-Backend
+        # (webview.platforms.winforms, das intern wiederum EdgeChromium
+        # ODER als Fallback das veraltete MSHTML importiert) erst zur
+        # Laufzeit innerhalb eines try/except - hier explizit als
+        # hiddenimport ergaenzt, auch wenn PyInstallers AST-Analyse
+        # bedingte Imports normalerweise bereits findet (Vorsichtsmassnahme,
+        # analog zu "migrations.env" oben). Die dafuer noetigen DLLs
+        # (WebView2-Loader, clr_loader/.NET-Interop) sammelt bereits
+        # "pyinstaller-hooks-contrib" automatisch ein (hook-webview.py,
+        # hook-clr_loader.py, seit Version 2026.6 im Projekt via
+        # PyInstaller selbst mitinstalliert) - hier daher KEINE eigene
+        # collect_dynamic_libs()-Handhabung noetig.
+        "webview.platforms.winforms",
     ],
     hookspath=[],
     hooksconfig={},

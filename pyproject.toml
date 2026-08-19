@@ -28,6 +28,12 @@ dependencies = [
     "pillow>=10.0",
     "fastembed>=0.4",
     "anthropic>=0.40",
+    # Natives Fensterfenster um den bestehenden Web-Stack (Prompt 46) - zieht
+    # unter Windows automatisch "pythonnet" nach (eigenes Umgebungs-Marker
+    # "sys_platform == 'win32'" in pywebviews eigenen Metadaten), das die
+    # bereits auf der Zielmaschine vorhandene Edge-WebView2-Runtime per
+    # .NET-Interop ansteuert - kein eigenes Chromium-Bundle noetig.
+    "pywebview>=6.0",
 ]
 
 [project.optional-dependencies]

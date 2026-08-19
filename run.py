@@ -1,15 +1,22 @@
-"""Windows-Entry-Point für die gebündelte Anwendung (Prompt 36/37).
+"""Windows-Entry-Point für die gebündelte Anwendung (Prompt 36/37, Prompt 46).
 
 Dies ist die einzige Datei, die PyInstaller bündelt (siehe
 windows/kanzlei_ai.spec) - ein dünner Dispatcher, keine Fachlogik. Bietet
 vier Subkommandos:
 
     kanzlei_ai.exe serve          (Standard, auch ohne Argument) - startet
-                                   den Webserver. Führt vorher automatisch
-                                   ausstehende Datenbankmigrationen aus
-                                   ("bei jedem Update", siehe HANDOFF-Doku)
-                                   und stößt bei fehlender Konfiguration
-                                   automatisch den Setup-Assistenten an.
+                                   den Webserver UND öffnet ein natives
+                                   Fenster (Edge-WebView2, siehe Prompt 46),
+                                   das auf das Dashboard zeigt - kein
+                                   Browser-Tab, keine Adressleiste. Führt
+                                   vorher automatisch ausstehende
+                                   Datenbankmigrationen aus ("bei jedem
+                                   Update", siehe HANDOFF-Doku) und stößt
+                                   bei fehlender Konfiguration automatisch
+                                   den Setup-Assistenten an.
+        --no-window                - nur der Server, kein Fenster (bisheriges
+                                   Verhalten vor Prompt 46, weiterhin nützlich
+                                   für Entwickler/Debugging/Kopfstationen).
     kanzlei_ai.exe setup          - Ersteinrichtung: Datenverzeichnis,
                                    `.env` (inkl. generiertem
                                    SESSION_SECRET_KEY), Migration, Admin.
@@ -17,6 +24,16 @@ vier Subkommandos:
     kanzlei_ai.exe create-admin   - ruft scripts/create_admin.py auf
                                    (liest ADMIN_EMAIL/ADMIN_INITIAL_PASSWORD
                                    aus der Prozessumgebung).
+
+WICHTIG zu Prompt 46 (natives Fenster): der bestehende Web-Stack (FastAPI,
+Jinja2, HTMX, app/main.py, app/web/*) wird NICHT verändert - der Server
+läuft unverändert wie bisher, nur zusätzlich in einem Hintergrund-Thread
+statt blockierend im Hauptthread, weil `webview.start()` selbst den
+Hauptthread braucht (Standard-Einschränkung von GUI-Event-Loops unter
+Windows). Das Fenster zeigt schlicht die bestehende Login-Seite im Browser-
+Fenster-Gewand an - siehe ARCHITECTURE.md für die ausführliche Begründung,
+warum dieser Ansatz (natives Fenster UM den Stack) gewählt wurde statt einer
+Neuentwicklung.
 
 WICHTIG zur Prozessarchitektur: `setup` ruft `migrate`/`create-admin` NICHT
 direkt als Python-Funktionsaufruf im selben Prozess auf, sondern startet
@@ -48,7 +65,23 @@ import getpass
 import os
 import subprocess
 import sys
+import threading
+import time
+from collections.abc import Callable
 from pathlib import Path
+
+#: WebView2-"Client"-GUIDs (Runtime/Beta/Dev/Canary) - dieselben, die
+#: pywebview intern selbst prüft (siehe webview/platforms/winforms.py,
+#: `_is_chromium()`), hier unabhängig reimplementiert (siehe
+#: `_is_webview2_runtime_available` weiter unten für die Begründung, warum
+#: wir NICHT einfach pywebview automatisch entscheiden lassen).
+_WEBVIEW2_CLIENT_GUIDS = (
+    "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",  # WebView2 Runtime (stabil)
+    "{2CD8A007-E189-409D-A2C8-9AF4EF3C72AA}",  # WebView2 Beta
+    "{0D50BFEC-CD6A-4F9A-964C-C7416E3ACB10}",  # WebView2 Dev
+    "{65C35B14-6C1D-4122-AC46-7148CC9D6497}",  # WebView2 Canary
+)
+_WEBVIEW2_DOWNLOAD_URL = "https://developer.microsoft.com/en-us/microsoft-edge/webview2/"
 
 
 def _bundle_base_dir() -> Path:
@@ -84,7 +117,101 @@ def cmd_create_admin() -> int:
     return create_admin_main()
 
 
-def cmd_serve() -> int:
+def _http_check(url: str) -> bool:
+    """Echter HTTP-GET-Bereitschaftscheck (Standardimplementierung von
+    `_wait_for_server_ready`) - eigenständige Funktion, damit Tests sie
+    durch einen Fake ersetzen können, ohne einen echten Server zu
+    brauchen."""
+    import urllib.request
+
+    with urllib.request.urlopen(url, timeout=2) as response:  # noqa: S310 - feste lokale URL
+        return response.status == 200
+
+
+def _wait_for_server_ready(
+    url: str,
+    *,
+    timeout: float = 15.0,
+    interval: float = 0.3,
+    check: Callable[[str], bool] = _http_check,
+    sleep: Callable[[float], None] = time.sleep,
+    now: Callable[[], float] = time.monotonic,
+) -> None:
+    """Wartet, bis `check(url)` `True` liefert, oder wirft `TimeoutError`.
+
+    `check`/`sleep`/`now` sind bewusst injizierbar (Standard: echter HTTP-
+    Aufruf/echtes Warten/echte Uhr) - macht sowohl den Erfolgs- als auch den
+    Timeout-Pfad ohne echten Netzwerk-Server und ohne echtes Warten testbar
+    (siehe tests/test_run_entrypoint.py).
+    """
+    deadline = now() + timeout
+    last_error: Exception | None = None
+    while now() < deadline:
+        try:
+            if check(url):
+                return
+        except Exception as exc:  # noqa: BLE001 - waehrend des Serverstarts erwartete Verbindungsfehler
+            last_error = exc
+        sleep(interval)
+    detail = f" ({last_error})" if last_error is not None else ""
+    raise TimeoutError(
+        f"Server unter {url} hat innerhalb von {timeout:.0f} Sekunden nicht "
+        f"geantwortet{detail}."
+    )
+
+
+def _is_webview2_runtime_available() -> bool:
+    """Prüft per Registry, ob die Microsoft-Edge-WebView2-Runtime installiert
+    ist - dieselbe Erkennung (Client-GUID unter
+    ...\\Microsoft\\EdgeUpdate\\Clients\\...), die auch pywebview intern
+    verwendet (siehe webview/platforms/winforms.py, `_is_chromium()`).
+
+    UNABHÄNGIG reimplementiert statt pywebview einfach entscheiden zu lassen:
+    fehlt WebView2, fällt pywebview NICHT mit einem Fehler auf, sondern
+    still auf die veraltete Internet-Explorer-Engine (MSHTML) zurück (siehe
+    dieselbe Quelldatei) - das würde das moderne HTMX-Dashboard nicht
+    sichtbar zum Absturz bringen, aber kaputt/unbenutzbar aussehen lassen.
+    Diese Prüfung VOR dem Fensteraufbau macht daraus einen klaren Fehler
+    statt einer stillen, schwer diagnostizierbaren Verschlechterung.
+
+    WICHTIGER FUND (beim echten End-to-End-Test auf einer 64-Bit-Windows-
+    Maschine mit tatsächlich installiertem WebView2 entdeckt): der
+    WebView2-Runtime-Installer ist selbst ein 32-Bit-Programm und schreibt
+    seinen `HKEY_LOCAL_MACHINE`-Registrierungseintrag deshalb NICHT unter
+    den "nativen" 64-Bit-Pfad, sondern unter den von Windows automatisch
+    umgeleiteten `WOW6432Node`-Zweig - ein reines `winreg.OpenKey(HKLM,
+    "SOFTWARE\\Microsoft\\...")` findet ihn auf einer 64-Bit-Maschine daher
+    NIE, obwohl die Runtime installiert ist (erste Version dieser Funktion
+    hatte genau diesen Fehler - fälschlich "nicht gefunden" trotz
+    installierter Runtime). `HKEY_CURRENT_USER`-Einträge sind von dieser
+    Umleitung nicht betroffen. Nachgebildet nach demselben Muster, das
+    pywebview selbst in `_is_chromium()` verwendet (`machine() == 'x86' or
+    key_type == 'HKEY_CURRENT_USER'` entscheidet zwischen beiden Pfaden).
+    """
+    if os.name != "nt":
+        return True  # Prüfung ergibt nur unter Windows Sinn (Zielplattform)
+
+    import platform
+    import winreg
+
+    is_32bit_machine = platform.machine() == "x86"
+
+    for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        # HKCU ist nie von der WOW6432Node-Umleitung betroffen; HKLM auf
+        # einer 64-Bit-Maschine schon (siehe Docstring oben).
+        use_wow6432node = hive == winreg.HKEY_LOCAL_MACHINE and not is_32bit_machine
+        subpath = "WOW6432Node\\Microsoft" if use_wow6432node else "Microsoft"
+        for guid in _WEBVIEW2_CLIENT_GUIDS:
+            try:
+                key = winreg.OpenKey(hive, rf"SOFTWARE\{subpath}\EdgeUpdate\Clients\{guid}")
+                winreg.QueryValueEx(key, "pv")
+                return True
+            except OSError:
+                continue
+    return False
+
+
+def cmd_serve(*, open_window: bool = True) -> int:
     from app.config import get_settings
 
     settings = get_settings()
@@ -96,11 +223,77 @@ def cmd_serve() -> int:
     if migrate_exit_code != 0:
         return migrate_exit_code
 
+    if not open_window:
+        import uvicorn
+
+        from app.main import app
+
+        uvicorn.run(
+            app, host=settings.host, port=settings.port, log_level=settings.log_level.lower()
+        )
+        return 0
+
+    return _serve_with_window(settings)
+
+
+def _serve_with_window(settings) -> int:  # noqa: ANN001 - Settings-Typ nur lazy importierbar
+    """Startet den Server in einem Hintergrund-Thread und öffnet darüber ein
+    natives WebView2-Fenster im Hauptthread (Prompt 46). Der bestehende
+    Web-Stack (app/main.py, app/web/*) läuft dabei vollkommen unverändert -
+    dieselbe FastAPI-App wie im `--no-window`-Pfad, nur eben nicht
+    blockierend im Hauptthread gestartet, weil `webview.start()` genau das
+    für sich selbst braucht (Standard-Einschränkung nativer GUI-Event-Loops
+    unter Windows)."""
     import uvicorn
 
     from app.main import app
 
-    uvicorn.run(app, host=settings.host, port=settings.port, log_level=settings.log_level.lower())
+    config = uvicorn.Config(
+        app, host=settings.host, port=settings.port, log_level=settings.log_level.lower()
+    )
+    server = uvicorn.Server(config)
+    server_thread = threading.Thread(target=server.run, name="kanzlei-ai-uvicorn", daemon=True)
+    server_thread.start()
+
+    base_url = f"http://{settings.host}:{settings.port}"
+
+    def _shutdown_server() -> None:
+        server.should_exit = True
+        server_thread.join(timeout=10)
+
+    try:
+        _wait_for_server_ready(f"{base_url}/health")
+    except TimeoutError as exc:
+        print(f"FEHLER: {exc}", file=sys.stderr)
+        _shutdown_server()
+        return 1
+
+    if not _is_webview2_runtime_available():
+        print(
+            "FEHLER: Die Microsoft-Edge-WebView2-Runtime wurde auf diesem Rechner nicht "
+            "gefunden. Ohne sie würde das native Fenster still auf eine veraltete, mit "
+            "dem Dashboard nicht kompatible Anzeige-Engine zurückfallen.\n"
+            f"Bitte die Runtime herunterladen und installieren: {_WEBVIEW2_DOWNLOAD_URL}\n"
+            "Alternativ jetzt ohne Fenster starten und im Browser öffnen: "
+            "kanzlei_ai.exe serve --no-window",
+            file=sys.stderr,
+        )
+        _shutdown_server()
+        return 1
+
+    import webview
+
+    webview.create_window(
+        "Kanzlei-AI",
+        f"{base_url}/dashboard/login",
+        width=1400,
+        height=900,
+        resizable=True,
+    )
+    # Blockiert im Hauptthread, bis der Nutzer das Fenster schließt.
+    webview.start()
+
+    _shutdown_server()
     return 0
 
 
@@ -163,7 +356,17 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(prog="kanzlei_ai", description=__doc__)
     subparsers = parser.add_subparsers(dest="command")
-    subparsers.add_parser("serve", help="Startet den Webserver (Standard ohne Argument)")
+    serve_parser = subparsers.add_parser(
+        "serve", help="Startet den Webserver + natives Fenster (Standard ohne Argument)"
+    )
+    serve_parser.add_argument(
+        "--no-window",
+        action="store_true",
+        help=(
+            "Kein natives Fenster öffnen, nur den Server starten (Verhalten vor Prompt "
+            "46, weiterhin nützlich für Entwickler/Debugging)"
+        ),
+    )
     setup_parser = subparsers.add_parser("setup", help="Führt die Ersteinrichtung durch")
     setup_parser.add_argument(
         "--force",
@@ -192,14 +395,18 @@ def main(argv: list[str] | None = None) -> int:
     if command == "create-admin":
         return cmd_create_admin()
 
-    # command == "serve"
+    # command == "serve" (auch der implizite Default ohne jedes Argument -
+    # dort hat argparse die "serve"-Subparser-Attribute nie befüllt, daher
+    # getattr mit sicherem Default statt args.no_window direkt).
+    open_window = not getattr(args, "no_window", False)
+
     env_path = data_dir / ".env"
     if not env_path.exists():
         print("Keine Konfiguration gefunden - Ersteinrichtung wird gestartet.")
         setup_exit_code = cmd_setup(data_dir, force=False)
         if setup_exit_code != 0:
             return setup_exit_code
-    return cmd_serve()
+    return cmd_serve(open_window=open_window)
 
 
 if __name__ == "__main__":
