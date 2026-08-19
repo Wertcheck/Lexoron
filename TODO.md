@@ -610,6 +610,35 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       instrumentiertem Browser-Tab verifiziert (Login-Durchlauf, alle Hrefs, SVG-Icons
       als valides sichtbares Markup bestätigt). Siehe ARCHITECTURE.md §52.
 
+## Nachtrag – Prompt 49 (juristische Menüstruktur, Profil-/Einstellungsbereich), 20.08.
+
+- [x] Juristische Menüstruktur + Profil-/Einstellungen-Bereich – Prompt 49, 20.08. Sidebar
+      in fünf aufklappbare Gruppen gegliedert (Dashboard, Akten & Dokumente, KI-Werkzeuge,
+      Vorlagen & Muster, Historie & Audit; `<details>`/`<summary>`, kein JavaScript) - wie
+      Prompt 48 auf Rückfrage als reiner UI-/IA-Auftrag bestätigt, keine neue Fachlogik.
+      **Gefundener Jinja2-Fallstrick:** der Dictionary-Schlüssel `"items"` kollidierte mit
+      der eingebauten `dict.items()`-Methode (`TypeError: 'builtin_function_or_method'
+      object is not iterable`) - zu `"links"` umbenannt. Zehn neue Platzhalter-Routen
+      (Schriftsatz-Generator, Fristen-Check, Zeitleiste, Beleg-Extraktion, Dokumenten-
+      Viewer, Archiv, Letzte Akten, Kanzlei-Mustertexte, Standard-Prompts, Gespeicherte
+      Analysen), `placeholder_router.py` dafür auf dict-generierte Routen umgestellt.
+      Neuer Profil-Bereich (`app/web/account_router.py`) getrennt unten links in der
+      Sidebar - "Mein Konto & Abmelden" (echt: Nutzerdaten + funktionierender Logout) und
+      "Anonymisierung & Datenschutz" (echt: nur verifizierte technische Fakten) sind echte
+      Seiten, "Kanzlei-Profil & Briefkopf"/"System & Lizenz" bleiben Platzhalter.
+      **Wichtigste Entscheidung, vor Umsetzung geklärt:** die ursprünglich geforderte
+      "§ 43e BRAO Compliance"-Statusanzeige und ein "KI-Trainings-Opt-Out"-Schalter wurden
+      NICHT gebaut - eine Konformitätsbehauptung zu einer konkreten Berufsordnungs-
+      Vorschrift wäre eine autonome rechtliche Entscheidung der Software gewesen (verboten
+      laut CLAUDE.md). Stattdessen: reine technische Fakten (Pseudonymisierung als
+      nicht-abschaltbare Status-Anzeige, nicht als Schalter; API-Key hinterlegt Ja/Nein;
+      Aufbewahrungsfrist), mit explizitem Hinweis "keine rechtliche Bewertung". 39 neue/
+      geänderte Tests (inkl. Regressionswachen: keine "BRAO"/"§"/"konform"-Begriffe im
+      HTML, keine Checkbox für die Pseudonymisierung), 827/832 gesamt grün (unverändert 4
+      Umgebungslimitierungen). Per echtem Server + Browser-Tab-Inspektion verifiziert
+      (Gruppenstruktur, automatisches Aufklappen der aktiven Gruppe, alle drei echten
+      Konto-Seiten, 30 SVG-Icons als valides Markup). Siehe ARCHITECTURE.md §53.
+
 ## Wiederkehrende Grundregeln (gelten für jede Phase)
 - Keine echten Mandantendaten in Tests/Entwicklung.
 - Keine Secrets in Code/Logs/Git.

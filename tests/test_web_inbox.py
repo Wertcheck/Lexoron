@@ -262,43 +262,93 @@ def test_message_detail_partial_not_found_returns_404(client: TestClient) -> Non
 # --- Sidebar / ehrliche Darstellung des Entwicklungsstands ---
 
 
-def test_sidebar_shows_all_eight_areas(client: TestClient, seeded: dict) -> None:
+def test_sidebar_shows_all_group_and_item_labels(client: TestClient, seeded: dict) -> None:
+    """Seit Prompt 49 ist die Sidebar nach juristischen Arbeitsablaeufen in
+    fuenf Gruppen gegliedert - "Einstellungen" ist bewusst kein sichtbares
+    Sidebar-Label mehr (siehe test_sidebar_shows_all_eight_areas in der
+    Git-Historie fuer den fruesheren, flachen Stand): der Profil-/
+    Einstellungen-Bereich wird stattdessen ueber das Profil-Icon unten
+    links erreicht (siehe test_sidebar_has_profile_link_at_bottom)."""
     response = client.get("/dashboard/inbox")
     for label in [
         "Dashboard",
+        "Akten &amp; Dokumente",
         "Posteingang",
-        "Akten",
+        "Aktive Akten",
+        "KI-Werkzeuge",
         "Entwürfe zur Prüfung",
         "Rechtsquellen",
+        "Vorlagen &amp; Muster",
         "Kanzlei-Wissen",
         "Postausgang",
-        "Einstellungen",
+        "Historie &amp; Audit",
     ]:
         assert label in response.text
 
 
-def test_sidebar_links_all_eight_areas_to_real_pages(
-    client: TestClient, seeded: dict
-) -> None:
+def test_sidebar_has_profile_link_at_bottom(client: TestClient, seeded: dict) -> None:
+    response = client.get("/dashboard/inbox")
+    assert 'href="/dashboard/account"' in response.text
+    assert "sidebar__profile" in response.text
+
+
+def test_sidebar_links_all_areas_to_real_pages(client: TestClient, seeded: dict) -> None:
     """Seit Prompt 48 ist JEDER Sidebar-Bereich ein echter, klickbarer Link
-    (<a href>) - Bereiche ohne eigene Fachlogik (Akten/Rechtsquellen/
-    Kanzlei-Wissen/Einstellungen) fuehren auf eine ehrliche Platzhalterseite
-    (app/web/placeholder_router.py) statt entweder auf einen toten Link oder
-    ein nicht anklickbares "bald"-Badge (fruehere Loesung, siehe Git-
-    Historie). Es gibt daher keine `sidebar__link--disabled`-Klasse mehr."""
+    (<a href>) - Bereiche ohne eigene Fachlogik fuehren auf eine ehrliche
+    Platzhalterseite (app/web/placeholder_router.py) statt entweder auf
+    einen toten Link oder ein nicht anklickbares "bald"-Badge (fruehere
+    Loesung, siehe Git-Historie). Seit Prompt 49 ist die Sidebar zusaetzlich
+    nach juristischen Arbeitsablaeufen in fuenf Gruppen gegliedert
+    (<details>/<summary>) - es gibt daher keine `sidebar__link--disabled`-
+    Klasse mehr."""
     response = client.get("/dashboard/inbox")
     for href in [
         "/dashboard",
+        "/dashboard/recent",
         "/dashboard/inbox",
         "/dashboard/matters",
-        "/dashboard/drafts",
-        "/dashboard/sources",
-        "/dashboard/knowledge",
+        "/dashboard/documents",
+        "/dashboard/archive",
         "/dashboard/outbox",
-        "/dashboard/settings",
+        "/dashboard/drafts",
+        "/dashboard/tools/schriftsatz",
+        "/dashboard/tools/fristen",
+        "/dashboard/tools/zeitleiste",
+        "/dashboard/tools/beleg-extraktion",
+        "/dashboard/sources",
+        "/dashboard/library/mustertexte",
+        "/dashboard/library/prompts",
+        "/dashboard/knowledge",
+        "/dashboard/errors",
+        "/dashboard/history/analysen",
+        "/dashboard/account",
     ]:
         assert f'href="{href}"' in response.text
     assert "sidebar__link--disabled" not in response.text
+
+
+def test_sidebar_shows_admin_only_items_for_admin(client: TestClient, seeded: dict) -> None:
+    """`client` meldet sich als Admin an (login_as_admin) - Systemstatus und
+    Export-Protokolle (Backup) sind admin_only=True in base.html und muessen
+    daher sichtbar sein."""
+    response = client.get("/dashboard/inbox")
+    assert 'href="/dashboard/monitoring"' in response.text
+    assert 'href="/dashboard/backup"' in response.text
+
+
+def test_sidebar_group_containing_active_item_is_open(
+    client: TestClient, seeded: dict
+) -> None:
+    """Die Gruppe, die den gerade aktiven Nav-Punkt enthaelt, ist automatisch
+    aufgeklappt (<details open>), damit der aktuelle Ort im Menü sichtbar
+    bleibt, statt hinter einer eingeklappten Gruppe versteckt zu sein."""
+    response = client.get("/dashboard/inbox")
+    # "Posteingang" gehoert zur Gruppe "Akten & Dokumente" - deren <details>
+    # muss "open" tragen, waehrend z. B. "Vorlagen & Muster" geschlossen bleibt.
+    akten_group_start = response.text.index("Akten &amp; Dokumente")
+    details_tag_start = response.text.rindex("<details", 0, akten_group_start)
+    details_tag_end = response.text.index(">", details_tag_start)
+    assert "open" in response.text[details_tag_start:details_tag_end]
 
 
 # --- Onboarding-Banner (Prompt 48) ---

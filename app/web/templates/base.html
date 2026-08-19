@@ -1,9 +1,12 @@
 {# Basis-Layout (Prompt 22, Login/Rollen Prompt 26, Icon-/Navigations-
-   Ueberarbeitung Prompt 48). Alle acht Bereiche aus der Design-Referenz des
-   Anwalts sind jetzt klickbar - Bereiche ohne eigene Fachlogik (Akten,
-   Rechtsquellen, Kanzlei-Wissen, Einstellungen) fuehren bewusst auf eine
-   ehrliche Platzhalterseite (app/web/placeholder_router.py) statt auf
-   "bald"-Badges oder tote Links, die 404 werfen wuerden. #}
+   Ueberarbeitung Prompt 48, juristische Menuestruktur Prompt 49). Sidebar
+   nach juristischen Arbeitsablaeufen in fuenf aufklappbare Gruppen
+   gegliedert (<details>/<summary>, wie bereits bei "Entwurf manuell
+   bearbeiten" verwendet - kein JavaScript noetig). Bereiche ohne eigene
+   Fachlogik fuehren bewusst auf eine ehrliche Platzhalterseite
+   (app/web/placeholder_router.py) statt auf tote Links oder vorgetaeuschte
+   Funktionen. Profil/Einstellungen bewusst GETRENNT vom Hauptmenue ganz
+   unten links (app/web/account_router.py) - siehe ARCHITECTURE.md §53. #}
 {% import "_icons.html" as icons %}
 <!DOCTYPE html>
 <html lang="de">
@@ -41,58 +44,94 @@
     <nav class="sidebar">
       <div class="sidebar__brand">Kanzlei&nbsp;AI</div>
       <div class="sidebar__brand-sub">Steuerrecht&nbsp;· Prototyp</div>
-      {% if current_user %}
-        <div class="sidebar__user">
-          {{ current_user.email }}
-          <span class="tag tag--outbound" style="margin-left:4px;">{{ current_user.role.name if current_user.role else "?" }}</span>
-          <form method="post" action="/dashboard/logout">
-            <button type="submit" class="sidebar__logout-btn">Abmelden</button>
-          </form>
-        </div>
-      {% endif %}
       <div class="sidebar__nav">
-        {% set nav_items = [
-          ("Dashboard", "/dashboard", icons.dashboard),
-          ("Posteingang", "/dashboard/inbox", icons.envelope),
-          ("Akten", "/dashboard/matters", icons.folder),
-          ("Entwürfe zur Prüfung", "/dashboard/drafts", icons.document),
-          ("Rechtsquellen", "/dashboard/sources", icons.book),
-          ("Kanzlei-Wissen", "/dashboard/knowledge", icons.bulb),
-          ("Postausgang", "/dashboard/outbox", icons.send),
-          ("Einstellungen", "/dashboard/settings", icons.settings),
+        {% set is_admin = current_user and current_user.role and current_user.role.name.lower() == "admin" %}
+        {% set nav_groups = [
+          {
+            "label": "Dashboard",
+            "icon": icons.dashboard,
+            "links": [
+              ("Schnellstart", "/dashboard", icons.dashboard, false),
+              ("Letzte Akten", "/dashboard/recent", icons.clock, false),
+              ("Systemstatus", "/dashboard/monitoring", icons.chart, true),
+            ],
+          },
+          {
+            "label": "Akten & Dokumente",
+            "icon": icons.folder,
+            "links": [
+              ("Posteingang", "/dashboard/inbox", icons.envelope, false),
+              ("Aktive Akten", "/dashboard/matters", icons.folder, false),
+              ("Dokumenten-Viewer", "/dashboard/documents", icons.document, false),
+              ("Archiv", "/dashboard/archive", icons.archive, false),
+              ("Postausgang", "/dashboard/outbox", icons.send, false),
+            ],
+          },
+          {
+            "label": "KI-Werkzeuge",
+            "icon": icons.bulb,
+            "links": [
+              ("Entwürfe zur Prüfung", "/dashboard/drafts", icons.document, false),
+              ("Schriftsatz-Generator", "/dashboard/tools/schriftsatz", icons.printer, false),
+              ("Fristen-Check", "/dashboard/tools/fristen", icons.clock, false),
+              ("Zeitleiste", "/dashboard/tools/zeitleiste", icons.chart, false),
+              ("Beleg-Extraktion", "/dashboard/tools/beleg-extraktion", icons.upload, false),
+              ("Rechtsquellen", "/dashboard/sources", icons.book, false),
+            ],
+          },
+          {
+            "label": "Vorlagen & Muster",
+            "icon": icons.book,
+            "links": [
+              ("Kanzlei-Mustertexte", "/dashboard/library/mustertexte", icons.document, false),
+              ("Standard-Prompts", "/dashboard/library/prompts", icons.bulb, false),
+              ("Kanzlei-Wissen", "/dashboard/knowledge", icons.bulb, false),
+            ],
+          },
+          {
+            "label": "Historie & Audit",
+            "icon": icons.archive,
+            "links": [
+              ("Fehler", "/dashboard/errors", icons.warning, false),
+              ("Gespeicherte Analysen", "/dashboard/history/analysen", icons.chart, false),
+              ("Export-Protokolle", "/dashboard/backup", icons.archive, true),
+            ],
+          },
         ] %}
-        {% for label, href, icon in nav_items %}
-          <a class="sidebar__link{% if active_nav == label %} sidebar__link--active{% endif %}"
-             href="{{ href }}">
-            {{ icon(class_="icon sidebar__link-icon") }}
-            <span class="sidebar__link-label">{{ label }}</span>
-          </a>
+        {% for group in nav_groups %}
+          {% set ns = namespace(has_active=false) %}
+          {% for label, href, icon, admin_only in group.links %}
+            {% if active_nav == label %}{% set ns.has_active = true %}{% endif %}
+          {% endfor %}
+          <details class="sidebar__group"{% if ns.has_active %} open{% endif %}>
+            <summary class="sidebar__group-summary">
+              {{ group.icon(class_="icon sidebar__group-icon") }}
+              <span class="sidebar__group-label">{{ group.label }}</span>
+            </summary>
+            <div class="sidebar__group-items">
+              {% for label, href, icon, admin_only in group.links %}
+                {% if not admin_only or is_admin %}
+                  <a class="sidebar__link{% if active_nav == label %} sidebar__link--active{% endif %}"
+                     href="{{ href }}">
+                    {{ icon(class_="icon sidebar__link-icon") }}
+                    <span class="sidebar__link-label">{{ label }}</span>
+                  </a>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </details>
         {% endfor %}
-        {% if current_user %}
-          <a class="sidebar__link{% if active_nav == 'Fehler' %} sidebar__link--active{% endif %}"
-             href="/dashboard/errors">
-            {{ icons.warning(class_="icon sidebar__link-icon") }}
-            <span class="sidebar__link-label">Fehler</span>
-          </a>
-        {% endif %}
-        {% if current_user and current_user.role and current_user.role.name.lower() == "admin" %}
-          <a class="sidebar__link{% if active_nav == 'Nutzerverwaltung' %} sidebar__link--active{% endif %}"
-             href="/dashboard/admin/users">
-            {{ icons.users(class_="icon sidebar__link-icon") }}
-            <span class="sidebar__link-label">Nutzerverwaltung</span>
-          </a>
-          <a class="sidebar__link{% if active_nav == 'Systemstatus' %} sidebar__link--active{% endif %}"
-             href="/dashboard/monitoring">
-            {{ icons.chart(class_="icon sidebar__link-icon") }}
-            <span class="sidebar__link-label">Systemstatus</span>
-          </a>
-          <a class="sidebar__link{% if active_nav == 'Backup' %} sidebar__link--active{% endif %}"
-             href="/dashboard/backup">
-            {{ icons.archive(class_="icon sidebar__link-icon") }}
-            <span class="sidebar__link-label">Backup &amp; Export</span>
-          </a>
-        {% endif %}
       </div>
+      {% if current_user %}
+        <a href="/dashboard/account" class="sidebar__profile{% if active_nav in ['Profil & Einstellungen', 'Anonymisierung & Datenschutz', 'Kanzlei-Profil & Briefkopf', 'System & Lizenz', 'Mein Konto & Abmelden'] %} sidebar__profile--active{% endif %}">
+          <span class="sidebar__profile-avatar">{{ current_user.email[0]|upper }}</span>
+          <span class="sidebar__profile-info">
+            <span class="sidebar__profile-email">{{ current_user.email }}</span>
+            <span class="sidebar__profile-role">{{ current_user.role.name if current_user.role else "?" }}</span>
+          </span>
+          {{ icons.settings(class_="icon sidebar__profile-gear") }}
+        </a>
+      {% endif %}
       <div class="sidebar__footer">
         Interner Prototyp &middot; Session-Login (Prompt 26)
       </div>

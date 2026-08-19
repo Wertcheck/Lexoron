@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}Profil & Einstellungen{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">Profil &amp; Einstellungen</h1>
+    <div class="topbar__meta">Angemeldet als <strong>{{ current_user.email }}</strong></div>
+  </div>
+
+  <div class="placeholder-page">
+    <div class="account-grid">
+      <a href="/dashboard/account/privacy" class="account-card">
+        {{ icons.bulb(class_="account-card__icon") }}
+        <span class="account-card__title">Anonymisierung &amp; Datenschutz</span>
+        <span class="account-card__text">PII-Filter-Status, Verschlüsselung, Aufbewahrungsfrist</span>
+      </a>
+      <a href="/dashboard/account/profile" class="account-card">
+        {{ icons.folder(class_="account-card__icon") }}
+        <span class="account-card__title">Kanzlei-Profil &amp; Briefkopf</span>
+        <span class="account-card__text">Kanzlei-Name, Logo, Export-Einstellungen</span>
+      </a>
+      <a href="/dashboard/account/license" class="account-card">
+        {{ icons.chart(class_="account-card__icon") }}
+        <span class="account-card__title">System &amp; Lizenz</span>
+        <span class="account-card__text">Verbrauchsanzeige, Update-Check</span>
+      </a>
+      <a href="/dashboard/account/me" class="account-card">
+        {{ icons.users(class_="account-card__icon") }}
+        <span class="account-card__title">Mein Konto &amp; Abmelden</span>
+        <span class="account-card__text">Profildaten, Passwort, Logout</span>
+      </a>
+      {% if is_admin %}
+        <a href="/dashboard/admin/users" class="account-card">
+          {{ icons.users(class_="account-card__icon") }}
+          <span class="account-card__title">Nutzerverwaltung</span>
+          <span class="account-card__text">Kanzlei-Nutzerkonten anlegen/verwalten (nur Admin)</span>
+        </a>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

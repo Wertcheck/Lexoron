@@ -1,10 +1,11 @@
-{# Onboarding-Banner (Prompt 48, Design-Vorlage) - wird nur gezeigt, wenn
-   der Posteingang leer ist (total_count == 0, siehe inbox.html). Alle drei
-   Aktionen fuehren ehrlich auf die "Einstellungen"-Platzhalterseite: Scan-
-   Ordner (INTAKE_WATCHED_FOLDERS) und E-Mail-Abruf (MAIL_*) werden aktuell
-   ausschliesslich ueber die .env-Datei konfiguriert, es gibt noch KEINEN
-   Dashboard-Endpunkt dafuer - bewusst KEINE Drag&Drop-Upload-Zone, die
-   optisch interaktiv wirkt, aber nichts entgegennimmt. #}
+{# Onboarding-Banner (Prompt 48, Design-Vorlage; Ziel-Links aktualisiert in
+   Prompt 49) - wird nur gezeigt, wenn der Posteingang leer ist
+   (total_count == 0, siehe inbox.html). Alle drei Aktionen fuehren ehrlich
+   auf die Profil-/Einstellungen-Uebersicht (app/web/account_router.py):
+   Scan-Ordner (INTAKE_WATCHED_FOLDERS) und E-Mail-Abruf (MAIL_*) werden
+   aktuell ausschliesslich ueber die .env-Datei konfiguriert, es gibt noch
+   KEINEN Dashboard-Endpunkt dafuer - bewusst KEINE Drag&Drop-Upload-Zone,
+   die optisch interaktiv wirkt, aber nichts entgegennimmt. #}
 <div class="onboarding">
   <div class="onboarding-box">
     <h2 class="onboarding-box__title">Willkommen bei Kanzlei AI – Erste Schritte</h2>
@@ -18,7 +19,7 @@
         <div class="onboarding-step__icon">{{ icons.printer(class_="icon") }}</div>
         <div class="onboarding-step__title">1. Scan-Ordner festlegen</div>
         <div class="onboarding-step__action">
-          <a href="/dashboard/settings" class="onboarding-icon-btn" title="Verzeichnis wählen" aria-label="Verzeichnis wählen">
+          <a href="/dashboard/account" class="onboarding-icon-btn" title="Verzeichnis wählen" aria-label="Verzeichnis wählen">
             {{ icons.plus(class_="icon") }}
           </a>
           <span>Verzeichnis wählen</span>
@@ -27,7 +28,7 @@
       <div class="onboarding-step">
         <div class="onboarding-step__icon">{{ icons.upload(class_="icon") }}</div>
         <div class="onboarding-step__title">2. Akten &amp; Dokumente hochladen</div>
-        <a href="/dashboard/settings" class="onboarding-step__dropzone">
+        <a href="/dashboard/account" class="onboarding-step__dropzone">
           Verzeichnis-Überwachung einrichten
         </a>
       </div>
@@ -35,7 +36,7 @@
         <div class="onboarding-step__icon">{{ icons.link(class_="icon") }}</div>
         <div class="onboarding-step__title">3. E-Mail verknüpfen</div>
         <div class="onboarding-step__action">
-          <a href="/dashboard/settings" class="btn btn--primary">Verknüpfen</a>
+          <a href="/dashboard/account" class="btn btn--primary">Verknüpfen</a>
           <span>IMAP/SMTP konfigurieren</span>
         </div>
       </div>

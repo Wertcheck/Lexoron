@@ -2788,3 +2788,128 @@ den eigenen Tab/das eigene Fenster erfassen.
 3. Die Onboarding-Banner-Aktionen verlinken alle auf dieselbe Platzhalterseite
    (Einstellungen) - sobald echte Konfigurationsseiten existieren, sollten die drei Links
    auf spezifischere Ziele zeigen (z. B. einen Scan-Ordner-spezifischen Abschnitt).
+
+## 53. Juristische Menüstruktur, aufklappbare Gruppen, Profil-/Einstellungen-Bereich (Prompt 49)
+
+Zweiter Design-Schritt nach Prompt 48 (Icons/Navigation) - Ausbau der flachen Sidebar zu
+einer nach juristischen Arbeitsabläufen gegliederten Gruppenstruktur, plus ein neuer,
+strukturierter Profil-/Einstellungen-Bereich. Wie Prompt 48 ausdrücklich als **reiner UI-/
+IA-Auftrag** umgesetzt (auf Nachfrage vom Anwalt bestätigt) - keine neue Fachlogik, mit
+GENAU EINER bewussten Ausnahme (siehe "Anonymisierung & Datenschutz" unten).
+
+### Fünf aufklappbare Sidebar-Gruppen (`base.html`, `<details>`/`<summary>`)
+
+Dashboard, Akten & Dokumente, KI-Werkzeuge, Vorlagen & Muster, Historie & Audit - wie vom
+Anwalt vorgegeben. Umgesetzt mit `<details>`/`<summary>` (bereits an anderer Stelle im
+Projekt verwendet, `draft_detail.html`, "Entwurf manuell bearbeiten") statt JavaScript -
+die Gruppe, die den gerade aktiven Nav-Punkt enthält, ist automatisch aufgeklappt
+(`{% set ns = namespace(has_active=false) %}`-Muster, da Jinja2-Variablen aus einer
+`{% for %}`-Schleife sonst nicht nach außen sichtbar sind), alle anderen bleiben
+eingeklappt.
+
+**Gefundener Jinja2-Fallstrick:** die Datenstruktur pro Gruppe verwendete zunächst den
+Schlüssel `"items"` - `{{ group.items }}` griff dadurch nicht auf diesen Dictionary-
+Schlüssel zu, sondern auf die gleichnamige eingebaute `dict.items()`-Methode (Attribut-
+Zugriff hat in Jinja2 Vorrang vor Subscript-Zugriff), was zur Laufzeit einen
+`TypeError: 'builtin_function_or_method' object is not iterable` auslöste. Behoben durch
+Umbenennung des Schlüssels zu `"links"` - ein by-echten-Testlauf gefundener Fehler, keine
+rein theoretische Annahme.
+
+**Alle bestehenden echten Bereiche bewusst erhalten**, auch wenn die Vorgabe des Anwalts
+sie nicht explizit nannte (Posteingang, Entwürfe zur Prüfung, Postausgang, Fehler,
+Systemstatus, Export-Protokolle/Backup, Rechtsquellen, Kanzlei-Wissen) - sinnvoll in die
+fünf neuen Gruppen eingeordnet, keiner davon durfte beim Umbau verloren gehen. "Aktive
+Akten" (vorher "Akten") und "Export-Protokolle" (vorher "Backup & Export") sind
+Label-Anpassungen an die neue Terminologie, dieselbe Zielseite wie zuvor.
+
+### Zehn neue Platzhalter-Routen (`placeholder_router.py`, jetzt dict-generiert)
+
+Schriftsatz-Generator, Fristen-Check, Zeitleiste, Beleg-Extraktion, Dokumenten-Viewer,
+Archiv, Letzte Akten, Kanzlei-Mustertexte, Standard-Prompts, Gespeicherte Analysen - JEDE
+mit eigenem, treffendem Beschreibungstext statt generischer Kopie. Der Router selbst wurde
+von vier Handfunktionen (Prompt 48) auf eine einzige Registrierungsschleife über ein Dict
+umgestellt (`_make_route`) - bei jetzt 15 Platzhaltern wäre die alte, sich wiederholende
+Struktur reine Boilerplate gewesen.
+
+### Profil-/Einstellungen-Bereich (`app/web/account_router.py`), getrennt vom Hauptmenü
+
+Wie vorgegeben: EIN Profil-Element ganz unten links in der Sidebar (Avatar-Kreis mit
+Initiale, E-Mail, Rolle, Zahnrad-Icon), führt auf `/dashboard/account` - eine Übersicht mit
+vier Karten (fünf für Admins, siehe unten). Drei der vier vorgegebenen Unterpunkte sind
+weiterhin ehrliche Platzhalter (`Kanzlei-Profil & Briefkopf`, `System & Lizenz`) im
+etablierten `placeholder_router.py`-Muster. **Zwei sind bewusst ECHTE Seiten:**
+
+- **`/dashboard/account/me`** ("Mein Konto & Abmelden"): zeigt E-Mail/Rolle des angemeldeten
+  Nutzers (bereits vorhandene Session-Daten, keine neue Datenquelle) und einen ECHTEN,
+  funktionierenden Abmelden-Button (`POST /dashboard/logout`, derselbe Endpunkt wie das
+  Header-Icon aus Prompt 48) - der Anwalt hatte das ausdrücklich als funktional gefordert
+  ("Bette hier auch die Logout-Funktion ein").
+- **`/dashboard/account/privacy`** ("Anonymisierung & Datenschutz"): siehe eigener Abschnitt
+  unten - der Anwalt hatte hier ausdrücklich "nur echte technische Fakten" gefordert.
+
+Zusätzlich, nicht in der ursprünglichen 4er-Liste, aber nicht weglassbar: eine fünfte
+Karte **"Nutzerverwaltung"**, nur für Admins sichtbar (`is_admin`-Flag aus dem Router),
+Link auf die bereits bestehende `/dashboard/admin/users` - dieser reale, bereits gebaute
+Bereich hatte in der neuen Struktur sonst keinen Platz mehr und wäre sonst unerreichbar
+geworden.
+
+### "Anonymisierung & Datenschutz": echte Fakten, KEINE Rechtsbehauptung (wichtigste Entscheidung dieses Prompts)
+
+Der ursprüngliche Auftrag nannte "§ 43e BRAO Compliance" und einen "KI-Trainings-Opt-Out"-
+Schalter - auf Rückfrage VOR der Umsetzung geklärt (siehe Gesprächsverlauf): eine
+Statusanzeige, die Konformität mit einer konkreten Berufsordnungs-Vorschrift behauptet,
+wäre eine rechtliche Bewertung, die weder dieses System noch eine KI autonom treffen darf
+(CLAUDE.md: "keine autonome rechtliche Entscheidung", "niemals Rechtsquellen erfinden").
+Umgesetzt wurde stattdessen eine Seite mit AUSSCHLIESSLICH echten, im System bereits
+verifizierbaren Fakten, im selben Muster wie `/dashboard/monitoring` (Prompt 32/33: "reine
+Ja/Nein-Konfigurationsstatus, NIE die tatsächlichen Werte/Schlüssel selbst"):
+
+- **Pseudonymisierung vor Claude-API-Aufruf**: Status-ANZEIGE ("aktiv"), bewusst KEIN
+  Schalter - diese Schwärzung ist architektonisch fest im Privacy Gateway verankert (§27)
+  und vom Nutzer nicht abschaltbar; ein Schalter, der das Gegenteil suggeriert (abschaltbar),
+  wäre selbst dann irreführend, wenn er tatsächlich funktionslos wäre - ein Mandant könnte
+  sich fälschlich in Sicherheit wiegen, ein Anwalt könnte fälschlich glauben, er hätte den
+  Schutz gerade deaktiviert.
+- **Verbindung zur Claude-API**: ob ein Schlüssel hinterlegt ist (Ja/Nein, wiederverwendet
+  aus Prompt 32/33) - bewusst KEINE Behauptung einer bestimmten TLS-Version, die nicht
+  verifiziert wurde (ursprünglich "TLS 1.3" gefordert).
+- **Aufbewahrungsfrist** (`settings.retention_days`): tatsächlicher, aus der `.env`
+  gelesener Wert, read-only (kein Schreibpfad vom Dashboard aus vorhanden).
+
+Explizite "Einordnung"-Sektion am Seitenende stellt klar: technische Systemeigenschaften,
+KEINE rechtliche Bewertung, KEINE Aussage zu einer bestimmten Berufsordnung. Per Test
+strukturell abgesichert (`tests/test_web_account.py::
+test_account_privacy_makes_no_legal_compliance_claim`): weder "BRAO" noch "§" noch
+"konform"/"compliant" dürfen im gerenderten HTML vorkommen, und es darf keine
+`<input type="checkbox">` existieren.
+
+### Getestet
+
+39 neue/geänderte Tests: `tests/test_web_account.py` (15, neu - Übersicht, Mein Konto,
+Datenschutz-Seite inkl. der beiden Ehrlichkeits-Regressionswachen oben),
+`tests/test_web_placeholder.py` (erweitert auf 15 Platzhalter-Fälle × 3 Tests + 1
+Redirect-Test), `tests/test_web_inbox.py` (Sidebar-Tests an die neue Gruppenstruktur
+angepasst, 2 neue Tests für Profil-Link und automatisches Aufklappen der aktiven Gruppe).
+827/832 Tests gesamt grün (unverändert 4 Umgebungslimitierungen + 1 Skip). Per echtem
+Server + instrumentiertem Browser-Tab verifiziert (kein Vollbild-Screenshot, siehe gelernte
+Lehre aus §52): vollständige Gruppenstruktur samt Links per JavaScript-Inspektion
+bestätigt (alle 5 Gruppen, korrekte Href-Ziele, automatisches Öffnen der aktiven Gruppe),
+alle drei echten Konto-Seiten inhaltlich korrekt gerendert, 30 SVG-Icons auf einer
+Einzelseite als sichtbares, valides Markup bestätigt.
+
+### Offene Punkte
+
+1. Wie in §52, Punkt 1: alle neuen Platzhalter-Bereiche (Schriftsatz-Generator,
+   Fristen-Check, Zeitleiste, Beleg-Extraktion, Dokumenten-Viewer, Archiv, Vorlagen &
+   Muster, Historie-Bereiche) sind rein informativ - der tatsächliche Bau bleibt eine
+   deutlich größere, hier ausdrücklich nicht beauftragte Aufgabe.
+2. "Kanzlei-Profil & Briefkopf" und "System & Lizenz" bleiben Platzhalter - sobald ein
+   echtes Kanzlei-Branding/Vorlagen-System existiert (Prompt 39, weiterhin offen), sollten
+   diese durch echte Seiten ersetzt werden.
+3. Die "§ 43e BRAO Compliance"-Frage aus dem ursprünglichen Auftrag ist NICHT beantwortet,
+   nur bewusst nicht von der Software autonom beantwortet - eine echte rechtliche Bewertung
+   der eingesetzten Technik gegen die Berufsordnung bleibt eine offene Aufgabe für die
+   Kanzlei/deren rechtliche Beratung, außerhalb dessen, was Code leisten kann oder sollte.
+4. Kein Update-Check-Mechanismus vorhanden (Teil von "System & Lizenz", Platzhalter) - der
+   Windows-Installer (Prompt 36) hat ebenfalls keinen automatischen Update-Mechanismus,
+   siehe ARCHITECTURE.md §45, offener Punkt 3.

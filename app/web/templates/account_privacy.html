@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Anonymisierung & Datenschutz{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">Anonymisierung &amp; Datenschutz</h1>
+    <div class="topbar__meta">Technische Statuswerte - keine rechtliche Bewertung</div>
+  </div>
+
+  <div class="draft-page">
+    <div class="instructions-panel">
+      <h2 class="panel-title">Automatische Anonymisierung (PII-Filter)</h2>
+      <table class="draft-table">
+        <tbody>
+          <tr>
+            <td>Mandanten-/Personendaten werden vor jeder Übertragung an die Claude-API
+              lokal geschwärzt/pseudonymisiert</td>
+            <td><span class="tag {% if pii_pseudonymization_active %}tag--matched{% else %}tag--unmatched{% endif %}">{{ "aktiv" if pii_pseudonymization_active else "inaktiv" }}</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="form-hint" style="margin-top: 10px;">
+        Diese Schwärzung ist fest im System verankert (Privacy Gateway) und über das
+        Dashboard nicht deaktivierbar - bewusst kein Schalter, da ein versehentlich
+        umgelegter Schalter Mandantendaten ungeschützt lassen könnte.
+      </p>
+    </div>
+
+    <div class="instructions-panel">
+      <h2 class="panel-title">Technische Transparenz</h2>
+      <table class="draft-table">
+        <tbody>
+          <tr>
+            <td>Verbindung zur Claude-API</td>
+            <td><span class="tag {% if claude_api_configured %}tag--matched{% else %}tag--unmatched{% endif %}">{{ "HTTPS, API-Schlüssel hinterlegt" if claude_api_configured else "nicht konfiguriert" }}</span></td>
+          </tr>
+          <tr>
+            <td>Session-Cookie "Secure"-Flag</td>
+            <td><span class="tag {% if session_cookie_secure %}tag--matched{% else %}tag--unmatched{% endif %}">{{ "ja" if session_cookie_secure else "nein (nur für lokale Entwicklung geeignet)" }}</span></td>
+          </tr>
+          <tr>
+            <td>Automatische Löschfrist (Aufbewahrung)</td>
+            <td><span class="tag {% if retention_days > 0 %}tag--matched{% else %}tag--unmatched{% endif %}">{{ retention_days ~ " Tage" if retention_days > 0 else "keine (0 = manuell verwaltet)" }}</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="form-hint" style="margin-top: 10px;">
+        Es werden ausschließlich Ja/Nein-/Wert-Statusangaben angezeigt - niemals
+        Schlüssel, Passwörter oder sonstige geheime Werte. Löschfrist wird aktuell über
+        die <code>.env</code>-Datei konfiguriert (<code>RETENTION_DAYS</code>), eine
+        Änderung über dieses Dashboard ist noch nicht möglich.
+      </p>
+    </div>
+
+    <div class="instructions-panel">
+      <h2 class="panel-title">Einordnung</h2>
+      <p class="form-hint">
+        Diese Seite beschreibt ausschließlich technisch verifizierte Systemeigenschaften.
+        Sie ist KEINE rechtliche Bewertung und KEINE Aussage zur Einhaltung einer
+        bestimmten Berufsordnung oder Rechtsvorschrift - eine solche Einordnung obliegt
+        der Kanzlei bzw. deren rechtlicher Beratung.
+      </p>
+    </div>
+  </div>
+{% endblock %}

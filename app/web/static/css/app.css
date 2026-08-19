@@ -78,7 +78,8 @@ a {
   color: var(--paper-100);
   display: flex;
   flex-direction: column;
-  padding: 28px 0 20px;
+  padding: 28px 0 16px;
+  overflow-y: auto;
 }
 
 .sidebar__brand {
@@ -101,27 +102,86 @@ a {
 .sidebar__nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+  margin-bottom: 8px;
+}
+
+/* --- Aufklappbare Menuegruppen (Prompt 49) --- */
+
+.sidebar__group {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.sidebar__group:last-child {
+  border-bottom: none;
+}
+
+.sidebar__group-summary {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 24px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  color: rgba(243, 244, 240, 0.85);
+  list-style: none;
+  user-select: none;
+}
+
+.sidebar__group-summary::-webkit-details-marker {
+  display: none;
+}
+
+.sidebar__group-summary::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  border-right: 1.5px solid rgba(243, 244, 240, 0.4);
+  border-bottom: 1.5px solid rgba(243, 244, 240, 0.4);
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.sidebar__group[open] > .sidebar__group-summary::after {
+  transform: rotate(45deg);
+}
+
+.sidebar__group-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: var(--seal-green);
+}
+
+.sidebar__group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-bottom: 6px;
 }
 
 .sidebar__link {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 11px;
-  padding: 9px 24px;
+  gap: 10px;
+  padding: 7px 24px 7px 42px;
   text-decoration: none;
-  color: rgba(243, 244, 240, 0.72);
-  font-size: 13.5px;
+  color: rgba(243, 244, 240, 0.68);
+  font-size: 13px;
   border-left: 2px solid transparent;
   transition: background-color 0.12s ease;
 }
 
 .sidebar__link-icon {
   flex-shrink: 0;
-  width: 17px;
-  height: 17px;
-  color: rgba(243, 244, 240, 0.55);
+  width: 16px;
+  height: 16px;
+  color: rgba(243, 244, 240, 0.5);
 }
 
 .sidebar__link--active .sidebar__link-icon {
@@ -919,26 +979,67 @@ textarea:focus {
   width: 340px;
 }
 
-/* --- Angemeldeter Nutzer / Logout in Sidebar --- */
+/* --- Profil-/Einstellungen-Bereich, unten links (Prompt 49) --- */
 
-.sidebar__user {
-  padding: 0 24px 12px;
+.sidebar__profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 12px 8px;
+  padding: 9px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  text-decoration: none;
+  color: rgba(243, 244, 240, 0.85);
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.sidebar__profile:hover,
+.sidebar__profile--active {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.sidebar__profile-avatar {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--seal-green);
+  color: var(--paper-000);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar__profile-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sidebar__profile-email {
   font-size: 12px;
-  color: rgba(243, 244, 240, 0.72);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.sidebar__user form {
-  margin-top: 4px;
+.sidebar__profile-role {
+  font-size: 10.5px;
+  color: rgba(243, 244, 240, 0.5);
 }
 
-.sidebar__logout-btn {
-  background: none;
-  border: none;
-  color: rgba(243, 244, 240, 0.55);
-  font-size: 11px;
-  text-decoration: underline;
-  cursor: pointer;
-  padding: 0;
+.sidebar__profile-gear {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  color: rgba(243, 244, 240, 0.45);
 }
 
 /* ==========================================================================
@@ -1126,4 +1227,58 @@ textarea:focus {
 .onboarding-icon-btn .icon {
   width: 20px;
   height: 20px;
+}
+
+/* ==========================================================================
+   Profil-/Einstellungen-Uebersicht (Prompt 49)
+   ========================================================================== */
+
+.account-grid {
+  width: 100%;
+  max-width: 780px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+}
+
+@media (max-width: 700px) {
+  .account-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.account-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 22px 22px;
+  background: var(--paper-000);
+  border: 1px solid var(--paper-line);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: var(--ink-900);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.account-card:hover {
+  border-color: var(--seal-green);
+  box-shadow: 0 2px 10px rgba(27, 42, 61, 0.06);
+}
+
+.account-card__icon {
+  width: 26px;
+  height: 26px;
+  color: var(--seal-green);
+}
+
+.account-card__title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.account-card__text {
+  font-size: 12px;
+  color: var(--ink-500);
+  line-height: 1.5;
 }

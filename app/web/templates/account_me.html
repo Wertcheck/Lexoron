@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}Mein Konto{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">Mein Konto &amp; Abmelden</h1>
+  </div>
+
+  <div class="draft-page">
+    <div class="instructions-panel">
+      <h2 class="panel-title">Profil</h2>
+      <table class="draft-table">
+        <tbody>
+          <tr>
+            <td>E-Mail-Adresse</td>
+            <td>{{ current_user.email }}</td>
+          </tr>
+          <tr>
+            <td>Rolle</td>
+            <td>{{ current_user.role.name if current_user.role else "?" }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="form-hint" style="margin-top: 10px;">
+        Passwort ändern: <a href="/dashboard/change-password">Zur Passwortänderung</a>
+      </p>
+    </div>
+
+    <div class="instructions-panel">
+      <h2 class="panel-title">Abmelden</h2>
+      <p class="form-hint">Beendet die aktuelle Sitzung auf diesem Gerät.</p>
+      <form method="post" action="/dashboard/logout">
+        <button type="submit" class="btn btn--danger">
+          {{ icons.logout(class_="icon") }}
+          Abmelden
+        </button>
+      </form>
+    </div>
+  </div>
+{% endblock %}
