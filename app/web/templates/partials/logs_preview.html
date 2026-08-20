@@ -1,0 +1,9 @@
+{# Anonymisierte Log-Vorschau (Schritt 3) - siehe app/logs/service.py. #}
+{% if not log_file_configured %}
+  <p class="form-hint">Keine Log-Datei konfiguriert (nur Konsolenausgabe) - siehe <code>LOG_FILE_PATH</code> in <code>.env</code>.</p>
+{% elif lines %}
+  <pre class="mono" style="max-height: 320px; overflow: auto; font-size: 12px; background: var(--paper-000); border: 1px solid var(--paper-line); padding: 10px; border-radius: 6px;">{% for line in lines %}{{ line }}
+{% endfor %}</pre>
+{% else %}
+  <p class="form-hint">Log-Datei ist noch leer.</p>
+{% endif %}

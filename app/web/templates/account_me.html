@@ -27,6 +27,37 @@
     </div>
 
     <div class="instructions-panel">
+      <h2 class="panel-title">App-Sperre (PIN)</h2>
+      {% if error %}
+        <div class="banner banner--error">{{ error }}</div>
+      {% endif %}
+      <p class="form-hint">
+        Eine kurze PIN erlaubt es, die Anwendung schnell zu sperren (Kopfzeile oder nach
+        Inaktivität), ohne sich abzumelden - z. B. beim kurzen Verlassen des Schreibtisches.
+        Ersetzt NICHT das eigentliche Passwort.
+      </p>
+      {% if current_user.pin_hash %}
+        <p class="form-hint">PIN ist eingerichtet.</p>
+        <form method="post" action="/dashboard/account/me/clear-pin" style="display:inline;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <button type="submit" class="btn">PIN entfernen</button>
+        </form>
+      {% endif %}
+      <form method="post" action="/dashboard/account/me/set-pin" class="dashboard-form" style="margin-top: 10px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <label class="form-label">
+          {{ "Neue PIN" if current_user.pin_hash else "PIN festlegen" }} (4-8 Ziffern)
+          <input type="password" inputmode="numeric" pattern="[0-9]*" name="new_pin" minlength="4" maxlength="8" required />
+        </label>
+        <label class="form-label">
+          PIN bestätigen
+          <input type="password" inputmode="numeric" pattern="[0-9]*" name="new_pin_confirm" minlength="4" maxlength="8" required />
+        </label>
+        <button type="submit" class="btn btn--primary">Speichern</button>
+      </form>
+    </div>
+
+    <div class="instructions-panel">
       <h2 class="panel-title">Abmelden</h2>
       <p class="form-hint">Beendet die aktuelle Sitzung auf diesem Gerät.</p>
       <form method="post" action="/dashboard/logout">

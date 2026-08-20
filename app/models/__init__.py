@@ -37,6 +37,7 @@ from app.models.pilot_feedback import (
     PilotFeedback,
 )
 from app.models.policy import Policy
+from app.models.prompt_template import PromptTemplate
 from app.models.review_finding import ReviewFinding
 from app.models.role import Role
 from app.models.source import Source
@@ -80,4 +81,5 @@ __all__ = [
     "PilotFeedback",
     "VALID_FEEDBACK_CATEGORIES",
     "VALID_REVIEW_STATUSES",
+    "PromptTemplate",
 ]

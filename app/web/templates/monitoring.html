@@ -78,5 +78,77 @@
         oder sonstige geheime Werte.
       </p>
     </div>
+
+    <div class="instructions-panel">
+      <h2 class="panel-title">Selbstdiagnose</h2>
+      <table class="draft-table">
+        <tbody>
+          <tr>
+            <td>Speicherplatz</td>
+            <td>
+              {% if disk_status.checked %}
+                <span class="tag {% if disk_status.is_low %}tag--unmatched{% else %}tag--matched{% endif %}">
+                  {{ disk_status.free_gb }}&nbsp;GB frei von {{ disk_status.total_gb }}&nbsp;GB ({{ disk_status.percent_free }}&nbsp;%)
+                </span>
+              {% else %}
+                <span class="tag tag--unmatched">nicht prüfbar: {{ disk_status.error }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td>Datenbank ({{ database_status.kind }})</td>
+            <td>
+              {% if database_status.kind == "sqlite" %}
+                {% if database_status.file_exists and database_status.integrity_ok %}
+                  <span class="tag tag--matched">ok ({{ database_status.size_mb }}&nbsp;MB, Integritätsprüfung bestanden)</span>
+                {% elif not database_status.file_exists %}
+                  <span class="tag tag--unmatched">Datenbankdatei nicht gefunden</span>
+                {% else %}
+                  <span class="tag tag--unmatched">Integritätsproblem: {{ database_status.error or "Prüfung fehlgeschlagen" }}</span>
+                {% endif %}
+              {% else %}
+                <span class="tag {% if database_status.integrity_ok %}tag--matched{% else %}tag--unmatched{% endif %}">
+                  {{ "erreichbar" if database_status.integrity_ok else "nicht erreichbar" }}
+                </span>
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td>Claude-API-Erreichbarkeit</td>
+            <td>
+              <span id="api-reachability-result">noch nicht geprüft</span>
+              <form hx-post="/dashboard/monitoring/check-api" hx-target="#api-reachability-result" hx-swap="innerHTML" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <button type="submit" class="btn" style="margin-left: 8px;">Jetzt prüfen</button>
+              </form>
+            </td>
+          </tr>
+          <tr>
+            <td>Lokales LLM (Ollama)</td>
+            <td>
+              <span class="tag tag--unmatched">nicht Teil dieser Installation</span>
+              <span class="form-hint">(offene Entscheidung, siehe ARCHITECTURE.md §10 - aktuell ausschließlich Anthropic angebunden)</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="form-hint" style="margin-top: 10px;">
+        Die Claude-API-Erreichbarkeit wird bewusst NICHT automatisch bei jedem Seitenaufruf
+        geprüft, sondern nur auf Klick - vermeidet unnötige ausgehende Verbindungen.
+      </p>
+    </div>
+
+    <div class="instructions-panel">
+      <h2 class="panel-title">Support-Logs</h2>
+      <p class="form-hint">
+        Zeigt die letzten Zeilen der aktiven Log-Datei - automatisch zusätzlich anonymisiert
+        (derselbe Schutz wie vor jedem Claude-API-Aufruf), bevor sie hier erscheinen oder
+        heruntergeladen werden können.
+      </p>
+      <div hx-get="/dashboard/monitoring/logs-preview" hx-trigger="load" hx-swap="innerHTML"></div>
+      <a href="/dashboard/monitoring/logs/download" class="btn" style="margin-top: 10px; display: inline-block;">
+        Anonymisierte Logs herunterladen
+      </a>
+    </div>
   </div>
 {% endblock %}

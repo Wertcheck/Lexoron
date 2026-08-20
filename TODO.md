@@ -647,6 +647,15 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       Admin-Rechte, Pilot-Feedback & Support (lokale KI-Vorkategorisierung, keine
       Claude-Nutzung, Admin-Freigabe-Schleife ohne automatische Umsetzung). Siehe
       ARCHITECTURE.md §54 für alle Details/offenen Punkte.
+- [x] Enterprise-Funktionen, Teil 2 (gleicher Tag): Selbstdiagnose/System-Health
+      (Speicherplatz, SQLite-Integrität, Claude-API-Erreichbarkeit nur auf Admin-Klick,
+      Ollama ehrlich als "nicht Teil dieser Installation" ausgewiesen), Support-Log-Viewer
+      (anonymisiert per Pseudonymizer), Backup/Restore als ZIP (Restore bewusst NUR per
+      Offline-CLI, kein Live-Dashboard-Button - siehe Begründung), App-Sperre/PIN-Lock
+      (server- und clientseitig durchgesetzt, ohne PIN inaktiv), Prompt-Bibliothek
+      "Standard-Prompts" (echte System-Prompts read-only direkt aus dem Code, editierbare
+      Kanzlei-Prompts mit Platzhalter-Variablen, nicht an die Drafting-Pipeline angebunden).
+      Siehe ARCHITECTURE.md §55 für alle Details/offenen Punkte.
 
 ## Wiederkehrende Grundregeln (gelten für jede Phase)
 - Keine echten Mandantendaten in Tests/Entwicklung.

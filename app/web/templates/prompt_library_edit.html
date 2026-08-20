@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Prompt bearbeiten{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">Kanzlei-Prompt bearbeiten</h1>
+  </div>
+
+  <div class="draft-page">
+    {% if error %}
+      <p class="form-hint" style="color: var(--amber);">{{ error }}</p>
+    {% endif %}
+    <div class="instructions-panel">
+      <form method="post" action="/dashboard/library/prompts/{{ template.id }}" class="dashboard-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <label class="form-label">
+          Name
+          <input type="text" name="name" value="{{ template.name }}" required />
+        </label>
+        <label class="form-label">
+          Beschreibung (optional)
+          <input type="text" name="description" value="{{ template.description or '' }}" />
+        </label>
+        <label class="form-label">
+          Text
+          <textarea name="content" rows="10" required>{{ template.content }}</textarea>
+        </label>
+        <button type="submit" class="btn btn--primary">Speichern (neue Version)</button>
+        <a href="/dashboard/library/prompts" class="btn">Abbrechen</a>
+      </form>
+    </div>
+  </div>
+{% endblock %}

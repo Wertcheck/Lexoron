@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gesperrt · Kanzlei-AI</title>
+  <link rel="stylesheet" href="/dashboard/static/css/app.css" />
+</head>
+<body>
+  <div class="login-shell">
+    <div class="login-box">
+      <div class="sidebar__brand" style="color: var(--ink-900);">Kanzlei&nbsp;AI</div>
+      <div class="sidebar__brand-sub" style="color: var(--ink-500); margin-bottom: 24px;">
+        Gesperrt - {{ current_user.email }}
+      </div>
+
+      {% if error %}
+        <div class="banner banner--error">{{ error }}</div>
+      {% endif %}
+
+      <form method="post" action="/dashboard/unlock" class="dashboard-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <label class="form-label">
+          PIN
+          <input type="password" inputmode="numeric" pattern="[0-9]*" name="pin" required autofocus />
+        </label>
+        <button type="submit" class="btn btn--primary">Entsperren</button>
+      </form>
+      <p class="form-hint" style="margin-top: 16px;">Nicht Sie?</p>
+      <form method="post" action="/dashboard/logout">
+        <button type="submit" class="btn">Abmelden und erneut mit Passwort anmelden</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

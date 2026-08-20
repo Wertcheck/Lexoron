@@ -167,6 +167,12 @@
           <a href="/dashboard/errors" class="header-icons__btn" title="Fehler &amp; Hinweise" aria-label="Fehler und Hinweise">
             {{ icons.bell(class_="icon") }}
           </a>
+          <form method="post" action="/dashboard/lock-now" id="lock-now-form" class="header-icons__form" style="display: none;">
+            <input type="hidden" name="csrf_token" id="lock-now-csrf" value="" />
+            <button type="submit" class="header-icons__btn" title="Jetzt sperren" aria-label="Jetzt sperren">
+              {{ icons.lock(class_="icon") }}
+            </button>
+          </form>
           <form method="post" action="/dashboard/logout" class="header-icons__form">
             <button type="submit" class="header-icons__btn" title="Abmelden" aria-label="Abmelden">
               {{ icons.logout(class_="icon") }}
@@ -177,5 +183,51 @@
       {% block content %}{% endblock %}
     </div>
   </div>
+  {% if current_user %}
+  <script>
+    // App-Sperre / PIN-Lock (Schritt 3): laedt einmalig, ob eine PIN
+    // eingerichtet ist (app/web/lock_router.py: /dashboard/lock-config) -
+    // ohne PIN bleibt sowohl der Sperren-Button als auch der
+    // Inaktivitaets-Timer inaktiv (sonst gaebe es keinen Weg, sich wieder
+    // zu entsperren). Bewusst reines Vanilla-JS, kein Build-Schritt
+    // (siehe ARCHITECTURE.md: "Ein Build-Schritt/Node.js ist nirgends im
+    // Projekt erforderlich").
+    (function () {
+      fetch("/dashboard/lock-config", { credentials: "same-origin" })
+        .then(function (response) { return response.ok ? response.json() : null; })
+        .then(function (config) {
+          if (!config || !config.pin_configured) {
+            return;
+          }
+          var lockForm = document.getElementById("lock-now-form");
+          var csrfInput = document.getElementById("lock-now-csrf");
+          if (!lockForm || !csrfInput) {
+            return;
+          }
+          csrfInput.value = config.csrf_token;
+          lockForm.style.display = "";
+
+          var inactivityMs = Math.max(1, config.inactivity_minutes) * 60 * 1000;
+          var timer = null;
+          function resetTimer() {
+            if (timer) {
+              clearTimeout(timer);
+            }
+            timer = setTimeout(function () {
+              lockForm.submit();
+            }, inactivityMs);
+          }
+          ["mousemove", "keydown", "click", "scroll", "touchstart"].forEach(function (evt) {
+            document.addEventListener(evt, resetTimer, { passive: true });
+          });
+          resetTimer();
+        })
+        .catch(function () {
+          // Sperrfunktion ist ein UX-Komfortmerkmal - ein fehlgeschlagener
+          // Abruf darf die restliche Seite nie beeintraechtigen.
+        });
+    })();
+  </script>
+  {% endif %}
 </body>
 </html>

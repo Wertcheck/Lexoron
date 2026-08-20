@@ -93,12 +93,10 @@ _PLACEHOLDER_PAGES: dict[str, tuple[str, str]] = {
         "Eine Verwaltung kanzleieigener Mustertexte befindet sich in der finalen "
         "Vorbereitung für das v0.2-Update.",
     ),
-    "/library/prompts": (
-        "Standard-Prompts",
-        "Eine Verwaltung wiederverwendbarer Standard-Anweisungen für die "
-        "KI-gestützte Entwurfserstellung befindet sich in der finalen Vorbereitung "
-        "für das v0.2-Update.",
-    ),
+    # "/library/prompts" ("Standard-Prompts") ist seit Schritt 3 KEIN
+    # Platzhalter mehr - siehe app/web/prompt_library_router.py (echte
+    # Prompt-Bibliothek: read-only Referenz der tatsächlichen System-Prompts
+    # + editierbare Kanzlei-Prompts mit Platzhalter-Variablen).
     "/knowledge": (
         "Kanzlei-Wissen",
         "Die Verwaltungsoberfläche für die Kanzlei-Wissensbasis befindet sich in der "

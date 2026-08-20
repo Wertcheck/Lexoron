@@ -78,7 +78,8 @@ _PLACEHOLDER_CASES = [
     ("/dashboard/tools/beleg-extraktion", "Beleg-Extraktion"),
     ("/dashboard/sources", "Rechtsquellen"),
     ("/dashboard/library/mustertexte", "Kanzlei-Mustertexte"),
-    ("/dashboard/library/prompts", "Standard-Prompts"),
+    # "/dashboard/library/prompts" ("Standard-Prompts") ist seit Schritt 3
+    # KEIN Platzhalter mehr - siehe tests/test_web_prompt_library.py.
     ("/dashboard/knowledge", "Kanzlei-Wissen"),
     ("/dashboard/history/analysen", "Gespeicherte Analysen"),
     ("/dashboard/account/profile", "Kanzlei-Profil & Briefkopf"),

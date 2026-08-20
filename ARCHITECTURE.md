@@ -3040,3 +3040,134 @@ alle übrigen 869 Tests grün.
    Deinstallation vor dem Umstieg auf die neue `%LocalAppData%`-Installation (siehe oben).
 4. Die eigentliche Umsetzung freigegebener Pilot-Feedback-Vorschläge (Prompt-/System-
    Änderungen) bleibt bewusst manuelle Entwicklungsarbeit, kein automatisierter Pfad.
+
+## 55. Enterprise-Funktionen: Selbstdiagnose, Backup/Restore, PIN-Lock, Prompt-Bibliothek (Schritt 3, Teil 2, 20.08.)
+
+Fortsetzung von §54 auf derselben, bestätigten lokalen Single-Tenant-Architektur (kein
+zentraler Proxy). Ergänzt die dort noch offenen Punkte "System-Health-Seite",
+"Backup & Restore", "Support-Log-Viewer", "App-Sperre (PIN-Lock)" und die
+"Vorlagen & Muster"-Prompt-Bibliothek.
+
+### System-Health / Selbstdiagnose
+
+Erweitert die bestehende Systemstatus-Seite (Prompt 32) statt eine separate Seite/einen
+neuen Router anzulegen - dieselbe Zielgruppe (Admin), derselbe Kontext.
+`app/system_health/service.py` (`SystemHealthService`):
+
+- **Speicherplatz**: `shutil.disk_usage` auf dem Verzeichnis der SQLite-Datenbankdatei.
+- **Datenbank**: bei SQLite `PRAGMA integrity_check` + Dateigröße; bei anderen Backends ein
+  einfacher `SELECT 1`-Liveness-Check.
+- **Claude-API-Erreichbarkeit**: bewusst NICHT automatisch bei jedem Seitenaufruf (unnötige
+  ausgehende Verbindung), sondern nur per Admin-Klick (`POST /dashboard/monitoring/
+  check-api`) - ein einzelner `GET /v1/models`-Abruf (laut Anthropic-Dokumentation ohne
+  Token-Kosten), kein Chat-Aufruf.
+- **Ollama**: **ehrlich als "nicht Teil dieser Installation" ausgewiesen**, kein
+  vorgetäuschter Verbindungsstatus - `settings.llm_provider` unterstützt aktuell
+  ausschließlich "anthropic" (weiterhin offene Entscheidung, siehe ARCHITECTURE.md §10).
+
+### Support-Log-Viewer
+
+`app/logs/service.py` (`LogAccessService`): Vorschau (letzte 50 Zeilen, per HTMX
+nachgeladen) + vollständiger Download der AKTIVEN Log-Datei (`settings.log_file_path`,
+bereits rotierte ältere Generationen bewusst nicht Teil dieser ersten Umsetzung). Jede
+Ausgabe läuft zusätzlich durch denselben `Pseudonymizer`, der auch reale Mandanteninhalte
+vor einem Claude-API-Aufruf schützt (app/privacy/) - eine zusätzliche Verteidigungslinie
+(defense in depth), kein Ersatz für die bestehende Entwickler-Disziplin "keine
+Mandanteninhalte in Logs" (Prompt 32).
+
+### Backup & Restore
+
+Export existierte bereits (Prompt 35, `BackupService`) - neu: `settings.json` im Archiv
+(`SettingsOut.from_settings`, jetzt die EINZIGE Konstruktionsstelle dieser Allowlist, auch
+vom `/api/settings`-Endpunkt genutzt) mit den nicht-geheimen Konfigurationswerten zum
+Zeitpunkt des Backups - bewusst OHNE jedes Secret (API-Schlüssel, Mail-Passwort): ein
+Backup-Archiv kann in andere Hände geraten, ein darin enthaltener gültiger API-Schlüssel
+wäre ein eigenständiges Risiko.
+
+**Wichtige Architekturentscheidung zur Wiederherstellung:** bewusst AUSSCHLIESSLICH über ein
+Offline-CLI-Kommando (`kanzlei_ai.exe restore --archive <pfad>`, `app/backup/
+restore_service.py`, `scripts/restore_backup.py`), NICHT über einen Button im laufenden
+Dashboard. Ein Restore-Klick im laufenden Webserver würde die SQLite-Datei überschreiben,
+während derselbe Prozess noch offene Datenbankverbindungen auf die alte Datei hält -
+identisches Muster zu `run.py migrate`/`create-admin`. Sicherheitsnetz: vor dem
+Überschreiben wird die aktuelle Datenbankdatei automatisch mit Zeitstempel-Suffix
+gesichert. Fragt interaktiv nach Bestätigung ("JA" eintippen), außer `--yes` wird für
+dokumentierte, nicht-interaktive Abläufe übergeben.
+
+### App-Sperre (PIN-Lock)
+
+Bedrohungsmodell (bewusst klein gehalten, siehe app/auth/pin_lock.py): eine fremde Person
+tritt kurz an einen unbeaufsichtigten, noch angemeldeten Arbeitsplatz - NICHT ein
+entschlossener Angreifer. Die PIN (`User.pin_hash`, 4-8 Ziffern, eigener - schwächerer -
+Argon2-Hash, komplett getrennt von `password_hash`) ist ein zusätzliches Gate INNERHALB
+einer bereits authentifizierten Session, kein Ersatz für das Passwort.
+
+- **Serverseitig durchgesetzt** über `User.is_locked` (neues Feld) + `require_login`/
+  `require_role` (app/auth/permissions.py) - identisches Muster zu `must_change_password`:
+  jeder Dashboard-Zugriff (außer `/dashboard/unlock`/`/dashboard/logout`/
+  `/dashboard/lock-now`) wird umgeleitet, solange `is_locked=True`. Bewusst am NUTZER, nicht
+  an der einzelnen Session hängend - "sperren" blockiert alle offenen Tabs/Geräte dieses
+  Nutzers gleichzeitig (passend zum Bedrohungsmodell).
+- **Ohne eingerichtete PIN ist die Funktion komplett inaktiv** (kein Sperren-Button, kein
+  Inaktivitäts-Timer) - sonst gäbe es keinen Weg, sich wieder zu entsperren.
+- **Clientseitiger Inaktivitäts-Timer** (`app/web/templates/base.html`, reines Vanilla-JS)
+  lädt einmalig `GET /dashboard/lock-config` (eigenständiger JSON-Endpunkt, liefert u. a.
+  das CSRF-Token) - bewusst NICHT über den Jinja-Kontext jeder einzelnen Seite injiziert,
+  da nicht jeder Router `csrf_token` in seinen Kontext aufnimmt (z. B. die
+  Platzhalterseiten) - identisches Muster zu den bereits bestehenden HTMX-Badges
+  (budget-badge/update-badge).
+- **Regressionsfund während der Umsetzung:** das neue, auf jeder angemeldeten Seite
+  eingebettete Skript enthält zwangsläufig das Wortfragment "csrf_token" (im JS selbst) -
+  zwei bestehende Tests (`tests/test_auth_web.py`) nutzten bislang eine naive
+  Substring-Prüfung `"csrf_token" in html`, um zu erkennen, ob eine Seite ÜBERHAUPT ein
+  echtes CSRF-Formularfeld für eine bestimmte Aktion zeigt - das ist seit diesem Schritt
+  nicht mehr zuverlässig. Behoben durch den tatsächlichen Regex-Treffer
+  (`_CSRF_RE.search(...)`) als Bedingung statt der Substring-Suche.
+
+### Prompt-Bibliothek ("Vorlagen & Muster" -> "Standard-Prompts")
+
+Bewusst NUR "Standard-Prompts" ausgebaut (nicht "Kanzlei-Mustertexte"/"Kanzlei-Wissen",
+weiterhin Platzhalter) - der Auftrag beschrieb konkret "sinnvolle System-Prompts +
+editierbare Kanzlei-Prompts mit Platzhalter-Variablen", das entspricht exakt diesem einen
+Menüpunkt.
+
+- **System-Prompts sind read-only UND werden NICHT in der Datenbank gespeichert**
+  (`app/prompt_library/system_prompts.py`) - direkter Import der drei tatsächlich
+  verwendeten Konstanten (`SYSTEM_RULES` aus Prompt 16, `WRITING_SYSTEM_PROMPT`,
+  `REVIEW_SYSTEM_PROMPT`). Eine in der DB gespeicherte Kopie könnte veralten, sobald ein
+  Entwickler den Wortlaut im Code ändert - der direkte Import garantiert, dass die Seite
+  IMMER exakt das zeigt, was tatsächlich an Claude gesendet wird (per Test abgesichert:
+  ein charakteristischer Ausschnitt des echten Prompts muss wortwörtlich erscheinen).
+- **Kanzlei-Prompts** (`PromptTemplate`-Modell, Migration `schritt3_003`): editierbare
+  Textbausteine mit Platzhaltern wie `{Mandant}`, `{Frist}`, `{Dokumententext}`
+  (`app/prompt_library/rendering.py`: reine Textverarbeitung, kein Claude-Bezug). Anlegen/
+  Ändern/Löschen auf Admin/Anwalt beschränkt (Mitarbeiter kuratiert keine KI-Textbausteine,
+  analog zur bestehenden Rechte-Matrix); Lesen/Vorschau-Rendern für alle drei Rollen.
+- **Bewusst NICHT an die Drafting-Pipeline angebunden** - eine solche Anbindung wäre ein
+  separater, sicherheitsrelevanter Schritt (Prompt-Injection-Härtung wie bei
+  `WRITING_SYSTEM_PROMPT`), hier ausdrücklich nicht vorgenommen. Diese Vorlagen sind eine
+  reine, kopierbare Referenzbibliothek.
+- **Unvollständig ausgefüllte Vorschau bleibt sichtbar unvollständig:** ein beim Rendern
+  leer gelassenes Platzhalterfeld wird NICHT durch einen leeren String ersetzt - der
+  Platzhalter (z. B. `{Frist}`) bleibt sichtbar im Vorschautext stehen, statt eine
+  unvollständige Vorlage unbemerkt als scheinbar fertigen Text erscheinen zu lassen
+  (CLAUDE.md: "Unsicherheit explizit markieren, nicht verschweigen").
+
+### Getestet
+
+`tests/test_system_health_service.py` (7), `tests/test_web_system_health.py` (7),
+`tests/test_logs_service.py` (5), `tests/test_restore_service.py` (6),
+`tests/test_restore_backup_cli.py` (4), `tests/test_pin_lock_service.py` (11),
+`tests/test_web_pin_lock.py` (8), `tests/test_prompt_library_rendering.py` (7),
+`tests/test_prompt_library_service.py` (5), `tests/test_web_prompt_library.py` (10), plus
+Anpassungen an `tests/test_web_placeholder.py` (Standard-Prompts kein Platzhalter mehr) und
+`tests/test_auth_web.py` (CSRF-Erkennungs-Regression, siehe oben). Gesamte Suite: 938
+bestanden, 1 Skip, unverändert 4 Umgebungslimitierungen der Sandbox (Tesseract/
+Symlink-Rechte).
+
+### Offene Punkte
+
+1. Log-Rotation-Generationen (`*.log.1` usw.) sind nicht Teil des Viewers/Downloads.
+2. Restore unterstützt weiterhin nur SQLite (konsistent mit der übrigen Backup-Architektur).
+3. Die Prompt-Bibliothek ist eine reine Referenz - keine Anbindung an die tatsächliche
+   Entwurfserstellung.

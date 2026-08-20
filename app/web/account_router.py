@@ -24,12 +24,15 @@ dieser Schutz ließe sich hier deaktivieren.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Depends, Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
 
-from app.auth.permissions import require_login
+from app.auth.permissions import require_login, require_role
+from app.auth.pin_lock import PinLockService, PinValidationError
 from app.config import get_settings
+from app.db.session import get_db
 from app.models import User
 from app.web.template_paths import TEMPLATES_DIR
 
@@ -56,14 +59,47 @@ def account_overview(
 
 @router.get("/me", response_class=HTMLResponse)
 def account_me(
-    request: Request, current_user: User = Depends(require_login)
+    request: Request, error: str | None = None, current_user: User = Depends(require_login)
 ) -> HTMLResponse:
     context = {
         "request": request,
         "current_user": current_user,
         "active_nav": "Mein Konto & Abmelden",
+        "error": error,
+        "csrf_token": getattr(request.state, "csrf_token", ""),
     }
     return templates.TemplateResponse(request, "account_me.html", context)
+
+
+@router.post("/me/set-pin")
+def set_pin(
+    new_pin: str = Form(...),
+    new_pin_confirm: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role()),
+) -> RedirectResponse:
+    """Richtet die PIN-Sperre ein/ändert sie (Schritt 3) - siehe
+    app/auth/pin_lock.py für das Bedrohungsmodell (schwächeres,
+    zusätzliches Geheimnis für "kurz weg vom Schreibtisch", kein Ersatz
+    für das Passwort)."""
+    if new_pin != new_pin_confirm:
+        return RedirectResponse(
+            url="/dashboard/account/me?error=PINs stimmen nicht überein", status_code=303
+        )
+    try:
+        PinLockService().set_pin(db, current_user, new_pin)
+    except PinValidationError as exc:
+        return RedirectResponse(url=f"/dashboard/account/me?error={exc}", status_code=303)
+    return RedirectResponse(url="/dashboard/account/me", status_code=303)
+
+
+@router.post("/me/clear-pin")
+def clear_pin(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role()),
+) -> RedirectResponse:
+    PinLockService().clear_pin(db, current_user)
+    return RedirectResponse(url="/dashboard/account/me", status_code=303)
 
 
 @router.get("/privacy", response_class=HTMLResponse)

@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Standard-Prompts{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">Standard-Prompts</h1>
+    <div class="topbar__meta">Referenz der tatsächlichen System-Prompts + editierbare Kanzlei-Prompts</div>
+  </div>
+
+  <div class="draft-page">
+    {# Immer vorhandener CSRF-Wert, unabhängig von Rolle/Datenlage - siehe
+       app/web/prompt_library_router.py: die eigentlichen Formulare weiter
+       unten sind je nach Rolle/vorhandenen Vorlagen bedingt sichtbar. #}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+    {% if error %}
+      <p class="form-hint" style="color: var(--amber);">{{ error }}</p>
+    {% endif %}
+
+    <div class="instructions-panel">
+      <h2 class="panel-title">System-Prompts (read-only)</h2>
+      <p class="form-hint">
+        Genau die Texte, die die Anwendung tatsächlich an Claude sendet - zur Transparenz, nicht
+        über das Dashboard veränderbar (sicherheitsrelevant, siehe jeweiliger Quellcode).
+      </p>
+      {% for ref in system_prompts %}
+        <details style="margin-top: 10px;">
+          <summary><strong>{{ ref.name }}</strong> - {{ ref.description }}</summary>
+          <pre class="mono" style="max-height: 260px; overflow: auto; font-size: 12px; background: var(--paper-000); border: 1px solid var(--paper-line); padding: 10px; border-radius: 6px; white-space: pre-wrap;">{{ ref.content }}</pre>
+        </details>
+      {% endfor %}
+    </div>
+
+    {% if is_curator %}
+      <div class="instructions-panel">
+        <h2 class="panel-title">Neuen Kanzlei-Prompt anlegen</h2>
+        <p class="form-hint">
+          Platzhalter im Text wie <code>{Mandant}</code>, <code>{Frist}</code> oder
+          <code>{Dokumententext}</code> werden beim Verwenden abgefragt und ersetzt.
+        </p>
+        <form method="post" action="/dashboard/library/prompts" class="dashboard-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <label class="form-label">
+            Name
+            <input type="text" name="name" required />
+          </label>
+          <label class="form-label">
+            Beschreibung (optional)
+            <input type="text" name="description" />
+          </label>
+          <label class="form-label">
+            Text
+            <textarea name="content" rows="6" required placeholder="Sehr geehrte/r {Mandant}, ..."></textarea>
+          </label>
+          <button type="submit" class="btn btn--primary">Anlegen</button>
+        </form>
+      </div>
+    {% endif %}
+
+    <div class="instructions-panel">
+      <h2 class="panel-title">Kanzlei-Prompts</h2>
+      {% if templates_with_variables %}
+        {% for template, variables in templates_with_variables %}
+          <div class="instructions-panel" style="margin-top: 10px; background: var(--paper-000);">
+            <h3 class="panel-title" style="font-size: 15px;">{{ template.name }} <span class="form-hint">(v{{ template.version }})</span></h3>
+            {% if template.description %}<p class="form-hint">{{ template.description }}</p>{% endif %}
+            <pre class="mono" style="font-size: 12px; white-space: pre-wrap;">{{ template.content }}</pre>
+
+            <form hx-post="/dashboard/library/prompts/{{ template.id }}/render" hx-target="#render-result-{{ template.id }}" hx-swap="innerHTML">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+              {% for var in variables %}
+                <label class="form-label">
+                  {{ var }}
+                  <input type="text" name="{{ var }}" />
+                </label>
+              {% endfor %}
+              <button type="submit" class="btn">Vorschau mit Platzhaltern</button>
+            </form>
+            <div id="render-result-{{ template.id }}"></div>
+
+            {% if is_curator %}
+              <a href="/dashboard/library/prompts/{{ template.id }}/edit" class="btn">Bearbeiten</a>
+              <form method="post" action="/dashboard/library/prompts/{{ template.id }}/delete" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <button type="submit" class="btn btn--danger">Löschen</button>
+              </form>
+            {% endif %}
+          </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state">Noch keine Kanzlei-Prompts angelegt.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,8 @@
+{# Ergebnis des admin-ausgelösten Claude-API-Erreichbarkeitschecks (Schritt 3). #}
+{% if not result.checked %}
+  <span class="tag tag--unmatched">nicht geprüft: {{ result.error }}</span>
+{% elif result.reachable %}
+  <span class="tag tag--matched">erreichbar ({{ result.latency_ms }} ms)</span>
+{% else %}
+  <span class="tag tag--unmatched">nicht erreichbar: {{ result.error }}</span>
+{% endif %}

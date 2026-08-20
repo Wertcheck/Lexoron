@@ -111,6 +111,14 @@ class ForcePasswordChangeError(Exception):
     eine andere Seite als die Passwort-Ändern-Seite selbst aufruft."""
 
 
+class AppLockedError(Exception):
+    """Wird ausgelöst, wenn ein Nutzer mit `is_locked=True` (Schritt 3,
+    PIN-Lock - siehe app/auth/pin_lock.py) eine andere Seite als die
+    Entsperr-Seite selbst aufruft. Von einem Exception-Handler (app/main.py)
+    zu einem Redirect auf /dashboard/unlock übersetzt - identisches Muster
+    zu `ForcePasswordChangeError`."""
+
+
 class PermissionDeniedError(HTTPException):
     def __init__(self, detail: str = "Keine Berechtigung für diese Aktion") -> None:
         super().__init__(status_code=403, detail=detail)
@@ -125,6 +133,16 @@ class CSRFError(HTTPException):
 # müssen (sonst könnte sich der Nutzer nie ein neues Passwort setzen).
 _PASSWORD_CHANGE_EXEMPT_PATHS = frozenset(
     {"/dashboard/change-password", "/dashboard/logout"}
+)
+
+# Analog fuer die PIN-Sperre (Schritt 3): muessen auch mit `is_locked=True`
+# erreichbar bleiben, sonst gaebe es keinen Weg, sich zu entsperren.
+# "/dashboard/lock-now" ist zusaetzlich enthalten, damit ein (theoretisch
+# doppelter, z. B. durch den Inaktivitaets-Timer in einem zweiten Tab
+# ausgeloester) erneuter Sperr-Aufruf idempotent bleibt statt einen Fehler
+# zu werfen.
+_LOCK_EXEMPT_PATHS = frozenset(
+    {"/dashboard/unlock", "/dashboard/logout", "/dashboard/lock-now"}
 )
 
 
@@ -184,6 +202,8 @@ def require_login(
         raise NotAuthenticatedError(next_path=str(request.url.path))
     if user.must_change_password and request.url.path not in _PASSWORD_CHANGE_EXEMPT_PATHS:
         raise ForcePasswordChangeError()
+    if user.is_locked and request.url.path not in _LOCK_EXEMPT_PATHS:
+        raise AppLockedError()
     return user
 
 
@@ -232,6 +252,8 @@ def require_role(*allowed_roles: str, permission: str | None = None):
             raise NotAuthenticatedError(next_path=str(request.url.path))
         if user.must_change_password:
             raise ForcePasswordChangeError()
+        if user.is_locked and request.url.path not in _LOCK_EXEMPT_PATHS:
+            raise AppLockedError()
         verify_csrf_token(request, csrf_token)
 
         if permission is not None and not has_permission(user, permission):

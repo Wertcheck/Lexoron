@@ -196,6 +196,44 @@ class SettingsOut(BaseModel):
     # (koennen interne Pfad-/Netzwerkdetails preisgeben, ohne Mehrwert fuer
     # das Dashboard).
 
+    @classmethod
+    def from_settings(cls, settings: "Settings") -> "SettingsOut":  # noqa: F821
+        """Einzige Konstruktionsstelle dieser Allowlist - genutzt vom
+        Settings-API-Endpunkt (app/api/routers/settings.py) UND vom
+        Backup-Snapshot (app/backup/service.py, Schritt 3), damit beide
+        garantiert dieselben (sekretfreien) Felder liefern."""
+        db_url = settings.database_url
+        if db_url.startswith("sqlite"):
+            database_url_kind = "sqlite"
+        elif db_url.startswith("postgresql"):
+            database_url_kind = "postgresql"
+        else:
+            database_url_kind = "other"
+
+        return cls(
+            app_env=settings.app_env,
+            database_url_kind=database_url_kind,
+            mail_provider=settings.mail_provider,
+            mail_host=settings.mail_host,
+            mail_mailbox=settings.mail_mailbox,
+            mail_use_ssl=settings.mail_use_ssl,
+            classification_low_confidence_threshold=(
+                settings.classification_low_confidence_threshold
+            ),
+            matching_auto_assign_threshold=settings.matching_auto_assign_threshold,
+            matching_review_threshold=settings.matching_review_threshold,
+            research_min_score_for_sufficient=settings.research_min_score_for_sufficient,
+            embedding_model_name=settings.embedding_model_name,
+            ocr_enabled=settings.ocr_enabled,
+            ocr_engine=settings.ocr_engine,
+            ocr_languages=settings.ocr_languages,
+            llm_provider=settings.llm_provider,
+            claude_model_name=settings.claude_model_name,
+            claude_max_tokens=settings.claude_max_tokens,
+            require_human_approval_before_send=settings.require_human_approval_before_send,
+            retention_days=settings.retention_days,
+        )
+
 
 # --- Audit ---
 

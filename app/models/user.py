@@ -49,5 +49,21 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     sessions_invalidated_after: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # PIN-Sperre / App-Lock (Schritt 3, Teil 2): eigener, KURZER Argon2-Hash
+    # (app/auth/pin_lock.py) - bewusst GETRENNT von `password_hash`, da eine
+    # PIN ein schwächeres, rein für "kurz weg vom Schreibtisch" gedachtes
+    # Geheimnis ist, kein Ersatz für das eigentliche Passwort. `None` = keine
+    # PIN eingerichtet - die Sperrfunktion ist dann inaktiv (siehe
+    # app/web/lock_router.py: ohne PIN gäbe es keinen Weg, sich wieder zu
+    # entsperren).
+    pin_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Wird durch manuelle Sperre ODER den clientseitigen Inaktivitäts-Timer
+    # gesetzt; `require_login` (app/auth/permissions.py) blockiert JEDEN
+    # Dashboard-Zugriff (außer der Entsperr-Seite selbst), solange dieser
+    # Wert True ist - bewusst am Nutzer, nicht an der einzelnen Session
+    # hängend, damit "sperren" wirklich alle offenen Tabs/Geräte dieses
+    # Nutzers gleichzeitig sperrt (Bedrohungsmodell: fremde Person am
+    # Schreibtisch, nicht Multi-Device-Isolation).
+    is_locked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     role: Mapped["Role | None"] = relationship(back_populates="users")

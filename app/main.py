@@ -29,7 +29,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api import api_router
-from app.auth.permissions import ForcePasswordChangeError, NotAuthenticatedError
+from app.auth.permissions import AppLockedError, ForcePasswordChangeError, NotAuthenticatedError
 from app.config import get_settings
 from app.observability import configure_logging
 from app.updater.checker import UpdateCheckResult, check_for_update
@@ -38,6 +38,8 @@ from app.web.auth_router import router as auth_web_router
 from app.web.backup_router import router as backup_web_router
 from app.web.drafts_router import router as drafts_web_router
 from app.web.feedback_router import router as feedback_web_router
+from app.web.lock_router import router as lock_web_router
+from app.web.prompt_library_router import router as prompt_library_web_router
 from app.web.quality_router import router as quality_web_router
 from app.web.template_paths import STATIC_DIR
 from app.web.errors_router import router as errors_web_router
@@ -114,6 +116,11 @@ def handle_force_password_change(
     return RedirectResponse(url="/dashboard/change-password", status_code=303)
 
 
+@app.exception_handler(AppLockedError)
+def handle_app_locked(request: Request, exc: AppLockedError) -> RedirectResponse:
+    return RedirectResponse(url="/dashboard/unlock", status_code=303)
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     """Einfacher Smoke-Test-Endpunkt: bestaetigt nur, dass die App laeuft.
@@ -134,6 +141,8 @@ app.include_router(backup_web_router)
 app.include_router(quality_web_router)
 app.include_router(account_web_router)
 app.include_router(feedback_web_router)
+app.include_router(lock_web_router)
+app.include_router(prompt_library_web_router)
 app.include_router(placeholder_web_router)
 app.mount(
     "/dashboard/static",

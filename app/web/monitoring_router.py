@@ -14,16 +14,19 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth.permissions import PermissionDeniedError, require_login
+from app.auth.permissions import PermissionDeniedError, require_login, require_role
 from app.config import get_settings
 from app.cost_control import CostControlService
 from app.db.session import get_db
+from app.logs import LogAccessService
 from app.models import AuditEvent, ProcessingError, User
+from app.setup.paths import resolve_data_dir
+from app.system_health import SystemHealthService
 from app.web.template_paths import TEMPLATES_DIR
 
 router = APIRouter(prefix="/dashboard/monitoring", tags=["dashboard-monitoring"])
@@ -34,6 +37,20 @@ def _require_admin(current_user: User = Depends(require_login)) -> User:
     if current_user.role is None or current_user.role.name.strip().lower() != "admin":
         raise PermissionDeniedError("Nur Administratoren können den Systemstatus einsehen")
     return current_user
+
+
+def _disk_check_path(database_url: str):  # -> Path
+    """Prüft den Speicherplatz dort, wo die Anwendung tatsächlich Daten
+    ablegt: bei SQLite das Verzeichnis der Datenbankdatei (i. d. R.
+    dieselbe Partition wie die Dokumentenspeicher), sonst als sinnvoller
+    Fallback das per Prompt 36/37 aufgelöste Datenverzeichnis
+    (%PROGRAMDATA%\\KanzleiAI)."""
+    from pathlib import Path
+
+    if database_url.startswith("sqlite:///"):
+        db_path = Path(database_url.removeprefix("sqlite:///")).resolve()
+        return db_path.parent if str(db_path.parent) not in ("", ".") else Path.cwd()
+    return resolve_data_dir()
 
 
 @router.get("/budget-badge", response_class=HTMLResponse)
@@ -65,6 +82,52 @@ def update_badge(request: Request, current_user: User = Depends(require_login)) 
     return templates.TemplateResponse(request, "partials/update_badge.html", context)
 
 
+@router.post("/check-api", response_class=HTMLResponse)
+def check_api_reachability(
+    request: Request,
+    current_user: User = Depends(require_role("admin")),
+) -> HTMLResponse:
+    """Löst GENAU EINEN, ausschließlich per Admin-Klick ausgelösten
+    Erreichbarkeitscheck aus (siehe SystemHealthService-Docstring für die
+    Begründung, warum das nicht automatisch bei jedem Seitenaufruf
+    passiert)."""
+    settings = get_settings()
+    api_key = (
+        settings.anthropic_api_key.get_secret_value()
+        if settings.anthropic_api_key is not None
+        else None
+    )
+    result = SystemHealthService().check_claude_api_reachability(api_key)
+    context = {"request": request, "result": result}
+    return templates.TemplateResponse(request, "partials/api_reachability_result.html", context)
+
+
+@router.get("/logs-preview", response_class=HTMLResponse)
+def logs_preview(request: Request, current_user: User = Depends(_require_admin)) -> HTMLResponse:
+    settings = get_settings()
+    lines = LogAccessService().read_tail(settings.log_file_path, max_lines=50)
+    context = {
+        "request": request,
+        "lines": lines,
+        "log_file_configured": settings.log_file_path is not None,
+    }
+    return templates.TemplateResponse(request, "partials/logs_preview.html", context)
+
+
+@router.get("/logs/download")
+def download_logs(current_user: User = Depends(_require_admin)) -> PlainTextResponse:
+    settings = get_settings()
+    content = LogAccessService().anonymized_download_content(settings.log_file_path)
+    if content is None:
+        content = "Keine Log-Datei konfiguriert oder Datei noch nicht vorhanden.\n"
+    return PlainTextResponse(
+        content,
+        headers={
+            "Content-Disposition": 'attachment; filename="kanzlei_ai_log_anonymisiert.txt"'
+        },
+    )
+
+
 @router.get("", response_class=HTMLResponse)
 def monitoring_page(
     request: Request,
@@ -72,6 +135,9 @@ def monitoring_page(
     current_user: User = Depends(_require_admin),
 ) -> HTMLResponse:
     settings = get_settings()
+    health_service = SystemHealthService()
+    disk_status = health_service.check_disk_space(_disk_check_path(settings.database_url))
+    database_status = health_service.check_database_status(db, settings.database_url)
 
     pending_count = (
         db.query(func.count(ProcessingError.id))
@@ -121,5 +187,9 @@ def monitoring_page(
         "total_spend_usd": total_spend,
         "monthly_budget_usd": monthly_budget,
         "budget_percent_used": budget_percent_used,
+        "disk_status": disk_status,
+        "database_status": database_status,
+        "log_file_configured": settings.log_file_path is not None,
+        "csrf_token": getattr(request.state, "csrf_token", ""),
     }
     return templates.TemplateResponse(request, "monitoring.html", context)

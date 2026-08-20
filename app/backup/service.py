@@ -8,6 +8,16 @@ Erzeugt EIN ZIP-Archiv mit:
    Connection.backup()` garantiert einen konsistenten Snapshot).
 2. Dem kompletten Inhalt der beiden Dokumentenspeicher-Verzeichnisse
    (`intake_storage_dir`, `mail_attachment_storage_dir`).
+3. Einem NICHT-geheimen Einstellungs-Schnappschuss (`settings.json`,
+   Schritt 3) - dieselbe Allowlist wie der `/api/settings`-Endpunkt
+   (`SettingsOut.from_settings`, app/api/schemas.py). Bewusst OHNE die
+   `.env`-Datei selbst und OHNE jedes Secret (`mail_password`,
+   `anthropic_api_key`, `session_secret_key`) - ein Backup-Archiv kann in
+   andere Hände geraten (Versand, externer Speicherort) und ein darin
+   enthaltener gültiger API-Schlüssel wäre ein eigenständiges,
+   kategorisch anderes Risiko als die (ohnehin bereits als
+   schützenswert behandelten) Mandantendaten selbst - siehe
+   app/api/routers/settings.py.
 
 WICHTIG: Dies ist eine VOLLSTÄNDIGE Rohdatensicherung - sie enthält ALLE
 Mandanteninhalte im Klartext (die Datenbank selbst enthält unpseudonymisierte
@@ -74,19 +84,31 @@ class BackupService:
             self._add_database_snapshot(archive, db_path)
             self._add_directory(archive, self.intake_storage_dir, "intake")
             self._add_directory(archive, self.mail_attachment_storage_dir, "mail_attachments")
+            self._add_settings_snapshot(archive)
             archive.writestr(
                 "BACKUP_INFO.txt",
                 (
                     f"Kanzlei-AI Backup, erstellt {timestamp} UTC\n"
                     "Enthaelt: Datenbank-Snapshot (database.db), "
-                    "intake/, mail_attachments/\n"
+                    "intake/, mail_attachments/, settings.json\n"
                     "WICHTIG: Enthaelt vollstaendige, unpseudonymisierte "
                     "Mandanteninhalte - wie die Produktionsdatenbank selbst "
-                    "zu behandeln (verschluesselt aufbewahren).\n"
+                    "zu behandeln (verschluesselt aufbewahren). settings.json "
+                    "enthaelt bewusst KEINE Secrets (kein API-Schluessel, kein "
+                    "Mail-Passwort) - diese muessen bei einer Wiederherstellung "
+                    "separat/manuell in der .env gesetzt werden, siehe "
+                    "scripts/restore_backup.py.\n"
                 ),
             )
 
         return archive_path
+
+    def _add_settings_snapshot(self, archive: zipfile.ZipFile) -> None:
+        from app.api.schemas import SettingsOut
+        from app.config import get_settings
+
+        snapshot = SettingsOut.from_settings(get_settings())
+        archive.writestr("settings.json", snapshot.model_dump_json(indent=2))
 
     def _add_database_snapshot(self, archive: zipfile.ZipFile, db_path: Path) -> None:
         """Nutzt `sqlite3`s eingebaute Backup-API statt eines rohen

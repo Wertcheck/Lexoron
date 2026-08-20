@@ -59,6 +59,9 @@ a = Analysis(  # noqa: F821 (von PyInstaller zur Laufzeit des Specs injiziert)
         # cmd_create_admin) - PyInstallers statische Analyse verfolgt
         # verschachtelte/späte Imports nicht immer zuverlässig.
         "scripts.create_admin",
+        # Wiederherstellungs-CLI (Schritt 3) - wie "scripts.create_admin"
+        # nur zur Laufzeit ueber run.py cmd_restore lazy importiert.
+        "scripts.restore_backup",
         "migrations.env",
         # SQLAlchemy laedt Dialekte z. T. dynamisch nach.
         "sqlalchemy.dialects.sqlite",

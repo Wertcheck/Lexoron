@@ -74,6 +74,31 @@ def test_main_dispatches_create_admin(tmp_path, monkeypatch) -> None:
     assert calls == ["create-admin"]
 
 
+def test_main_dispatches_restore_with_archive_and_yes_flag(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("KANZLEI_AI_DATA_DIR", str(tmp_path))
+    calls: list[tuple[str, bool]] = []
+    monkeypatch.setattr(
+        run, "cmd_restore", lambda *, archive, yes: (calls.append((archive, yes)), 0)[1]
+    )
+
+    exit_code = run.main(["restore", "--archive", "backup.zip", "--yes"])
+
+    assert exit_code == 0
+    assert calls == [("backup.zip", True)]
+
+
+def test_main_dispatches_restore_without_yes_flag(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("KANZLEI_AI_DATA_DIR", str(tmp_path))
+    calls: list[tuple[str, bool]] = []
+    monkeypatch.setattr(
+        run, "cmd_restore", lambda *, archive, yes: (calls.append((archive, yes)), 0)[1]
+    )
+
+    run.main(["restore", "--archive", "backup.zip"])
+
+    assert calls == [("backup.zip", False)]
+
+
 def test_main_dispatches_setup_with_force_flag(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("KANZLEI_AI_DATA_DIR", str(tmp_path))
     recorded: list[tuple[Path, bool]] = []

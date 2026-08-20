@@ -286,6 +286,22 @@ class Settings(BaseSettings):
             raise ValueError("usd_to_eur_rate muss positiv sein")
         return value
 
+    # --- App-Sperre / PIN-Lock (Schritt 3, Teil 2) ---
+    # Nach so vielen Minuten Inaktivität sperrt der clientseitige Timer
+    # automatisch (siehe app/web/templates/base.html) - NUR wirksam für
+    # Nutzer, die überhaupt eine PIN eingerichtet haben (app/auth/
+    # pin_lock.py). Kein sicherheitskritischer Wert (die eigentliche
+    # Durchsetzung ist serverseitig über `User.is_locked`, siehe
+    # app/auth/permissions.py) - rein die Komfort-/UX-Schwelle.
+    pin_lock_inactivity_minutes: int = 10
+
+    @field_validator("pin_lock_inactivity_minutes")
+    @classmethod
+    def pin_lock_inactivity_minutes_must_be_positive(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("pin_lock_inactivity_minutes muss positiv sein")
+        return value
+
     # --- Auto-Updater (Schritt 3, 20.08.) ---
     # Stumme Hintergrund-Pruefung auf neue Versionen beim Start (siehe
     # app/updater/checker.py) - fragt AUSSCHLIESSLICH eine statische

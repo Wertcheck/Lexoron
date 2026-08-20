@@ -24,6 +24,12 @@ vier Subkommandos:
     kanzlei_ai.exe create-admin   - ruft scripts/create_admin.py auf
                                    (liest ADMIN_EMAIL/ADMIN_INITIAL_PASSWORD
                                    aus der Prozessumgebung).
+    kanzlei_ai.exe restore        - stellt Datenbank + Dokumentenspeicher aus
+                                   einem Backup-Archiv wieder her (Schritt 3,
+                                   siehe app/backup/restore_service.py). Die
+                                   Anwendung MUSS dafür gestoppt sein - bewusst
+                                   KEINE Restore-Aktion im laufenden Dashboard.
+                                   `--archive <pfad.zip>` [--yes].
 
 WICHTIG zu Prompt 46 (natives Fenster): der bestehende Web-Stack (FastAPI,
 Jinja2, HTMX, app/main.py, app/web/*) wird NICHT verändert - der Server
@@ -115,6 +121,15 @@ def cmd_create_admin() -> int:
     from scripts.create_admin import main as create_admin_main
 
     return create_admin_main()
+
+
+def cmd_restore(*, archive: str, yes: bool) -> int:
+    from scripts.restore_backup import main as restore_backup_main
+
+    argv = ["--archive", archive]
+    if yes:
+        argv.append("--yes")
+    return restore_backup_main(argv)
 
 
 def _http_check(url: str) -> bool:
@@ -378,6 +393,15 @@ def main(argv: list[str] | None = None) -> int:
         "create-admin",
         help="Legt den initialen Admin-Nutzer an (liest ADMIN_EMAIL/ADMIN_INITIAL_PASSWORD)",
     )
+    restore_parser = subparsers.add_parser(
+        "restore",
+        help="Stellt Datenbank + Dokumentenspeicher aus einem Backup-Archiv wieder her "
+        "(Anwendung muss dafür gestoppt sein)",
+    )
+    restore_parser.add_argument("--archive", required=True, help="Pfad zum Backup-ZIP")
+    restore_parser.add_argument(
+        "--yes", action="store_true", help="Bestätigung überspringen"
+    )
 
     args = parser.parse_args(argv)
     command = args.command or "serve"
@@ -394,6 +418,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_migrate()
     if command == "create-admin":
         return cmd_create_admin()
+    if command == "restore":
+        return cmd_restore(archive=args.archive, yes=args.yes)
 
     # command == "serve" (auch der implizite Default ohne jedes Argument -
     # dort hat argparse die "serve"-Subparser-Attribute nie befüllt, daher

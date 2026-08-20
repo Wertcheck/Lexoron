@@ -294,7 +294,14 @@ def test_mitarbeiter_cannot_mark_sent(
 
     _login(client, "mitarbeiter@kanzlei.test")
     outbox_page = client.get("/dashboard/outbox")
-    csrf = _extract_csrf(outbox_page.text) if "csrf_token" in outbox_page.text else None
+    # Bewusst der echte Regex-Treffer als Bedingung, NICHT eine naive
+    # Substring-Suche nach "csrf_token" - seit Schritt 3 (PIN-Lock,
+    # base.html) enthält JEDE angemeldete Seite dieses Wort bereits im
+    # eingebetteten Inaktivitäts-Skript, unabhängig davon, ob die
+    # jeweilige Seite selbst ein echtes CSRF-Formularfeld für DIESE Aktion
+    # rendert.
+    csrf_match = _CSRF_RE.search(outbox_page.text)
+    csrf = csrf_match.group(1) if csrf_match else None
     # Mitarbeiter sieht in der Ansicht gar kein CSRF-Feld fuer diese
     # Aktion (Button ausgeblendet), daher direkt mit leerem Platzhalter -
     # der servereitige Check muss trotzdem (unabhängig vom UI) greifen.
@@ -409,7 +416,10 @@ def test_mitarbeiter_cannot_create_user(client: TestClient, users: dict) -> None
     # Selbst mit irgendeinem CSRF-Token - die Rollenprüfung greift zuerst
     # bzw. unabhängig davon, der eigentliche Test ist die Rollensperre.
     detail = client.get("/dashboard/inbox")
-    csrf = _extract_csrf(detail.text) if "csrf_token" in detail.text else "x"
+    # Siehe Kommentar bei test_mitarbeiter_cannot_mark_sent: echter
+    # Regex-Treffer statt naiver Substring-Suche.
+    csrf_match = _CSRF_RE.search(detail.text)
+    csrf = csrf_match.group(1) if csrf_match else "x"
     response = client.post(
         "/dashboard/admin/users",
         data={"email": "hack@kanzlei.test", "role_name": "Admin", "csrf_token": csrf},
