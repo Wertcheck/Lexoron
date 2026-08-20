@@ -72,7 +72,7 @@ class RestoreService:
         if "database.db" not in names:
             raise RestoreError(
                 "Archiv enthält keine 'database.db' - kein gültiges "
-                "Kanzlei-AI-Backup (siehe app/backup/service.py)."
+                "Lexono-Backup (siehe app/backup/service.py)."
             )
 
     def restore_from_backup(self, archive_path: str | Path, *, confirm: bool) -> RestoreResult:

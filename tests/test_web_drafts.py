@@ -121,7 +121,10 @@ def test_draft_detail_page_returns_200(client: TestClient, seeded: dict) -> None
     response = client.get(f"/dashboard/drafts/{seeded['draft_id']}")
     assert response.status_code == 200
     assert "Ursprünglicher Entwurfstext" in response.text
-    assert "Anwaltliche Anmerkungen" in response.text
+    # "Anwaltliche Anmerkungen"-Panel wurde 20.08. durch die feste
+    # Anweisungs-Leiste (instruction-bar) direkt unter dem Entwurfstext
+    # ersetzt - siehe test_draft_detail_page_shows_instruction_bar.
+    assert "Änderungsauftrag an die KI" in response.text
 
 
 def test_draft_detail_page_shows_version_one_as_only_chip(
@@ -130,6 +133,21 @@ def test_draft_detail_page_shows_version_one_as_only_chip(
     response = client.get(f"/dashboard/drafts/{seeded['draft_id']}")
     assert "v1 · draft" in response.text
     assert "v2 · draft" not in response.text
+
+
+def test_draft_detail_page_shows_instruction_bar_with_mic_button(
+    client: TestClient, seeded: dict
+) -> None:
+    """20.08.: feste Anweisungs-Leiste mit Diktier-Button (Web Speech API)
+    direkt unter dem Entwurfstext - postet weiterhin an dieselben,
+    bestehenden Endpunkte wie zuvor das Sidebar-Panel (kein Router-Umbau
+    nötig, siehe app/web/drafts_router.py)."""
+    response = client.get(f"/dashboard/drafts/{seeded['draft_id']}")
+    assert response.status_code == 200
+    assert 'id="instruction-mic-btn"' in response.text
+    assert 'id="instruction-text"' in response.text
+    assert f'/dashboard/drafts/{seeded["draft_id"]}/instructions"' in response.text
+    assert f'/dashboard/drafts/{seeded["draft_id"]}/instructions/apply"' in response.text
 
 
 def test_draft_not_found_returns_404(client: TestClient) -> None:

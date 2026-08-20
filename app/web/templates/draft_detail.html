@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "partials/_macros.html" import matter_tag %}
+{% import "_icons.html" as icons %}
 {% block title %}Entwurf v{{ draft.version }}{% endblock %}
 {% block content %}
   <div class="topbar">
@@ -11,6 +12,7 @@
       Status: <strong>{{ draft.status }}</strong>
       &middot; Akte <span class="mono">{{ draft.matter_id }}</span>
       &middot; <a href="/dashboard/drafts">zur Liste</a>
+      &middot; <a href="/dashboard/drafts/{{ draft.id }}/export.docx">Als DOCX exportieren</a>
     </div>
   </div>
 
@@ -56,6 +58,39 @@
       <div class="original-box">
         <h2 class="panel-title">Entwurf</h2>
         <div class="draft-content-box">{{ draft.content }}</div>
+
+        <div class="instruction-bar">
+          <div class="instruction-bar__header">
+            <span class="instruction-bar__title">Änderungsauftrag an die KI</span>
+            <span class="instruction-bar__hint">
+              z. B. "Mach den Ton schärfer" oder "Füge § 286 BGB hinzu"
+            </span>
+          </div>
+          <form method="post" action="/dashboard/drafts/{{ draft.id }}/instructions"
+                id="instruction-form" class="instruction-bar__form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <div class="instruction-bar__input-row">
+              <textarea name="instruction_text" id="instruction-text" rows="2" required
+                        placeholder="Änderungswunsch eingeben oder einsprechen…"></textarea>
+              <button type="button" id="instruction-mic-btn" class="instruction-bar__mic"
+                      title="Diktieren (Deutsch)" aria-label="Spracheingabe starten" aria-pressed="false">
+                {{ icons.mic(class_="icon") }}
+              </button>
+            </div>
+            <div class="instruction-actions">
+              <button type="submit" class="btn">Anmerkung speichern</button>
+              {% if can_claude_call %}
+                <button type="submit" formaction="/dashboard/drafts/{{ draft.id }}/instructions/apply"
+                        class="btn btn--primary">
+                  Änderungen übernehmen &amp; neu formulieren
+                </button>
+              {% endif %}
+            </div>
+          </form>
+          {% if not can_claude_call %}
+            <p class="form-hint">Nur Anwalt/Admin können eine Neuformulierung auslösen (KI-Aufruf).</p>
+          {% endif %}
+        </div>
 
         <details class="manual-edit-toggle">
           <summary>Entwurf manuell bearbeiten</summary>
@@ -104,7 +139,7 @@
             </form>
           {% else %}
             <p class="form-hint" style="margin-top:0;">
-              Nur Anwalt/Admin können eine Prüfung auslösen (löst einen Claude-API-Aufruf aus).
+              Nur Anwalt/Admin können eine Prüfung auslösen (löst einen KI-Aufruf aus).
             </p>
           {% endif %}
           {% if findings %}
@@ -123,36 +158,6 @@
       </div>
 
       <div class="draft-sidebar">
-        <div class="instructions-panel">
-          <h2 class="panel-title">Anwaltliche Anmerkungen / Änderungsauftrag</h2>
-          <p class="form-hint">
-            Konkrete Änderungs-/Arbeitsaufträge für die nächste Version, z. B.
-            "Auf Punkt 3 eingehen" oder "§ 286 BGB berücksichtigen".
-          </p>
-          <form method="post" action="/dashboard/drafts/{{ draft.id }}/instructions" class="dashboard-form">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <label class="form-label">
-              Anmerkung
-              <textarea name="instruction_text" rows="4" required
-                        placeholder="z. B. Schadensersatzhöhe nicht anerkennen."></textarea>
-            </label>
-            <div class="instruction-actions">
-              <button type="submit" class="btn">Anmerkung speichern</button>
-              {% if can_claude_call %}
-                <button type="submit" formaction="/dashboard/drafts/{{ draft.id }}/instructions/apply"
-                        class="btn btn--primary">
-                  Änderungen übernehmen &amp; neu formulieren
-                </button>
-              {% endif %}
-            </div>
-          </form>
-          {% if not can_claude_call %}
-            <p class="form-hint">
-              Nur Anwalt/Admin können eine Neuformulierung auslösen (Claude-API-Aufruf).
-            </p>
-          {% endif %}
-        </div>
-
         {% if instructions %}
           <div class="instructions-panel">
             <h2 class="panel-title">Anmerkungen zu dieser Version</h2>
@@ -222,4 +227,88 @@
       wird in keinem Fall automatisch etwas versendet.
     </p>
   </div>
+
+  <script>
+    // Diktierfunktion für die Anweisungs-Leiste (native Web Speech API,
+    // deutsche Spracherkennung) - bewusst reines Vanilla-JS, kein Build-
+    // Schritt (siehe base.html/settings.html für dasselbe Prinzip). Nur in
+    // Chromium-basierten Browsern (Chrome/Edge - auch das gebündelte
+    // WebView2-Fenster) verfügbar; Firefox/Safari kennen `webkitSpeech
+    // Recognition`/`SpeechRecognition` nicht - der Mikrofon-Button wird in
+    // dem Fall deaktiviert statt eine Funktion vorzutäuschen, die nicht
+    // existiert (Feature-Detection, kein Fehlerfall).
+    (function () {
+      var micButton = document.getElementById("instruction-mic-btn");
+      var textarea = document.getElementById("instruction-text");
+      var SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      if (!SpeechRecognitionImpl) {
+        micButton.disabled = true;
+        micButton.title = "Spracheingabe wird von diesem Browser nicht unterstützt (funktioniert z. B. in Chrome/Edge).";
+        return;
+      }
+
+      var recognition = new SpeechRecognitionImpl();
+      recognition.lang = "de-DE";
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      var recording = false;
+      var baseValue = "";
+      var finalTranscript = "";
+
+      function setRecording(value) {
+        recording = value;
+        micButton.classList.toggle("instruction-bar__mic--recording", recording);
+        micButton.setAttribute("aria-pressed", recording ? "true" : "false");
+      }
+
+      recognition.addEventListener("result", function (event) {
+        var interimTranscript = "";
+        for (var i = event.resultIndex; i < event.results.length; i++) {
+          var transcriptPart = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcriptPart + " ";
+          } else {
+            interimTranscript += transcriptPart;
+          }
+        }
+        textarea.value = (baseValue + finalTranscript + interimTranscript).trim();
+      });
+
+      recognition.addEventListener("end", function () {
+        // Manche Browser beenden eine "continuous"-Erkennung nach einer
+        // Stillephase von selbst - automatisch neu starten, solange der
+        // Anwalt nicht explizit per Klick gestoppt hat (`recording` wird
+        // beim manuellen Stopp SYNCHRON vor `recognition.stop()` bereits
+        // auf false gesetzt, siehe unten).
+        if (recording) {
+          try {
+            recognition.start();
+          } catch (err) {
+            setRecording(false);
+          }
+        }
+      });
+
+      recognition.addEventListener("error", function (event) {
+        if (event.error === "no-speech" || event.error === "aborted") {
+          return;
+        }
+        setRecording(false);
+      });
+
+      micButton.addEventListener("click", function () {
+        if (recording) {
+          setRecording(false);
+          recognition.stop();
+        } else {
+          baseValue = textarea.value ? textarea.value.trim() + " " : "";
+          finalTranscript = "";
+          setRecording(true);
+          recognition.start();
+        }
+      });
+    })();
+  </script>
 {% endblock %}

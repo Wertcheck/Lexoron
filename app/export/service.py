@@ -47,7 +47,7 @@ class MatterNotFoundError(Exception):
     pass
 
 
-def _json_default(value: Any) -> str:
+def json_default(value: Any) -> str:
     if isinstance(value, (datetime, date)):
         return value.isoformat()
     raise TypeError(f"Nicht serialisierbar: {type(value)}")
@@ -59,7 +59,7 @@ class MatterExportService:
         if matter is None:
             raise MatterNotFoundError(f"Akte {matter_id} nicht gefunden")
 
-        manifest = self._build_manifest(matter, db)
+        manifest = self.build_manifest(matter, db)
 
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -72,7 +72,7 @@ class MatterExportService:
         with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as archive:
             archive.writestr(
                 "manifest.json",
-                json.dumps(manifest, ensure_ascii=False, indent=2, default=_json_default),
+                json.dumps(manifest, ensure_ascii=False, indent=2, default=json_default),
             )
             for document in documents:
                 source_path = Path(document.file_path)
@@ -82,7 +82,7 @@ class MatterExportService:
             archive.writestr(
                 "EXPORT_INFO.txt",
                 (
-                    f"Kanzlei-AI Aktenexport - Akte: {matter.title}\n"
+                    f"Lexono Aktenexport - Akte: {matter.title}\n"
                     f"Erstellt: {timestamp}\n"
                     "Enthaelt vollstaendige, unpseudonymisierte Akteninhalte - "
                     "wie die Produktionsdatenbank selbst zu behandeln.\n"
@@ -91,7 +91,12 @@ class MatterExportService:
 
         return archive_path
 
-    def _build_manifest(self, matter: Matter, db: Session) -> dict[str, Any]:
+    def build_manifest(self, matter: Matter, db: Session) -> dict[str, Any]:
+        """Öffentlich (nicht mehr `_build_manifest`, 20.08.) - wird jetzt
+        zusätzlich von `ClientExportService` (app/clients/export_service.py)
+        wiederverwendet, um den Mandanten-Datenauszug pro Akte auf exakt
+        demselben, bereits für DSGVO Art. 15/20 konzipierten Format
+        aufzubauen statt einer zweiten, abweichenden Implementierung."""
         messages = db.query(Message).filter_by(matter_id=matter.id).all()
         documents = db.query(Document).filter_by(matter_id=matter.id).all()
         drafts = (

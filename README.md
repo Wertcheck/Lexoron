@@ -1,4 +1,4 @@
-# Kanzlei-AI-Pipeline (v0.1.0 – Pilot Release)
+# Lexono-Pipeline (v0.1.0 – Pilot Release)
 
 Konfigurierbare KI-gestützte Workflow-Plattform für eine Anwaltskanzlei. 
 
@@ -24,8 +24,8 @@ Konfigurierbare KI-gestützte Workflow-Plattform für eine Anwaltskanzlei.
 - ✅ **Secure Architecture:** DSGVO-compliant, audit trail, no PII in logs
 - ✅ **Windows Installer:** One-click setup + automatic configuration (Prompts 36–37)
 - ✅ **Native App Window:** Edge WebView2 window instead of a browser tab, own app icon
-  (Prompts 46–47; icon is currently a generated placeholder, see `windows/
-  generate_placeholder_icon.py` - swap `windows/app_icon.ico` for a real firm logo anytime)
+  (Prompts 46–47; icon is generated from the real Lexono mark, see `windows/
+  generate_placeholder_icon.py`)
 - ✅ **8 Dashboard Areas:** Inbox, Matters, Documents, Drafts, Legal Sources, Tasks, Settings, Admin
 - ✅ **Full Test Coverage:** 767 tests (763 passing, 4 environment-limited on this build
   machine), ~82% code coverage
@@ -49,11 +49,11 @@ See **RELEASE_NOTES.md** for full feature list and known limitations.
 ### Installation & Setup
 ```bash
 # 1. Download and run installer
-KanzleiAI_Setup.exe
+Lexono_Setup.exe
 
 # 2. First run (automatic setup wizard + native app window)
 #    Start via the Start Menu or Desktop shortcut, or:
-cd "%LocalAppData%\KanzleiAI"
+cd "%LocalAppData%\Lexono"
 kanzlei_ai.exe serve
 
 # 3. Setup wizard prompts (in the console window) for:
@@ -162,7 +162,7 @@ See **FUTURE_ROADMAP.md** for detailed planning and risk assessment.
 
 ## License
 
-**Proprietary** – Kanzlei-AI Project. Use restricted to authorized pilot participants and development team.
+**Proprietary** – Lexono Project. Use restricted to authorized pilot participants and development team.
 
 ## Contact
 

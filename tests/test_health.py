@@ -16,7 +16,7 @@ def test_health_returns_ok() -> None:
 
 
 def test_app_has_expected_title() -> None:
-    assert app.title == "Kanzlei-AI-Pipeline"
+    assert app.title == "Lexono-Pipeline"
 
 
 def test_settings_are_loaded_into_app_state_on_startup() -> None:

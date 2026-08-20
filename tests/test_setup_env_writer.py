@@ -1,8 +1,14 @@
-"""Tests für app/setup/env_writer.py (Prompt 37)."""
+"""Tests für app/setup/env_writer.py (Prompt 37; update_env_values ab 20.08.,
+siehe ARCHITECTURE.md - schlüsselweise .env-Aktualisierung fürs Dashboard)."""
 
 import pytest
 
-from app.setup.env_writer import build_env_content, write_env_file
+from app.setup.env_writer import (
+    build_env_content,
+    format_env_value,
+    update_env_values,
+    write_env_file,
+)
 
 
 def test_build_env_content_contains_expected_keys(tmp_path) -> None:
@@ -77,3 +83,112 @@ def test_write_env_file_overwrites_with_force(tmp_path) -> None:
     write_env_file(target, "new content", force=True)
 
     assert target.read_text(encoding="utf-8") == "new content"
+
+
+# --- format_env_value ---
+
+
+def test_format_env_value_bool() -> None:
+    assert format_env_value(True) == "true"
+    assert format_env_value(False) == "false"
+
+
+def test_format_env_value_list_is_json_array() -> None:
+    assert format_env_value(["C:/Kanzlei/Eingang", "C:/Kanzlei/Zweit"]) == (
+        '["C:/Kanzlei/Eingang", "C:/Kanzlei/Zweit"]'
+    )
+
+
+def test_format_env_value_string_is_always_quoted() -> None:
+    assert format_env_value("imap.example.com") == '"imap.example.com"'
+
+
+def test_format_env_value_escapes_quotes_and_backslashes() -> None:
+    assert format_env_value('a"b\\c') == '"a\\"b\\\\c"'
+
+
+# --- update_env_values ---
+
+
+def test_update_env_values_replaces_key_preserving_surrounding_lines(tmp_path) -> None:
+    target = tmp_path / ".env"
+    target.write_text(
+        "APP_ENV=production\n"
+        "SESSION_SECRET_KEY=do-not-touch-me\n"
+        "MAIL_HOST=old.example.com\n"
+        "PORT=8000\n",
+        encoding="utf-8",
+    )
+
+    update_env_values(target, {"MAIL_HOST": "new.example.com"})
+
+    content = target.read_text(encoding="utf-8")
+    assert 'MAIL_HOST="new.example.com"' in content
+    assert "old.example.com" not in content
+    # Unveraendert, insbesondere Reihenfolge und der Secret-Key.
+    assert "APP_ENV=production" in content
+    assert "SESSION_SECRET_KEY=do-not-touch-me" in content
+    assert "PORT=8000" in content
+    lines = content.splitlines()
+    assert lines[0] == "APP_ENV=production"
+    assert lines[1] == "SESSION_SECRET_KEY=do-not-touch-me"
+
+
+def test_update_env_values_appends_new_key_at_end(tmp_path) -> None:
+    target = tmp_path / ".env"
+    target.write_text("APP_ENV=production\n", encoding="utf-8")
+
+    update_env_values(target, {"MAIL_HOST": "imap.example.com"})
+
+    content = target.read_text(encoding="utf-8")
+    assert "APP_ENV=production" in content
+    assert 'MAIL_HOST="imap.example.com"' in content
+    assert content.index("APP_ENV") < content.index("MAIL_HOST")
+
+
+def test_update_env_values_removes_key_when_value_is_none(tmp_path) -> None:
+    target = tmp_path / ".env"
+    target.write_text("APP_ENV=production\nMAIL_PASSWORD=\"secret\"\n", encoding="utf-8")
+
+    update_env_values(target, {"MAIL_PASSWORD": None})
+
+    content = target.read_text(encoding="utf-8")
+    assert "MAIL_PASSWORD" not in content
+    assert "APP_ENV=production" in content
+
+
+def test_update_env_values_creates_file_if_missing(tmp_path) -> None:
+    target = tmp_path / "nested" / ".env"
+
+    update_env_values(target, {"RETENTION_DAYS": 30})
+
+    assert target.exists()
+    assert "RETENTION_DAYS=30" in target.read_text(encoding="utf-8")
+
+
+def test_update_env_values_writes_list_as_json_array_readable_by_settings(tmp_path) -> None:
+    """Integrationstest: das Ergebnis muss von Settings tatsaechlich als
+    Liste eingelesen werden koennen - beweist das JSON-Array-Format ist
+    korrekt, nicht nur eine Behauptung."""
+    from app.config.settings import Settings
+
+    target = tmp_path / ".env"
+    target.write_text("APP_ENV=development\n", encoding="utf-8")
+
+    update_env_values(target, {"INTAKE_WATCHED_FOLDERS": ["C:/Kanzlei/Eingang"]})
+
+    settings = Settings(_env_file=str(target))  # type: ignore[call-arg]
+    assert settings.intake_watched_folders == ["C:/Kanzlei/Eingang"]
+
+
+def test_update_env_values_does_not_touch_unrelated_keys(tmp_path) -> None:
+    target = tmp_path / ".env"
+    original = "APP_ENV=production\nHOST=127.0.0.1\nPORT=8000\n"
+    target.write_text(original, encoding="utf-8")
+
+    update_env_values(target, {"RETENTION_DAYS": 90})
+
+    content = target.read_text(encoding="utf-8")
+    assert "APP_ENV=production" in content
+    assert "HOST=127.0.0.1" in content
+    assert "PORT=8000" in content

@@ -17,9 +17,9 @@ dass alles Notwendige vorbereitet ist.
 
 ## B. Installation & Setup (Tag -1 bis -0.5)
 
-- [ ] KanzleiAI_Setup.exe herunterladen (von Prompt 36; %LocalAppData%-Installation Schritt 3)
+- [ ] Lexono_Setup.exe herunterladen (von Prompt 36; %LocalAppData%-Installation Schritt 3)
 - [ ] Installer ausführen:
-  - [ ] Installationsordner: `%LocalAppData%\KanzleiAI` (keine Admin-Rechte nötig)
+  - [ ] Installationsordner: `%LocalAppData%\Lexono` (keine Admin-Rechte nötig)
   - [ ] Datenverzeichnis automatisch: `C:\ProgramData\KanzleiAI`
 - [ ] Installer **nicht** die App starten lassen (wir machen First-Run manuell)
 - [ ] Admin-Desktop-Shortcut prüfen (für einfachen Start)
@@ -29,7 +29,7 @@ dass alles Notwendige vorbereitet ist.
 ## C. First-Run Setup-Assistent (Tag 0, Morning)
 
 - [ ] Terminal/Konsole öffnen: `cmd` oder PowerShell
-- [ ] Zu Installationsordner wechseln: `cd "%LocalAppData%\KanzleiAI"`
+- [ ] Zu Installationsordner wechseln: `cd "%LocalAppData%\Lexono"`
 - [ ] Setup-Assistent starten: `kanzlei_ai.exe serve`
 - [ ] Assistent-Fragen beantworten:
   - [ ] Admin-E-Mail eingeben: `anwalt@kanzlei.local` (Beispiel)
@@ -126,7 +126,7 @@ dass alles Notwendige vorbereitet ist.
 ## H. Backups & Notfall-Plan (Tag 0, Night)
 
 - [ ] Backup des gesamten Installationsordners machen:
-  - [ ] `%LocalAppData%\KanzleiAI` → externe Festplatte kopieren
+  - [ ] `%LocalAppData%\Lexono` → externe Festplatte kopieren
 - [ ] Backup des Datenverzeichnisses machen:
   - [ ] `C:\ProgramData\KanzleiAI` → externe Festplatte kopieren
 - [ ] Notfall-Kontakt festlegen (falls Fragen während Pilot):

@@ -1,4 +1,4 @@
-# Security Review – Kanzlei-AI (Prompt 27)
+# Security Review – Lexono (Prompt 27)
 
 Stand: 15.08.2026. Dieser Review bewertet den Code-Stand nach Prompt 26 (Rollen &
 Berechtigungen) und ergänzt/verifiziert ihn – er ersetzt keine der bisherigen

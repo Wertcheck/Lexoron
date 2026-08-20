@@ -2,15 +2,23 @@
 
 'Blende etwaige API-Key-Eingabefelder in den UI-Einstellungen für
 Endnutzer aus.' Bestandsaufnahme ergab: es gibt im gesamten Dashboard
-keinen einzigen Endpunkt, der `.env`-Werte (insbesondere
-`anthropic_api_key`) überhaupt schreibbar macht - Konfiguration erfolgt
+keinen einzigen Endpunkt, der den Anthropic-/Cloud-API-Schlüssel
+überhaupt schreibbar macht - Konfiguration erfolgt für DIESEN einen Wert
 ausschließlich dateibasiert (siehe ARCHITECTURE.md, "kein SaaS-/Cloud-
 Bezug", Settings sind SecretStr + Allowlist-Schemas, siehe
 app/api/schemas.py: SettingsOut, app/web/account_router.py:
-account_privacy). Dieser Test verankert das dauerhaft: kein Template darf
-ein Formularfeld einführen, dessen `name`-Attribut auf einen der
-Settings-Secret-Felder verweist - ein zukünftiger Editier-Endpunkt für den
-API-Key würde diesen Test sofort brechen.
+account_privacy). Dieser Test verankert das dauerhaft für den
+Cloud-API-Schlüssel: kein Template darf ein Formularfeld mit `name`
+"anthropic_api_key"/"api_key" einführen.
+
+`mail_password` war bis 20.08. ebenfalls in dieser Liste (damals galt: gar
+keine Secret-Bearbeitung im Dashboard) - seither gibt es auf ausdrücklichen
+Auftrag ("echte Einstellungen... E-Mail-Zugangsdaten", "kritischer
+Bugfix": IMAP/SMTP-Eingabe statt totem Link) einen echten, admin-only
+Editier-Endpunkt dafür (app/web/settings_router.py: update_mail_settings).
+Das ist eine BEWUSSTE, im Auftrag mehrfach wiederholte Umkehrung dieser
+einzelnen Teilentscheidung, siehe ARCHITECTURE.md - der Anthropic-/
+Cloud-API-Schlüssel bleibt davon unberührt weiterhin nicht editierbar.
 """
 
 from __future__ import annotations
@@ -20,7 +28,7 @@ from pathlib import Path
 
 from app.web.template_paths import TEMPLATES_DIR
 
-_FORBIDDEN_FIELD_NAMES = ("anthropic_api_key", "api_key", "mail_password")
+_FORBIDDEN_FIELD_NAMES = ("anthropic_api_key", "api_key")
 _INPUT_NAME_PATTERN = re.compile(
     r'<(?:input|textarea|select)\b[^>]*\bname="([^"]+)"', re.IGNORECASE
 )

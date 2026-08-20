@@ -11,6 +11,7 @@ um auch geringfügige operative Informationspreisgabe zu vermeiden.
 
 from __future__ import annotations
 
+import threading
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Request
@@ -25,6 +26,7 @@ from app.cost_control import CostControlService
 from app.db.session import get_db
 from app.logs import LogAccessService
 from app.models import AuditEvent, ProcessingError, User
+from app.ollama_setup import OllamaInstallerService, OllamaInstallProgress
 from app.setup.paths import resolve_data_dir
 from app.system_health import SystemHealthService
 from app.web.template_paths import TEMPLATES_DIR
@@ -82,6 +84,28 @@ def update_badge(request: Request, current_user: User = Depends(require_login)) 
     return templates.TemplateResponse(request, "partials/update_badge.html", context)
 
 
+@router.get("/ollama-badge", response_class=HTMLResponse)
+def ollama_badge(request: Request, current_user: User = Depends(require_login)) -> HTMLResponse:
+    """Sichtbarer KI-Modus-/Ollama-Status fuer JEDE angemeldete Person auf
+    JEDER Seite (Auftrag 20.08.: "Live-Status-Badge... prominent") - wie
+    `update_badge` oben liest dies ausschließlich das beim Start bereits
+    ermittelte `app.state.ollama_check` (siehe app/main.py:
+    _run_silent_ollama_check), KEIN erneuter Netzwerkaufruf pro
+    Seitenaufruf/pro Nutzer (derselbe Grundsatz wie bei allen anderen
+    Erreichbarkeitschecks in diesem Projekt). Eine erneute, aktive Prüfung
+    bleibt admin-only und explizit (siehe /check-ollama, Systemstatus-/
+    Einstellungsseite)."""
+    settings = get_settings()
+    ollama_check = getattr(request.app.state, "ollama_check", None)
+    context = {
+        "request": request,
+        "ai_mode": settings.ai_mode,
+        "ollama_model_name": settings.ollama_model_name,
+        "ollama_check": ollama_check,
+    }
+    return templates.TemplateResponse(request, "partials/ollama_badge.html", context)
+
+
 @router.post("/check-api", response_class=HTMLResponse)
 def check_api_reachability(
     request: Request,
@@ -100,6 +124,85 @@ def check_api_reachability(
     result = SystemHealthService().check_claude_api_reachability(api_key)
     context = {"request": request, "result": result}
     return templates.TemplateResponse(request, "partials/api_reachability_result.html", context)
+
+
+@router.post("/check-ollama", response_class=HTMLResponse)
+def check_ollama_reachability(
+    request: Request,
+    current_user: User = Depends(require_role("admin")),
+) -> HTMLResponse:
+    """Wie `check_api_reachability`, für den lokalen Ollama-Dienst
+    (Local-First-Architektur, siehe ARCHITECTURE.md §60)."""
+    settings = get_settings()
+    result = SystemHealthService().check_ollama_reachability(settings.ollama_base_url)
+    context = {"request": request, "result": result}
+    return templates.TemplateResponse(request, "partials/api_reachability_result.html", context)
+
+
+# --- Geführter Ollama-Installations-/Update-Assistent (20.08.) ---
+#
+# Verhindert einen doppelten, gleichzeitig laufenden Installationsversuch
+# (z. B. zweiter Klick waehrend eines laufenden Downloads) - EIN
+# Prozess-weiter Lock reicht (Single-Instance-App, siehe run.py:
+# _acquire_single_instance_lock fuer dasselbe Grundprinzip auf
+# Anwendungsebene). Der eigentliche Fortschritt lebt in `app.state`
+# (dieselbe Ablage wie `app.state.ollama_check`/`app.state.update_check`),
+# NICHT in der Datenbank - rein transienter Laufzeit-Status.
+_ollama_install_lock = threading.Lock()
+
+
+def _run_ollama_install_in_background(app_state: object) -> None:
+    def _on_progress(progress: OllamaInstallProgress) -> None:
+        app_state.ollama_install_progress = progress  # type: ignore[attr-defined]
+
+    try:
+        OllamaInstallerService().run_guided_install(_on_progress)
+    finally:
+        _ollama_install_lock.release()
+
+
+@router.post("/ollama-install/start", response_class=HTMLResponse)
+def start_ollama_install(
+    request: Request,
+    current_user: User = Depends(require_role("admin")),
+) -> HTMLResponse:
+    """Startet den geführten Download+Installation/Update NUR auf diesen
+    expliziten Admin-Klick hin (siehe app/ollama_setup/service.py-
+    Moduldocstring zur "keine automatische externe Kommunikation ohne
+    explizite Freigabe"-Leitplanke) - läuft in einem eigenen Hintergrund-
+    Thread, damit dieser Request selbst sofort zurückkehrt (Download +
+    UAC-Elevation + Erreichbarkeits-Polling können mehrere Minuten dauern).
+    Ein bereits laufender Versuch wird NICHT doppelt gestartet - der Klick
+    liefert dann einfach den aktuellen Fortschritt zurück."""
+    if _ollama_install_lock.acquire(blocking=False):
+        request.app.state.ollama_install_progress = OllamaInstallProgress(
+            status="downloading", message="Ollama-Setup wird heruntergeladen…"
+        )
+        threading.Thread(
+            target=_run_ollama_install_in_background,
+            args=(request.app.state,),
+            daemon=True,
+        ).start()
+
+    progress = getattr(
+        request.app.state, "ollama_install_progress", OllamaInstallProgress()
+    )
+    context = {"request": request, "progress": progress}
+    return templates.TemplateResponse(request, "partials/ollama_install_progress.html", context)
+
+
+@router.get("/ollama-install/status", response_class=HTMLResponse)
+def ollama_install_status(
+    request: Request, current_user: User = Depends(_require_admin)
+) -> HTMLResponse:
+    """Wird vom Frontend per `setInterval` gepollt, während ein Vorgang
+    läuft (siehe partials/ollama_install_widget.html) - liefert denselben
+    Fortschritts-Partial wie `/ollama-install/start`."""
+    progress = getattr(
+        request.app.state, "ollama_install_progress", OllamaInstallProgress()
+    )
+    context = {"request": request, "progress": progress}
+    return templates.TemplateResponse(request, "partials/ollama_install_progress.html", context)
 
 
 @router.get("/logs-preview", response_class=HTMLResponse)
@@ -177,6 +280,7 @@ def monitoring_page(
         "ocr_enabled": settings.ocr_enabled,
         "mail_configured": settings.mail_password is not None,
         "claude_api_configured": settings.anthropic_api_key is not None,
+        "ai_mode": settings.ai_mode,
         "session_cookie_secure": settings.resolved_session_cookie_secure,
         "pending_error_count": pending_count,
         "failed_permanent_error_count": failed_permanent_count,

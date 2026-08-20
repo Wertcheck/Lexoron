@@ -1,4 +1,4 @@
-# RELEASE_NOTES.md – Kanzlei-AI v0.1.0 (Pilot Release)
+# RELEASE_NOTES.md – Lexono v0.1.0 (Pilot Release)
 
 **Release Date:** 17.08.2026 (Prompts 1–45); native window + app icon added 19.08.2026 (Prompts 46–47)
 **Version:** 0.1.0
@@ -148,10 +148,10 @@
 
 ```bash
 # 1. Run installer
-KanzleiAI_Setup.exe
+Lexono_Setup.exe
 
 # 2. First start
-cd "%LocalAppData%\KanzleiAI"
+cd "%LocalAppData%\Lexono"
 kanzlei_ai.exe serve
 
 # 3. Setup Wizard runs (if .env doesn't exist)
@@ -251,7 +251,7 @@ For future versions:
 **Release Schedule:** 1 week after Pilot start completion
 
 **Automatic Steps:**
-1. Download new `KanzleiAI-Setup-0.2.0.exe`
+1. Download new `Lexono_Setup-0.2.0.exe`
 2. Stop current server
 3. Run installer (will prompt to upgrade or fresh install)
 4. Migrations run automatically (`alembic upgrade head`)
@@ -303,7 +303,7 @@ Document in **FUTURE_ROADMAP.md** or contact development.
 
 ## License
 
-**Proprietary** – Kanzlei AI Projekt  
+**Proprietary** – Lexono Projekt  
 Use restricted to authorized pilot participants and development team.
 
 ---

@@ -19,7 +19,7 @@ from app.db.session import get_db
 from app.main import app
 from app.models import Client, Document, Matter, Message
 from app.models.base import Base
-from tests.auth_test_utils import login_as_admin
+from tests.auth_test_utils import create_test_user, login, login_as_admin, seed_roles
 
 
 @pytest.fixture()
@@ -48,6 +48,22 @@ def client(db_session: Session) -> Iterator[TestClient]:
     try:
         test_client = TestClient(app)
         login_as_admin(db_session, test_client)
+        yield test_client
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def mitarbeiter_client(db_session: Session) -> Iterator[TestClient]:
+    def _override_get_db() -> Iterator[Session]:
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        test_client = TestClient(app)
+        roles = seed_roles(db_session)
+        create_test_user(db_session, roles["mitarbeiter"], "mitarbeiter@kanzlei.test")
+        login(test_client, "mitarbeiter@kanzlei.test")
         yield test_client
     finally:
         app.dependency_overrides.clear()
@@ -263,25 +279,27 @@ def test_message_detail_partial_not_found_returns_404(client: TestClient) -> Non
 
 
 def test_sidebar_shows_all_group_and_item_labels(client: TestClient, seeded: dict) -> None:
-    """Seit Prompt 49 ist die Sidebar nach juristischen Arbeitsablaeufen in
-    fuenf Gruppen gegliedert - "Einstellungen" ist bewusst kein sichtbares
-    Sidebar-Label mehr (siehe test_sidebar_shows_all_eight_areas in der
-    Git-Historie fuer den fruesheren, flachen Stand): der Profil-/
-    Einstellungen-Bereich wird stattdessen ueber das Profil-Icon unten
-    links erreicht (siehe test_sidebar_has_profile_link_at_bottom)."""
+    """Seit der bereinigten Navigation (20.08.) ist die Sidebar auf EXAKT
+    fuenf logische Kernmodule fokussiert - "Uebersicht" und
+    "Mandantendatenbank" sind bewusst flache Einzel-Links (keine
+    "Dashboard"-Unterpunkt-unter-"Dashboard"-Gruppe mehr), die restlichen
+    drei bleiben aufklappbare Gruppen. "Einstellungen" ist weiterhin kein
+    sichtbares Hauptmenue-Label - der Profil-/Einstellungen-Bereich wird
+    ueber die Account-Zeile im Sidebar-Footer erreicht (siehe
+    test_sidebar_has_profile_link_at_bottom)."""
     response = client.get("/dashboard/inbox")
     for label in [
-        "Dashboard",
-        "Akten &amp; Dokumente",
+        "Übersicht",
+        "Akten &amp; Ordner",
         "Posteingang",
         "Aktive Akten",
-        "KI-Werkzeuge",
+        "E-Mail &amp; Posteingang",
         "Entwürfe zur Prüfung",
         "Rechtsquellen",
-        "Vorlagen &amp; Muster",
+        "Kanzleiwissen &amp; KI",
         "Kanzlei-Wissen",
         "Postausgang",
-        "Historie &amp; Audit",
+        "Mandantendatenbank",
     ]:
         assert label in response.text
 
@@ -297,20 +315,22 @@ def test_sidebar_links_all_areas_to_real_pages(client: TestClient, seeded: dict)
     (<a href>) - Bereiche ohne eigene Fachlogik fuehren auf eine ehrliche
     Platzhalterseite (app/web/placeholder_router.py) statt entweder auf
     einen toten Link oder ein nicht anklickbares "bald"-Badge (fruehere
-    Loesung, siehe Git-Historie). Seit Prompt 49 ist die Sidebar zusaetzlich
-    nach juristischen Arbeitsablaeufen in fuenf Gruppen gegliedert
-    (<details>/<summary>) - es gibt daher keine `sidebar__link--disabled`-
-    Klasse mehr."""
+    Loesung, siehe Git-Historie). Seit der bereinigten Fuenf-Module-
+    Navigation (20.08.) sind drei der fuenf Module weiterhin aufklappbare
+    Gruppen (<details>/<summary>), "Uebersicht" und "Mandantendatenbank"
+    sind flache Einzel-Links - es gibt weiterhin keine
+    `sidebar__link--disabled`-Klasse."""
     response = client.get("/dashboard/inbox")
     for href in [
         "/dashboard",
-        "/dashboard/recent",
         "/dashboard/inbox",
-        "/dashboard/matters",
-        "/dashboard/documents",
-        "/dashboard/archive",
         "/dashboard/outbox",
         "/dashboard/drafts",
+        "/dashboard/errors",
+        "/dashboard/matters",
+        "/dashboard/recent",
+        "/dashboard/documents",
+        "/dashboard/archive",
         "/dashboard/tools/schriftsatz",
         "/dashboard/tools/fristen",
         "/dashboard/tools/zeitleiste",
@@ -319,8 +339,8 @@ def test_sidebar_links_all_areas_to_real_pages(client: TestClient, seeded: dict)
         "/dashboard/library/mustertexte",
         "/dashboard/library/prompts",
         "/dashboard/knowledge",
-        "/dashboard/errors",
         "/dashboard/history/analysen",
+        "/dashboard/clients",
         "/dashboard/account",
     ]:
         assert f'href="{href}"' in response.text
@@ -328,12 +348,13 @@ def test_sidebar_links_all_areas_to_real_pages(client: TestClient, seeded: dict)
 
 
 def test_sidebar_shows_admin_only_items_for_admin(client: TestClient, seeded: dict) -> None:
-    """`client` meldet sich als Admin an (login_as_admin) - Systemstatus und
-    Export-Protokolle (Backup) sind admin_only=True in base.html und muessen
-    daher sichtbar sein."""
+    """`client` meldet sich als Admin an (login_as_admin) - Systemstatus ist
+    admin_only=True in base.html (Gruppe "Kanzleiwissen & KI") und muss daher
+    sichtbar sein. Backup & Export ist seit der bereinigten Navigation kein
+    Sidebar-Eintrag mehr, sondern nur noch eine Admin-Kachel auf der
+    Profil-/Einstellungen-Uebersicht (siehe tests/test_web_account.py)."""
     response = client.get("/dashboard/inbox")
     assert 'href="/dashboard/monitoring"' in response.text
-    assert 'href="/dashboard/backup"' in response.text
 
 
 def test_sidebar_group_containing_active_item_is_open(
@@ -343,12 +364,46 @@ def test_sidebar_group_containing_active_item_is_open(
     aufgeklappt (<details open>), damit der aktuelle Ort im Menü sichtbar
     bleibt, statt hinter einer eingeklappten Gruppe versteckt zu sein."""
     response = client.get("/dashboard/inbox")
-    # "Posteingang" gehoert zur Gruppe "Akten & Dokumente" - deren <details>
-    # muss "open" tragen, waehrend z. B. "Vorlagen & Muster" geschlossen bleibt.
-    akten_group_start = response.text.index("Akten &amp; Dokumente")
-    details_tag_start = response.text.rindex("<details", 0, akten_group_start)
+    # "Posteingang" gehoert seit der bereinigten Navigation zur Gruppe
+    # "E-Mail & Posteingang" - deren <details> muss "open" tragen, waehrend
+    # z. B. "Kanzleiwissen & KI" geschlossen bleibt.
+    mail_group_start = response.text.index("E-Mail &amp; Posteingang")
+    details_tag_start = response.text.rindex("<details", 0, mail_group_start)
     details_tag_end = response.text.index(">", details_tag_start)
     assert "open" in response.text[details_tag_start:details_tag_end]
+
+
+def test_sidebar_footer_has_help_and_ollama_status(client: TestClient, seeded: dict) -> None:
+    """Der Sidebar-Footer zeigt einen dezenten Hilfe-/Systemstatus-Streifen:
+    denselben Ollama-Erreichbarkeits-Badge wie die Kopfzeile (per HTMX
+    nachgeladen, siehe partials/ollama_badge.html) sowie einen Link auf
+    Pilot-Feedback & Support."""
+    response = client.get("/dashboard/inbox")
+    assert "sidebar__footer-status" in response.text
+    assert 'hx-get="/dashboard/monitoring/ollama-badge"' in response.text
+    assert 'href="/dashboard/feedback"' in response.text
+    assert "sidebar__footer-help" in response.text
+
+
+def test_sidebar_settings_gear_points_to_settings_page_for_admin(
+    client: TestClient, seeded: dict
+) -> None:
+    """Der Zahnrad-Button im Footer ist ein eigener Link (getrennt von der
+    Avatar-Zeile) und fuehrt fuer Admins direkt auf die echte
+    Einstellungsseite."""
+    response = client.get("/dashboard/inbox")
+    assert 'class="sidebar__settings-btn"' in response.text
+    assert 'href="/dashboard/settings" class="sidebar__settings-btn"' in response.text
+
+
+def test_sidebar_settings_gear_points_to_account_overview_for_non_admin(
+    mitarbeiter_client: TestClient, seeded: dict
+) -> None:
+    """Nicht-Admins haben keine eigene Einstellungsseite (/dashboard/settings
+    ist admin_only, siehe app/web/settings_router.py) - der Zahnrad-Button
+    fuehrt fuer sie stattdessen auf die Profil-/Einstellungen-Uebersicht."""
+    response = mitarbeiter_client.get("/dashboard/inbox")
+    assert 'href="/dashboard/account" class="sidebar__settings-btn"' in response.text
 
 
 # --- Onboarding-Banner (Prompt 48) ---
@@ -361,6 +416,17 @@ def test_onboarding_banner_shown_when_inbox_empty(client: TestClient) -> None:
     assert response.status_code == 200
     assert "Erste Schritte" in response.text
     assert 'class="split"' not in response.text
+
+
+def test_onboarding_banner_includes_ollama_install_widget(client: TestClient) -> None:
+    """20.08.: das "Start-Popup" (Onboarding-Banner, Schritt 3 "Lokale KI
+    prüfen") bietet zusätzlich zum bestehenden Erreichbarkeitscheck den
+    geführten Installations-/Update-Assistenten an (siehe partials/
+    ollama_install_widget.html)."""
+    response = client.get("/dashboard/inbox")
+    assert response.status_code == 200
+    assert "Ollama automatisch einrichten" in response.text
+    assert 'id="ollama-install-modal"' in response.text
 
 
 def test_onboarding_banner_hidden_when_messages_exist(

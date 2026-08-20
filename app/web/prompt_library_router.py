@@ -1,4 +1,4 @@
-"""Dashboard-Router für 'Vorlagen & Muster' -> 'Standard-Prompts'
+"""Dashboard-Router für 'Kanzleiwissen & KI' -> 'Standard-Prompts'
 (Schritt 3, Teil 2): die tatsächlich verwendeten System-Prompts (read-only,
 zur Transparenz) + eine editierbare Kanzlei-Prompt-Bibliothek mit
 Platzhalter-Variablen wie {Mandant}/{Frist}/{Dokumententext}.

@@ -1,11 +1,11 @@
 ═══════════════════════════════════════════════════════════════════════════════
-  KANZLEI-AI v0.1.0 – Pilot Release
+  LEXONO v0.1.0 – Pilot Release
 ═══════════════════════════════════════════════════════════════════════════════
 
 📦 INHALT DIESER RELEASE:
 
 ├── INSTALLER/
-│   ├── KanzleiAI-Setup-0.1.0.exe      ← Windows Installer (empfohlen)
+│   ├── Lexono_Setup.exe                ← Windows Installer (empfohlen)
 │   └── kanzlei_ai.exe                 ← Bundled App (für Fortgeschrittene)
 │
 ├── DOKUMENTATION (Lesen Sie diese in dieser Reihenfolge):
@@ -39,13 +39,13 @@
 ⚡ QUICK START:
 
 1. Installer ausführen:
-   → Doppelklick auf: INSTALLER/KanzleiAI-Setup-0.1.0.exe
-   
-2. Installation durchlaufen (Standard-Pfad: C:\Program Files\KanzleiAI)
+   → Doppelklick auf: INSTALLER/Lexono_Setup.exe
+
+2. Installation durchlaufen (Standard-Pfad: %LocalAppData%\Lexono)
 
 3. Erste Nutzung:
    → Konsole öffnen
-   → cd "C:\Program Files\KanzleiAI"
+   → cd "%LocalAppData%\Lexono"
    → kanzlei_ai.exe serve
    
 4. Setup-Assistent läuft automatisch (Admin-E-Mail eingeben)

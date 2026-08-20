@@ -662,6 +662,66 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       Prozessende auf Anfrage geprüft - beides bereits korrekt, ein kleiner, unkritischer
       Randfall (Ctrl+C im Konsolenfenster bei offenem nativem Fenster) dokumentiert statt
       behoben. Siehe ARCHITECTURE.md §56.
+- [x] Angefragter Portkey-Gateway-Umbau ABGELEHNT (gleicher Tag) - widersprach der in
+      Schritt 3 bereits bestätigten Entscheidung "kein zentraler Proxy, direkte
+      Anthropic-API". Presidio-Umbau der lokalen Pseudonymisierung zurückgestellt (Vorgabe:
+      `app/privacy/` unverändert lassen). Admin-only-Sichtbarkeit von API-Keys war bereits
+      erfüllt. Neuer Regressionstest `tests/test_no_ai_gateway_proxy.py` verankert die
+      Entscheidung dauerhaft. Siehe ARCHITECTURE.md §57.
+- [x] Produktiver Piloteinsatz (gleicher Tag): stummer Start (`Start.vbs`, Konsole nur beim
+      allerersten/Setup-Start sichtbar, sonst `app.log`), Installer liefert/nutzt den stummen
+      Starter, Premium-Legal-Tech-Design-Refresh (Sans-Serif, Off-White/Slate-Farbschema,
+      Breitenbegrenzung, Logo, Pill-Badges, Schatten). Zwei echte Bugs gefunden+behoben: ein
+      `cmd.exe /c`-Quoting-Bug in Start.vbs, und Hintergrund-Badge-Endpunkte, die während einer
+      erzwungenen Passwortänderung die volle HTML-Seite statt JSON lieferten. Live auf dem
+      echten Windows-System verifiziert (Server-Lauf, echter Installer-Kompilierlauf,
+      Browser-Check per getComputedStyle). Siehe ARCHITECTURE.md §58.
+- [x] Markenumbenennung "Kanzlei-AI" -> "Lexono" (gleicher Tag): echtes Logo (Schild-Symbol
+      mit integriertem "L") aus einer vom Anwalt gelieferten Rasterbild-Vorlage per
+      Konturerkennung als `app/web/static/img/logo.svg`/`logo-dark.svg` nachgezeichnet,
+      `windows/app_icon.ico` daraus neu generiert. Markenname in UI/Titeln/Installer/
+      Dokumentation umbenannt. Bewusst NICHT umbenannt: `%PROGRAMDATA%\KanzleiAI`
+      (Datenverzeichnis bestehender Pilot-Installationen) und die Python-/PyInstaller-
+      Paketidentität - Datenkontinuität geht vor vollständiger Namenskonsistenz. UI-
+      Designsprache (Off-White/dunkle Sidebar/Breitenbegrenzung/Schatten) war durch §58
+      bereits erfüllt, keine Änderung nötig. Siehe ARCHITECTURE.md §59.
+- [x] Local-First-Architektur: Ollama als Standard-Provider, §57 nach ausdrücklicher
+      Rückfrage BEWUSST überschrieben (gleicher Tag) - `AI_MODE` (LOCAL_ONLY/HYBRID)
+      ersetzt das alte `llm_provider`-Feld vollständig. `OllamaWritingProvider`/
+      `OllamaReviewProvider` implementieren dieselben Protocols wie die
+      Anthropic-Provider, ausgewählt einzig in `app/ai_providers/factory.py` - keine
+      Änderung an DraftingService/ReviewEngine/Routern nötig. Der lokale Privacy-Gateway
+      (Pseudonymisierung + Security-Check) sass strukturell bereits vor JEDER
+      Provider-Auswahl, gilt also unverändert für beide Modi. Anthropic-Provider bewusst
+      NICHT gelöscht (HYBRID braucht sie weiterhin). Startup-Check (still, ins Log) in
+      app/main.py + Start.vbs, Systemstatus-Seite zeigt jetzt einen echten
+      Ollama-Erreichbarkeitscheck statt der bisherigen ehrlich-negativen Platzhalterzeile.
+      Zusätzlich: durchgehend helles UI-Layout (dunkle Sidebar entfernt, Stripe-Trennlinie
+      statt Farbkontrast). Siehe ARCHITECTURE.md §60.
+- [x] Offizielles Logo integriert (gleicher Tag): das vom Anwalt gelieferte finale Icon
+      (Dokument+Schild+Kette) per Konturerkennung (diesmal mit Loch-Behandlung -
+      Konturlinien-Icon statt Vollflächen) als `app/web/static/img/logo.svg`/
+      `logo-white.svg` nachgezeichnet und pixelgenau gegen die Vorlage verifiziert,
+      `windows/app_icon.ico` daraus neu generiert. Neuer CI-Farbcode `#101828` für
+      Icon/Desktop-Verknüpfung/Installer-Icon übernommen - bewusst NICHT auf das
+      allgemeine UI-Farbschema (app.css) ausgeweitet, das war nicht Teil dieser Anfrage.
+      Installer komplett neu gebaut (PyInstaller + Inno Setup). Siehe ARCHITECTURE.md §61.
+- [x] Echte Einstellungen, sichtbares Ollama, Navigations-Feinschliff, heller
+      Fensterrahmen (gleicher Tag): neue echte Einstellungsseite
+      (`app/web/settings_router.py`) für Scan-Ordner/E-Mail/Aufbewahrung/KI-Modus, schreibt
+      gezielt in die bestehende `.env` (neu: `update_env_values`) und wirkt sofort ohne
+      Neustart. Onboarding-Banner postet jetzt echt gegen modale Formulare statt auf einen
+      toten Link zu zeigen (kritischer Bugfix). CI-Farbcode `#101828` auf primäre
+      UI-Elemente ausgeweitet. Sichtbare Ollama-Statusbadge in der Kopfzeile (kein
+      zusätzlicher Netzwerkaufruf pro Seitenaufruf). Veraltete "Claude-API"-UI-Hinweise
+      modusabhängig bereinigt (HYBRID nutzt Anthropic weiterhin real, das wird nicht
+      verschwiegen). Konsistenter Zurück-Pfeil auf allen Unterseiten, "In
+      Vorbereitung"-Seiten optisch aufgeräumt. Nativer Fensterrahmen erzwingt jetzt eine
+      helle Titelleiste unabhängig vom System-Dunkelmodus. **Bewusst NICHT umgesetzt:**
+      automatischer/API-basierter Rechtsquellen-Import - widerspricht der technisch
+      verankerten "nur manuelle Eingabe"-Regel in `app/models/source.py`, Rückfrage an den
+      Anwalt nötig statt stiller Umsetzung. Installer erneut komplett neu gebaut. Siehe
+      ARCHITECTURE.md §62.
 
 ## Wiederkehrende Grundregeln (gelten für jede Phase)
 - Keine echten Mandantendaten in Tests/Entwicklung.

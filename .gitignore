@@ -1,6 +1,12 @@
 # Secrets / lokale Konfiguration
 .env
 *.local.env
+.claude/launch.json
+
+# Laufzeit-Logs (Schritt 3, Start.vbs) - koennen technische Details/
+# Stacktraces enthalten, gehoeren nicht ins Repo.
+app.log
+*.log
 
 # Mandanten-/Aktendaten (duerfen nie ins Repo)
 /data/

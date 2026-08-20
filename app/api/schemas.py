@@ -186,7 +186,7 @@ class SettingsOut(BaseModel):
     ocr_enabled: bool
     ocr_engine: str
     ocr_languages: str
-    llm_provider: str
+    ai_mode: str
     claude_model_name: str
     claude_max_tokens: int
     require_human_approval_before_send: bool
@@ -227,7 +227,7 @@ class SettingsOut(BaseModel):
             ocr_enabled=settings.ocr_enabled,
             ocr_engine=settings.ocr_engine,
             ocr_languages=settings.ocr_languages,
-            llm_provider=settings.llm_provider,
+            ai_mode=settings.ai_mode,
             claude_model_name=settings.claude_model_name,
             claude_max_tokens=settings.claude_max_tokens,
             require_human_approval_before_send=settings.require_human_approval_before_send,

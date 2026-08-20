@@ -1,4 +1,4 @@
-"""Kanzlei-AI-Pipeline – Anwendungspaket.
+"""Lexono-Pipeline – Anwendungspaket.
 
 Dieses Paket enthaelt bewusst noch keine Fachlogik (Stand: Prompt 02,
 Repository-Grundgeruest). Module wie Konfiguration, Datenmodell, Ingestion,

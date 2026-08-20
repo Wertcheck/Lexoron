@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from app.ai_providers.claude_writing_provider import ClaudeWritingProvider
 from app.ai_providers.local_ai_provider import LocalAIProvider
 from app.cost_control import CostControlService
+from app.drafting.quick_matter import create_quick_matter
 from app.drafting.schema import DraftingResult, KnowledgeItemReference, SourceReference
 from app.drafting.versioning import create_new_draft_version
 from app.models import Deadline, Draft, DraftKnowledgeItemLink, DraftSourceLink, KnowledgeItem, Matter
@@ -60,7 +61,7 @@ class DraftingService:
 
     def create_draft(
         self,
-        matter_id: str,
+        matter_id: str | None,
         purpose: str,
         db: Session,
         *,
@@ -69,6 +70,8 @@ class DraftingService:
         attorney_anmerkungen: str | None = None,
         previous_draft: Draft | None = None,
         actor: str = "system",
+        new_matter_title: str | None = None,
+        new_client_name: str | None = None,
     ) -> DraftingResult:
         """Erstellt eine neue Draft-Version.
 
@@ -87,15 +90,27 @@ class DraftingService:
         gateway_schema.py) - durchläuft hier denselben Privacy-Gateway-
         Durchlauf wie Sachverhalt/Quellen/Vorlage, GENAU EINMAL, bevor
         irgendetwas Claude erreicht.
-        """
+
+        `matter_id=None` (Schriftsatz-Generator, 20.08.): statt einen Fehler
+        zu werfen, wird automatisch eine neue Akte (mit einem ebenfalls neu
+        angelegten Mandanten) angelegt, DAMIT dieser Entwurf überhaupt
+        gespeichert werden kann - `Draft.matter_id` ist NICHT nullable
+        (Aktenisolation, siehe CLAUDE.md). Alles NACH diesem Block (Privacy-Gateway,
+        Kostenkontrolle, Audit-Logging des eigentlichen Schreibauftrags)
+        bleibt UNVERÄNDERT - der Auto-Create-Zweig liefert nur eine echte
+        `matter_id`, bevor die bestehende Logik beginnt. Die Anlage selbst
+        wird als eigenes `AuditEvent` festgehalten (nachvollziehbar, siehe
+        CLAUDE.md-Grundregel), unabhängig vom Erfolg/Misserfolg der
+        anschließenden Entwurfserstellung."""
         if not matter_id:
-            raise ValueError(
-                "matter_id ist erforderlich - Entwurfserstellung ohne "
-                "Aktenbezug ist nicht erlaubt"
+            matter = create_quick_matter(
+                db, title=new_matter_title, client_name=new_client_name, actor=actor
             )
-        matter = db.query(Matter).filter_by(id=matter_id).first()
-        if matter is None:
-            raise ValueError(f"Matter {matter_id} nicht gefunden")
+            matter_id = matter.id
+        else:
+            matter = db.query(Matter).filter_by(id=matter_id).first()
+            if matter is None:
+                raise ValueError(f"Matter {matter_id} nicht gefunden")
         if previous_draft is not None and previous_draft.matter_id != matter_id:
             raise ValueError(
                 "previous_draft gehört nicht zur angegebenen Akte - "

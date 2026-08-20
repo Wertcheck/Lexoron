@@ -1,4 +1,4 @@
-# PILOT_PLAYBOOK.md – Kanzlei-AI Pilotbetrieb (2–4 Wochen)
+# PILOT_PLAYBOOK.md – Lexono Pilotbetrieb (2–4 Wochen)
 
 **Stand:** Prompt 44, 17.08.2026  
 **Phase:** 8 (Kanzlei-Produkt), finale operative Vorbereitung vor finaler Review (Prompt 45)
@@ -37,8 +37,8 @@ des bis Prompt 43 fertiggestellten Systems.
 ### 1.2 Installation aus Installer
 
 ```bash
-# 1. KanzleiAI_Setup.exe ausführen (von Prompt 36; %LocalAppData% seit Schritt 3)
-# 2. Standard-Installationspfad: %LocalAppData%\KanzleiAI (keine Admin-Rechte nötig)
+# 1. Lexono_Setup.exe ausführen (von Prompt 36; %LocalAppData% seit Schritt 3)
+# 2. Standard-Installationspfad: %LocalAppData%\Lexono (keine Admin-Rechte nötig)
 # 3. Datenverzeichnis: C:\ProgramData\KanzleiAI (automatisch angelegt)
 #
 # Der Installer startet die App nicht automatisch.
@@ -250,7 +250,7 @@ des bis Prompt 43 fertiggestellten Systems.
 ```bash
 # Manuell vor Pilot-Start empfohlen:
 # Vollständige Sicherung des Installationsordners
-# %LocalAppData%\KanzleiAI\  →  externe Festplatte / Cloud
+# %LocalAppData%\Lexono\  →  externe Festplatte / Cloud
 #
 # Datenverzeichnis ist größer und wichtiger:
 # C:\ProgramData\KanzleiAI\  →  besonders Database + Dokumente

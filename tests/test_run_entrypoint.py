@@ -18,11 +18,36 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
 import run
+
+
+@pytest.fixture(autouse=True)
+def _restore_cwd() -> Iterator[None]:
+    """Regressionsschutz (20.08.): `run.main(...)` wechselt als Nebeneffekt
+    des Dispatch in JEDEM Zweig (serve/setup/migrate/create-admin/restore)
+    das Arbeitsverzeichnis nach `resolve_data_dir()` (siehe `run.main`,
+    kurz nach dem Argument-Parsing) - OHNE es selbst zurueckzusetzen, das
+    ist bewusst Aufgabe des jeweiligen Aufrufers (siehe run.py-Kommentare).
+    Diese Datei ruft `run.main(...)` in ueber einem Dutzend Tests auf,
+    grossteils mit einer im Test geschriebenen `.env` mit `APP_ENV=
+    production` (ohne SESSION_SECRET_KEY) - blieb das Arbeitsverzeichnis
+    nach EINEM einzigen dieser Tests haengen, scheiterte JEDER spaeter in
+    der GESAMTEN Suite ausgefuehrte Login-/Auth-Check hart (`Settings.
+    resolved_session_secret_key`), unabhaengig von der betroffenen
+    Testdatei - live per vollstaendigem Suite-Lauf reproduziert und
+    verifiziert (siehe ARCHITECTURE.md). Statt jeden einzelnen der
+    `run.main(...)`-Aufrufe unten manuell mit einem eigenen try/finally
+    abzusichern, EIN zentraler, autouse-Fixture-basierter Schutz fuer die
+    gesamte Datei - robust auch gegen kuenftige, neu hinzugefuegte Tests
+    hier, die denselben Effekt haben koennten."""
+    original_cwd = Path.cwd()
+    yield
+    os.chdir(original_cwd)
 
 
 def test_bundle_base_dir_in_dev_mode_is_repo_root(monkeypatch) -> None:
@@ -186,6 +211,19 @@ def test_main_serve_bare_invocation_without_subcommand_opens_window(tmp_path, mo
 
 
 def test_main_serve_no_window_flag_disables_window(tmp_path, monkeypatch) -> None:
+    """WICHTIG (Regressionsfund 20.08.): `run.main` wechselt als Nebeneffekt
+    des Dispatch das Arbeitsverzeichnis in KANZLEI_AI_DATA_DIR (dasselbe
+    Verhalten wie in test_main_changes_into_resolved_data_dir oben belegt) -
+    OHNE es selbst zurueckzusetzen. Diese Datei stubbt zwar `cmd_serve`
+    weg, aber der CWD-Wechsel selbst passiert VOR diesem Aufruf in
+    `run.main` und bleibt bestehen. Ohne das `try/finally` hier (analog zu
+    test_main_changes_into_resolved_data_dir) blieb das Arbeitsverzeichnis
+    fuer den GESAMTEN Rest des Testprozesses auf einem tmp_path mit einer
+    production-`.env` OHNE SESSION_SECRET_KEY stehen - das liess JEDEN
+    spaeter in der Suite ausgefuehrten Login-/Auth-Check hart fehlschlagen
+    (`Settings.resolved_session_secret_key`), unabhaengig davon, welche
+    Testdatei betroffen war. Live per vollstaendigem Suite-Lauf verifiziert."""
+    original_cwd = Path.cwd()
     monkeypatch.setenv("KANZLEI_AI_DATA_DIR", str(tmp_path))
     (tmp_path / ".env").write_text("APP_ENV=production\n", encoding="utf-8")
     recorded: list[bool] = []
@@ -193,8 +231,11 @@ def test_main_serve_no_window_flag_disables_window(tmp_path, monkeypatch) -> Non
         run, "cmd_serve", lambda *, open_window=True: (recorded.append(open_window), 0)[1]
     )
 
-    assert run.main(["serve", "--no-window"]) == 0
-    assert recorded == [False]
+    try:
+        assert run.main(["serve", "--no-window"]) == 0
+        assert recorded == [False]
+    finally:
+        os.chdir(original_cwd)
 
 
 def test_wait_for_server_ready_returns_on_first_successful_check() -> None:
@@ -374,3 +415,69 @@ def test_cmd_serve_releases_lock_even_when_migration_fails(monkeypatch) -> None:
 
     assert exit_code == 1
     assert released == [42]
+
+
+# --- _apply_light_title_bar (20.08., "kritischer Design-Fix": keine
+# schwarze Titelleiste mehr, siehe ARCHITECTURE.md) ---
+
+
+class _FakeHandle:
+    def ToInt32(self) -> int:
+        return 12345
+
+
+class _FakeNative:
+    Handle = _FakeHandle()
+
+
+class _FakeWindow:
+    native = _FakeNative()
+
+
+def test_apply_light_title_bar_calls_dwm_with_correct_attributes(monkeypatch) -> None:
+    """Beweis auf Aufrufebene: DWMWA_USE_IMMERSIVE_DARK_MODE (20) wird auf 0
+    (hell) gesetzt, DWMWA_CAPTION_COLOR (35) und DWMWA_TEXT_COLOR (36) auf
+    die exakten Marken-Farbwerte aus app/web/static/css/app.css."""
+    calls: list[tuple[int, int, int]] = []
+
+    class _FakeDwmApi:
+        def DwmSetWindowAttribute(self, hwnd, attribute, value_ptr, size):
+            import ctypes
+
+            calls.append((hwnd, attribute, ctypes.cast(value_ptr, ctypes.POINTER(ctypes.c_int)).contents.value))
+            return 0
+
+    import ctypes as ctypes_module
+
+    monkeypatch.setattr(ctypes_module, "windll", type("W", (), {"dwmapi": _FakeDwmApi()})(), raising=False)
+
+    run._apply_light_title_bar(_FakeWindow())
+
+    attributes_seen = {attr for _, attr, _ in calls}
+    assert 20 in attributes_seen  # DWMWA_USE_IMMERSIVE_DARK_MODE
+    assert 35 in attributes_seen  # DWMWA_CAPTION_COLOR
+    assert 36 in attributes_seen  # DWMWA_TEXT_COLOR
+
+    dark_mode_call = next(c for c in calls if c[1] == 20)
+    assert dark_mode_call == (12345, 20, 0)  # 0 = helle Titelleiste, NICHT dunkel
+
+    caption_call = next(c for c in calls if c[1] == 35)
+    assert caption_call[2] == run._TITLE_BAR_CAPTION_COLORREF
+
+    text_call = next(c for c in calls if c[1] == 36)
+    assert text_call[2] == run._TITLE_BAR_TEXT_COLORREF
+
+
+def test_apply_light_title_bar_never_raises_when_native_handle_missing() -> None:
+    """Rein kosmetische Funktion - ein fehlendes/unerwartetes window-Objekt
+    (z. B. sehr alte pywebview-Version) darf den App-Start nie gefaehrden."""
+    run._apply_light_title_bar(object())  # kein .native Attribut
+    run._apply_light_title_bar(None)
+
+
+def test_title_bar_colorref_constants_match_app_css_brand_colors() -> None:
+    """COLORREF ist 0x00BBGGRR (umgekehrte Byte-Reihenfolge zu RGB-Hex) -
+    beweist, dass die Konstanten tatsaechlich #F8FAFC/#101828 kodieren,
+    nicht nur behauptet werden."""
+    assert run._TITLE_BAR_CAPTION_COLORREF == 0x00FCFAF8  # R=F8,G=FA,B=FC -> BB GG RR
+    assert run._TITLE_BAR_TEXT_COLORREF == 0x00281810  # R=10,G=18,B=28 -> BB GG RR

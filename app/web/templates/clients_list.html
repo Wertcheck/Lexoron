@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}Mandantendatenbank{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">Mandantendatenbank</h1>
+    <div class="topbar__meta">
+      <strong>{{ rows|length }}</strong> Mandant{{ "en" if rows|length != 1 else "" }} in dieser Ansicht
+    </div>
+  </div>
+
+  {% if error %}
+    <div class="banner banner--error">{{ error }}</div>
+  {% endif %}
+  {% if import_error %}
+    <div class="banner banner--error">Import fehlgeschlagen: {{ import_error }}</div>
+  {% endif %}
+  {% if import_result %}
+    <div class="banner {{ 'banner--error' if import_result.has_errors else 'banner--success' }}">
+      <strong>{{ import_result.created_count }}</strong> Mandant{{ "en" if import_result.created_count != 1 else "" }} importiert.
+      {% if import_result.has_errors %}
+        {{ import_result.errors|length }} Zeile(n) übersprungen:
+        <ul style="margin: 8px 0 0; padding-left: 18px;">
+          {% for row_error in import_result.errors %}
+            <li>Zeile {{ row_error.row_number }}: {{ row_error.reason }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <div class="draft-page">
+    <div class="instructions-panel">
+      <h2 class="panel-title">CSV-/Excel-Import</h2>
+      <p class="settings-section__hint">
+        Pflichtspalten: <strong>Name</strong> und <strong>Mandantennummer</strong> (auch als
+        "Mandant"/"Kundennummer" o. Ä. erkannt) - Zeilen ohne diese Angaben oder mit bereits
+        vergebener Mandantennummer werden übersprungen und unten aufgelistet, der restliche
+        Import läuft trotzdem durch. Erkannt werden zusätzlich E-Mail, Telefon und Rechtsgebiet.
+      </p>
+      <form method="post" action="/dashboard/clients/import" enctype="multipart/form-data" id="import-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <div id="import-dropzone" class="dropzone" tabindex="0" role="button"
+             aria-label="CSV- oder Excel-Datei hierher ziehen oder klicken, um eine Datei auszuwählen">
+          {{ icons.upload(class_="dropzone__icon") }}
+          <div class="dropzone__text">Datei hierher ziehen oder klicken</div>
+          <div class="dropzone__hint">.csv oder .xlsx · max. 10 MB</div>
+        </div>
+        <input type="file" name="file" id="import-file-input" accept=".csv,.xlsx" style="display: none;" required />
+        <div id="import-file-list" class="dropzone__file-list"></div>
+      </form>
+    </div>
+
+    <div class="instructions-panel">
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+        <h2 class="panel-title" style="margin: 0;">Mandanten</h2>
+        <button type="button" class="btn btn--primary"
+                onclick="document.getElementById('create-client-modal').showModal()">
+          {{ icons.plus(class_="icon") }} Mandant anlegen
+        </button>
+      </div>
+
+      <div class="clients-toolbar">
+        <div class="filters" style="margin-top: 0;">
+          {% for key, label in [("active", "Aktiv"), ("archived", "Archiviert"), ("all", "Alle")] %}
+            <form method="get" action="/dashboard/clients">
+              <input type="hidden" name="q" value="{{ search }}" />
+              <input type="hidden" name="practice_area" value="{{ practice_area }}" />
+              <input type="hidden" name="responsible_user_id" value="{{ responsible_user_id }}" />
+              <input type="hidden" name="status" value="{{ key }}" />
+              <button type="submit" class="filter-tab{% if status == key %} filter-tab--active{% endif %}">{{ label }}</button>
+            </form>
+          {% endfor %}
+        </div>
+
+        <form method="get" action="/dashboard/clients" class="clients-search-bar">
+          <input type="hidden" name="status" value="{{ status }}" />
+          <span class="clients-search-bar__icon">{{ icons.search(class_="icon") }}</span>
+          <input type="text" name="q" value="{{ search }}" placeholder="Name oder Mandantennummer…" />
+          <select name="practice_area" onchange="this.form.submit()">
+            <option value="">Alle Rechtsgebiete</option>
+            {% for area in practice_areas %}
+              <option value="{{ area }}"{% if area == practice_area %} selected{% endif %}>{{ area }}</option>
+            {% endfor %}
+          </select>
+          <select name="responsible_user_id" onchange="this.form.submit()">
+            <option value="">Alle Bearbeiter</option>
+            {% for user in users %}
+              <option value="{{ user.id }}"{% if user.id == responsible_user_id %} selected{% endif %}>{{ user.display_name or user.email }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn">Filtern</button>
+        </form>
+      </div>
+
+      <div class="table-container">
+        <table class="draft-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Mandantennr.</th>
+              <th>Rechtsgebiet</th>
+              <th>Bearbeiter</th>
+              <th>E-Mail</th>
+              <th>Telefon</th>
+              <th>Letzter Kontakt</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr onclick="window.location='/dashboard/clients/{{ row.client.id }}'">
+                <td>{{ row.client.name }}</td>
+                <td class="mono">{{ row.client.client_number or "–" }}</td>
+                <td>{{ row.client.practice_area or "–" }}</td>
+                <td>{{ (row.client.responsible_user.display_name or row.client.responsible_user.email) if row.client.responsible_user else "–" }}</td>
+                <td>{{ row.client.contact_email or "–" }}</td>
+                <td>{{ row.client.contact_phone or "–" }}</td>
+                <td class="mono">{{ row.last_contact_at.strftime("%d.%m.%Y") if row.last_contact_at else "–" }}</td>
+                <td>
+                  <span class="tag {{ 'tag--matched' if row.client.status == 'active' else 'tag--outbound' }}">
+                    {{ "aktiv" if row.client.status == "active" else "archiviert" }}
+                  </span>
+                </td>
+              </tr>
+            {% else %}
+              <tr><td colspan="8" class="empty-state">Keine Mandanten in dieser Ansicht.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <dialog id="create-client-modal" class="modal">
+    <div class="modal__header">
+      <h3 class="modal__title">Mandant anlegen</h3>
+      <button type="button" class="modal__close" onclick="document.getElementById('create-client-modal').close()" aria-label="Schließen">✕</button>
+    </div>
+    <div class="modal__body">
+      <form method="post" action="/dashboard/clients/create" class="dashboard-form" style="max-width: none;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <label class="form-label">
+          Name *
+          <input type="text" name="name" required autofocus />
+        </label>
+        <label class="form-label">
+          Mandantennummer *
+          <input type="text" name="client_number" required />
+        </label>
+        <label class="form-label">
+          Rechtsgebiet
+          <select name="practice_area">
+            <option value="">— Kein Rechtsgebiet —</option>
+            {% for area in practice_areas %}
+              <option value="{{ area }}">{{ area }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="form-label">
+          Zuständiger Bearbeiter
+          <select name="responsible_user_id">
+            <option value="">— Kein Bearbeiter —</option>
+            {% for user in users %}
+              <option value="{{ user.id }}">{{ user.display_name or user.email }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="form-label">
+          E-Mail
+          <input type="email" name="contact_email" />
+        </label>
+        <label class="form-label">
+          Telefon
+          <input type="text" name="contact_phone" />
+        </label>
+        <button type="submit" class="btn btn--primary" style="align-self: flex-start; margin-top: 8px;">
+          Mandant anlegen
+        </button>
+      </form>
+    </div>
+  </dialog>
+
+  <script>
+    (function () {
+      var dropzone = document.getElementById("import-dropzone");
+      var fileInput = document.getElementById("import-file-input");
+      var fileList = document.getElementById("import-file-list");
+      var form = document.getElementById("import-form");
+
+      function renderFile(file) {
+        fileList.innerHTML = "";
+        if (!file) {
+          return;
+        }
+        var chip = document.createElement("span");
+        chip.className = "doc-chip dropzone__file-chip";
+        chip.textContent = file.name;
+        fileList.appendChild(chip);
+      }
+
+      dropzone.addEventListener("click", function () {
+        fileInput.click();
+      });
+      dropzone.addEventListener("keydown", function (evt) {
+        if (evt.key === "Enter" || evt.key === " ") {
+          evt.preventDefault();
+          fileInput.click();
+        }
+      });
+      fileInput.addEventListener("change", function () {
+        renderFile(fileInput.files[0]);
+        if (fileInput.files[0]) {
+          form.submit();
+        }
+      });
+
+      ["dragenter", "dragover"].forEach(function (evtName) {
+        dropzone.addEventListener(evtName, function (evt) {
+          evt.preventDefault();
+          dropzone.classList.add("dropzone--dragover");
+        });
+      });
+      ["dragleave", "drop"].forEach(function (evtName) {
+        dropzone.addEventListener(evtName, function (evt) {
+          evt.preventDefault();
+          dropzone.classList.remove("dropzone--dragover");
+        });
+      });
+      dropzone.addEventListener("drop", function (evt) {
+        if (evt.dataTransfer && evt.dataTransfer.files && evt.dataTransfer.files[0]) {
+          fileInput.files = evt.dataTransfer.files;
+          renderFile(fileInput.files[0]);
+          form.submit();
+        }
+      });
+    })();
+  </script>
+{% endblock %}

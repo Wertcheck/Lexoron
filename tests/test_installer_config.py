@@ -17,7 +17,7 @@ def _read_installer() -> str:
 
 def test_installs_under_local_app_data_not_program_files() -> None:
     content = _read_installer()
-    assert "DefaultDirName={localappdata}\\KanzleiAI" in content
+    assert "DefaultDirName={localappdata}\\Lexono" in content
     assert "DefaultDirName={autopf}" not in content
 
 
@@ -47,7 +47,14 @@ def test_uninstall_entry_shows_the_real_app_icon() -> None:
 
 def test_creates_start_menu_shortcut() -> None:
     content = _read_installer()
-    assert 'Name: "{group}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"' in content
+    # Seit Schritt 3 (stummer Start): Filename zeigt auf wscript.exe +
+    # Start.vbs statt direkt auf die .exe, IconFilename bleibt die .exe
+    # (damit die Verknüpfung trotzdem das echte App-Icon zeigt).
+    assert (
+        'Name: "{group}\\{#MyAppName}"; Filename: "wscript.exe"; '
+        'Parameters: """{app}\\Start.vbs"""' in content
+    )
+    assert 'IconFilename: "{app}\\{#MyAppExeName}"' in content
     # Eigener Deinstallations-Eintrag im Startmenü zusätzlich zum
     # automatischen "Apps & Features"-Eintrag.
     assert '{uninstallexe}' in content
@@ -56,7 +63,8 @@ def test_creates_start_menu_shortcut() -> None:
 def test_creates_desktop_shortcut_checked_by_default() -> None:
     content = _read_installer()
     assert (
-        'Name: "{autodesktop}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"' in content
+        'Name: "{autodesktop}\\{#MyAppName}"; Filename: "wscript.exe"; '
+        'Parameters: """{app}\\Start.vbs"""' in content
     )
     # Der Task existiert weiterhin (abwählbar), ist aber seit dieser
     # Anfrage NICHT mehr per "unchecked" abgewählt vorbelegt.
@@ -66,4 +74,17 @@ def test_creates_desktop_shortcut_checked_by_default() -> None:
 
 def test_output_filename_matches_requested_exe_name() -> None:
     content = _read_installer()
-    assert "OutputBaseFilename=KanzleiAI_Setup" in content
+    assert "OutputBaseFilename=Lexono_Setup" in content
+
+
+def test_ships_start_vbs_for_silent_launch() -> None:
+    content = _read_installer()
+    assert 'Source: "..\\Start.vbs"; DestDir: "{app}"' in content
+
+
+def test_postinstall_run_uses_silent_launcher_too() -> None:
+    content = _read_installer()
+    assert (
+        'Filename: "wscript.exe"; Parameters: """{app}\\Start.vbs"""; '
+        'Description:' in content
+    )

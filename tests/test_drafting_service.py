@@ -68,10 +68,52 @@ def _service(
     return service, search_service
 
 
-def test_requires_matter_id(db_session: Session) -> None:
+def test_empty_matter_id_auto_creates_matter(db_session: Session) -> None:
+    """Schriftsatz-Generator (20.08.): eine leere/fehlende matter_id wirft
+    KEINEN Fehler mehr, sondern legt automatisch Mandant+Akte an, damit der
+    Entwurf trotzdem gespeichert werden kann (Draft.matter_id ist NICHT
+    nullable)."""
+    assert db_session.query(Matter).count() == 0
     service, _ = _service()
-    with pytest.raises(ValueError):
-        service.create_draft("", "formulate_draft", db_session)
+
+    # Bewusst EIN Wort als Titel - zwei aufeinanderfolgende grossgeschriebene
+    # Woerter wuerden vom SecurityCheckService als moegliche unerkannte
+    # Namen/Entitaeten markiert (_find_possible_unrecognized_names, siehe
+    # app/privacy/security_check.py) und den Aufruf blockieren - hier soll
+    # ausschliesslich die Auto-Create-Verdrahtung getestet werden.
+    result = service.create_draft(
+        "", "formulate_draft", db_session, new_matter_title="Schnellentwurfsakte"
+    )
+
+    assert result.success is True
+    matter = db_session.query(Matter).one()
+    assert matter.title == "Schnellentwurfsakte"
+    persisted = db_session.query(Draft).filter_by(id=result.draft_id).first()
+    assert persisted.matter_id == matter.id
+
+
+def test_none_matter_id_auto_creates_matter_with_default_title(db_session: Session) -> None:
+    service, _ = _service()
+
+    result = service.create_draft(None, "formulate_draft", db_session)
+
+    assert result.success is True
+    matter = db_session.query(Matter).one()
+    assert "Schnellentwurf" in matter.title
+    assert matter.client.name == "Ohne Mandantenzuordnung"
+
+
+def test_auto_created_matter_logs_audit_event(db_session: Session) -> None:
+    service, _ = _service()
+
+    service.create_draft(None, "formulate_draft", db_session, actor="anwalt@kanzlei.test")
+
+    matter = db_session.query(Matter).one()
+    events = db_session.query(AuditEvent).filter_by(
+        entity_id=matter.id, event_type="matter_auto_created"
+    ).all()
+    assert len(events) == 1
+    assert events[0].actor == "anwalt@kanzlei.test"
 
 
 def test_raises_for_unknown_matter(db_session: Session) -> None:

@@ -12,8 +12,9 @@
       <table class="draft-table">
         <tbody>
           <tr>
-            <td>Mandanten-/Personendaten werden vor jeder Übertragung an die Claude-API
-              lokal geschwärzt/pseudonymisiert</td>
+            <td>Mandanten-/Personendaten werden vor jeder Übertragung an ein KI-Modell
+              lokal geschwärzt/pseudonymisiert{% if ai_mode == "LOCAL_ONLY" %} (verlassen bei
+              AI_MODE=LOCAL_ONLY zusätzlich diesen Rechner gar nicht){% endif %}</td>
             <td><span class="tag {% if pii_pseudonymization_active %}tag--matched{% else %}tag--unmatched{% endif %}">{{ "aktiv" if pii_pseudonymization_active else "inaktiv" }}</span></td>
           </tr>
         </tbody>
@@ -30,9 +31,15 @@
       <table class="draft-table">
         <tbody>
           <tr>
-            <td>Verbindung zur Claude-API</td>
-            <td><span class="tag {% if claude_api_configured %}tag--matched{% else %}tag--unmatched{% endif %}">{{ "HTTPS, API-Schlüssel hinterlegt" if claude_api_configured else "nicht konfiguriert" }}</span></td>
+            <td>KI-Modus</td>
+            <td><span class="tag tag--matched">{{ ai_mode }}</span></td>
           </tr>
+          {% if ai_mode == "HYBRID" %}
+            <tr>
+              <td>Verbindung zur Claude-API (HYBRID-Anteil)</td>
+              <td><span class="tag {% if claude_api_configured %}tag--matched{% else %}tag--unmatched{% endif %}">{{ "HTTPS, API-Schlüssel hinterlegt" if claude_api_configured else "nicht konfiguriert" }}</span></td>
+            </tr>
+          {% endif %}
           <tr>
             <td>Session-Cookie "Secure"-Flag</td>
             <td><span class="tag {% if session_cookie_secure %}tag--matched{% else %}tag--unmatched{% endif %}">{{ "ja" if session_cookie_secure else "nein (nur für lokale Entwicklung geeignet)" }}</span></td>
@@ -45,9 +52,8 @@
       </table>
       <p class="form-hint" style="margin-top: 10px;">
         Es werden ausschließlich Ja/Nein-/Wert-Statusangaben angezeigt - niemals
-        Schlüssel, Passwörter oder sonstige geheime Werte. Löschfrist wird aktuell über
-        die <code>.env</code>-Datei konfiguriert (<code>RETENTION_DAYS</code>), eine
-        Änderung über dieses Dashboard ist noch nicht möglich.
+        Schlüssel, Passwörter oder sonstige geheime Werte. Löschfrist und KI-Modus lassen
+        sich unter <a href="/dashboard/settings">Einstellungen</a> (nur Admin) ändern.
       </p>
     </div>
 

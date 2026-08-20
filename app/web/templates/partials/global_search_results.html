@@ -1,0 +1,28 @@
+{# Ergebnis-Partial der Universal Command Bar (Strg+K/⌘K, 20.08.) - siehe
+   app/web/global_search_router.py und templates/base.html (Modal-Markup +
+   Tastenkombination). Wird per HTMX bei jeder Eingabe (mit Debounce)
+   nachgeladen, ersetzt bei jedem Treffer vollstaendig den Inhalt von
+   #command-bar-results. #}
+{% if query|length < min_length %}
+  <div class="command-bar__hint">Mindestens {{ min_length }} Zeichen eingeben, um Mandanten, Akten,
+    Dokumente und Rechtsquellen zu durchsuchen.</div>
+{% elif not results %}
+  <div class="command-bar__hint">Keine Treffer für „{{ query }}“.</div>
+{% else %}
+  <ul class="command-bar__results" role="listbox">
+    {% for result in results %}
+      <li role="option">
+        <a href="{{ result.url }}" class="command-bar__result" data-command-bar-result>
+          <span class="command-bar__result-main">
+            <span class="command-bar__result-title">{{ result.title }}</span>
+            <span class="command-bar__result-subtitle">{{ result.subtitle }}</span>
+          </span>
+          <span class="tag {{ 'tag--matched' if result.badge_label == 'Lokal' else 'tag--extern' }}"
+                title="{{ result.badge_title }}">
+            {{ result.badge_label }}
+          </span>
+        </a>
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}

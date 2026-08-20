@@ -91,11 +91,34 @@ def test_account_overview_hides_admin_only_card_for_non_admin(
     assert 'href="/dashboard/admin/users"' not in response.text
 
 
+def test_account_overview_shows_monitoring_and_backup_cards_for_admin(
+    admin_client: TestClient,
+) -> None:
+    """Systemstatus und Backup & Export sind seit der bereinigten
+    Fuenf-Module-Sidebar (20.08., siehe app/web/templates/base.html) keine
+    eigenen Hauptmenue-Eintraege mehr - fuer Admins bleiben sie ueber diese
+    beiden Kacheln auf der Profil-/Einstellungen-Uebersicht erreichbar."""
+    response = admin_client.get("/dashboard/account")
+    assert 'href="/dashboard/monitoring"' in response.text
+    assert 'href="/dashboard/backup"' in response.text
+
+
+def test_account_overview_hides_monitoring_and_backup_cards_for_non_admin(
+    mitarbeiter_client: TestClient,
+) -> None:
+    response = mitarbeiter_client.get("/dashboard/account")
+    assert 'href="/dashboard/monitoring"' not in response.text
+    assert 'href="/dashboard/backup"' not in response.text
+
+
 def test_account_overview_links_to_all_four_sections(admin_client: TestClient) -> None:
     response = admin_client.get("/dashboard/account")
     for href in [
         "/dashboard/account/privacy",
-        "/dashboard/account/profile",
+        # "Kanzlei-Profil & Briefkopf" verlinkt seit 20.08. auf die echte
+        # Seite unter /dashboard/settings/profile statt auf den
+        # ehemaligen Platzhalter /dashboard/account/profile.
+        "/dashboard/settings/profile",
         "/dashboard/account/license",
         "/dashboard/account/me",
     ]:

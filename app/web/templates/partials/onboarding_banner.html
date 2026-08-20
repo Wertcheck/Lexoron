@@ -1,45 +1,114 @@
 {# Onboarding-Banner (Prompt 48, Design-Vorlage; Ziel-Links aktualisiert in
    Prompt 49) - wird nur gezeigt, wenn der Posteingang leer ist
-   (total_count == 0, siehe inbox.html). Alle drei Aktionen fuehren ehrlich
-   auf die Profil-/Einstellungen-Uebersicht (app/web/account_router.py):
-   Scan-Ordner (INTAKE_WATCHED_FOLDERS) und E-Mail-Abruf (MAIL_*) werden
-   aktuell ausschliesslich ueber die .env-Datei konfiguriert, es gibt noch
-   KEINEN Dashboard-Endpunkt dafuer - bewusst KEINE Drag&Drop-Upload-Zone,
-   die optisch interaktiv wirkt, aber nichts entgegennimmt. #}
+   (total_count == 0, siehe inbox.html).
+
+   Seit 20.08. (siehe ARCHITECTURE.md) fuehren die drei Aktionen NICHT mehr
+   auf einen toten Redirect zur Profil-Uebersicht, sondern oeffnen echte
+   modale Eingabefenster, die direkt gegen app/web/settings_router.py
+   posten (Scan-Ordner/E-Mail sind seither ECHTE, editierbare Einstellungen,
+   nicht mehr nur ueber die .env-Datei erreichbar). Schritt 3 (Ollama) ist
+   kein Formular, sondern derselbe admin-Klick-Erreichbarkeitscheck wie auf
+   der Systemstatus-/Einstellungsseite. #}
 <div class="onboarding">
   <div class="onboarding-box">
-    <h2 class="onboarding-box__title">Willkommen bei Kanzlei AI – Erste Schritte</h2>
+    <h2 class="onboarding-box__title">Willkommen bei Lexono – Erste Schritte</h2>
     <p class="onboarding-box__hint">
-      Diese Einrichtungsschritte werden mit dem v0.2-Update direkt im Dashboard
-      verfügbar. Bis dahin erfolgt die Konfiguration über die <code>.env</code>-Datei
-      (siehe ARCHITECTURE.md).
+      Drei kurze Schritte, bevor Dokumente automatisch aufgenommen werden.
     </p>
     <div class="onboarding-steps">
       <div class="onboarding-step">
         <div class="onboarding-step__icon">{{ icons.printer(class_="icon") }}</div>
         <div class="onboarding-step__title">1. Scan-Ordner festlegen</div>
         <div class="onboarding-step__action">
-          <a href="/dashboard/account" class="onboarding-icon-btn" title="Verzeichnis wählen" aria-label="Verzeichnis wählen">
+          <button type="button" class="onboarding-icon-btn" title="Ordner hinzufügen" aria-label="Ordner hinzufügen"
+                  onclick="document.getElementById('onboarding-modal-folder').showModal()">
             {{ icons.plus(class_="icon") }}
-          </a>
+          </button>
           <span>Verzeichnis wählen</span>
         </div>
       </div>
       <div class="onboarding-step">
-        <div class="onboarding-step__icon">{{ icons.upload(class_="icon") }}</div>
-        <div class="onboarding-step__title">2. Akten &amp; Dokumente hochladen</div>
-        <a href="/dashboard/account" class="onboarding-step__dropzone">
-          Verzeichnis-Überwachung einrichten
-        </a>
+        <div class="onboarding-step__icon">{{ icons.link(class_="icon") }}</div>
+        <div class="onboarding-step__title">2. E-Mail verknüpfen</div>
+        <div class="onboarding-step__action">
+          <button type="button" class="btn btn--primary" onclick="document.getElementById('onboarding-modal-mail').showModal()">
+            Verknüpfen
+          </button>
+          <span>IMAP/SMTP konfigurieren</span>
+        </div>
       </div>
       <div class="onboarding-step">
-        <div class="onboarding-step__icon">{{ icons.link(class_="icon") }}</div>
-        <div class="onboarding-step__title">3. E-Mail verknüpfen</div>
-        <div class="onboarding-step__action">
-          <a href="/dashboard/account" class="btn btn--primary">Verknüpfen</a>
-          <span>IMAP/SMTP konfigurieren</span>
+        <div class="onboarding-step__icon">{{ icons.bulb(class_="icon") }}</div>
+        <div class="onboarding-step__title">3. Lokale KI prüfen</div>
+        <div class="onboarding-step__action" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+          <span id="onboarding-ollama-result">noch nicht geprüft</span>
+          <form hx-post="/dashboard/monitoring/check-ollama" hx-target="#onboarding-ollama-result" hx-swap="innerHTML">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+            <button type="submit" class="btn">Ollama jetzt prüfen</button>
+          </form>
+          {% include "partials/ollama_install_widget.html" %}
         </div>
       </div>
     </div>
   </div>
 </div>
+
+<dialog id="onboarding-modal-folder" class="modal">
+  <div class="modal__header">
+    <h3 class="modal__title">Scan-Ordner hinzufügen</h3>
+    <button type="button" class="modal__close" onclick="document.getElementById('onboarding-modal-folder').close()" aria-label="Schließen">✕</button>
+  </div>
+  <div class="modal__body">
+    <p class="modal__hint">
+      Vollständiger Verzeichnispfad auf diesem Rechner, z. B. <span class="mono">C:\Kanzlei\Eingang</span>.
+      Weitere Ordner und alle anderen Einstellungen finden sich jederzeit unter
+      <a href="/dashboard/settings">Einstellungen</a>.
+    </p>
+    <form method="post" action="/dashboard/settings/intake-folders/add" class="dashboard-form" style="max-width:none;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+      <label class="form-label">
+        Ordnerpfad
+        <input type="text" name="path" placeholder="C:\Kanzlei\Eingang" required autofocus />
+      </label>
+      <button type="submit" class="btn btn--primary">Hinzufügen</button>
+    </form>
+  </div>
+</dialog>
+
+<dialog id="onboarding-modal-mail" class="modal">
+  <div class="modal__header">
+    <h3 class="modal__title">E-Mail-Postfach verknüpfen</h3>
+    <button type="button" class="modal__close" onclick="document.getElementById('onboarding-modal-mail').close()" aria-label="Schließen">✕</button>
+  </div>
+  <div class="modal__body">
+    <p class="modal__hint">IMAP-Zugangsdaten für den automatischen Nachrichtenabruf.</p>
+    <form method="post" action="/dashboard/settings/mail" class="dashboard-form" style="max-width:none;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+      <label class="form-label">
+        IMAP-Server
+        <input type="text" name="mail_host" placeholder="imap.beispiel-kanzlei.de" required />
+      </label>
+      <label class="form-label">
+        Port
+        <input type="number" name="mail_port" value="993" min="1" max="65535" />
+      </label>
+      <label class="form-label">
+        Benutzername
+        <input type="text" name="mail_username" autocomplete="off" required />
+      </label>
+      <label class="form-label">
+        Passwort
+        <input type="password" name="mail_password" autocomplete="new-password" required />
+      </label>
+      <label class="form-label">
+        Postfach
+        <input type="text" name="mail_mailbox" value="INBOX" />
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" name="mail_use_ssl" value="true" checked />
+        SSL/TLS verwenden
+      </label>
+      <button type="submit" class="btn btn--primary">Verknüpfen</button>
+    </form>
+  </div>
+</dialog>

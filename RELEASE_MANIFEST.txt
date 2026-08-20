@@ -1,14 +1,14 @@
 ═══════════════════════════════════════════════════════════════════════════════
-  KANZLEI-AI v0.1.0 – Release Manifest
+  LEXONO v0.1.0 – Release Manifest
 ═══════════════════════════════════════════════════════════════════════════════
 
-📦 ZIP-INHALT: Kanzlei-AI-v0.1.0-Release.zip (86 MB)
+📦 ZIP-INHALT: Lexono-v0.1.0-Release.zip (86 MB)
 
 ═══════════════════════════════════════════════════════════════════════════════
 📋 DATEI-ÜBERSICHT:
 
 1. INSTALLER/
-   ├── KanzleiAI-Setup-0.1.0.exe      (Main Windows Installer)
+   ├── Lexono_Setup.exe                (Main Windows Installer)
    └── kanzlei_ai.exe                 (Bundled Application)
 
 2. DOKUMENTATION/
@@ -122,14 +122,14 @@ Pilot Success Rate:   7/7 criteria met ✅
    → Read PILOT_CHECKLIST.md (sections A–D)
 
 2. Installation:
-   → Double-click: INSTALLER/KanzleiAI-Setup-0.1.0.exe
+   → Double-click: INSTALLER/Lexono_Setup.exe
    → Follow Windows installer prompts
-   → Installation path: C:\Program Files\KanzleiAI (default)
+   → Installation path: %LocalAppData%\Lexono (default)
    → Data directory: C:\ProgramData\KanzleiAI (auto-created)
 
 3. First Run:
    → Open console: cmd or PowerShell
-   → cd "C:\Program Files\KanzleiAI"
+   → cd "%LocalAppData%\Lexono"
    → Run: kanzlei_ai.exe serve
    → Setup wizard will ask for admin email + password
    → Database migrations will run automatically
@@ -261,7 +261,7 @@ See FUTURE_ROADMAP.md for detailed planning.
 📦 FILE SIZES & STRUCTURE:
 
 INSTALLER/
-  KanzleiAI-Setup-0.1.0.exe    ~65 MB  (Inno Setup Installer)
+  Lexono_Setup.exe              ~65 MB  (Inno Setup Installer)
   kanzlei_ai.exe               ~184 MB (PyInstaller Bundle)
 
 SOURCE/
@@ -313,7 +313,7 @@ Next Step:                Deploy to pilot law firm
 ═══════════════════════════════════════════════════════════════════════════════
 
 Questions? See the appropriate documentation above.
-Thank you for using Kanzlei-AI v0.1.0!
+Thank you for using Lexono v0.1.0!
 
 Release Date: 17.08.2026
 Version: 0.1.0 (Prompt 45 Completion; Prompts 46-47 added 19.08.2026)

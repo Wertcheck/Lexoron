@@ -1,0 +1,23 @@
+{# Paragraphenliste der Gesetzesbibliothek (20.08.) - genutzt sowohl beim
+   vollen Seitenaufruf (templates/law_library.html) als auch als HTMX-
+   Ziel der Schnellsuche (app/web/laws_router.py:
+   law_library_sections_partial). #}
+{% if not selected_law %}
+  <div class="empty-state">Gesetzeswerk auswählen.</div>
+{% elif not sections %}
+  <div class="empty-state">
+    {% if search %}Keine Paragraphen für „{{ search }}“ gefunden.{% else %}Noch keine Paragraphen hinterlegt.{% endif %}
+  </div>
+{% else %}
+  <ul class="law-sidebar__sections">
+    {% for section in sections %}
+      <li>
+        <a href="/dashboard/laws/{{ selected_law.code }}/{{ section.id }}{% if search %}?q={{ search }}{% endif %}"
+           class="law-sidebar__section-link{% if selected_section and selected_section.id == section.id %} law-sidebar__section-link--active{% endif %}">
+          <span class="law-sidebar__section-number">{{ section.section_number }}</span>
+          <span class="law-sidebar__section-title">{{ section.title }}</span>
+        </a>
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}

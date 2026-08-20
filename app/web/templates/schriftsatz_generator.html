@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}Schriftsatz-Generator{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">Schriftsatz-Generator</h1>
+    <div class="topbar__meta">
+      Erstellt einen neuen Entwurf über dieselbe KI-Architektur wie der Rest des Dashboards
+      (lokal/Ollama standardmäßig, optional HYBRID über
+      <a href="/dashboard/settings">Einstellungen</a>) · Freigabe/Prüfung erfolgt wie gewohnt
+      in der Entwurfsansicht
+    </div>
+  </div>
+
+  {% if error %}
+    <div class="banner banner--error">{{ error }}</div>
+  {% endif %}
+
+  <div class="draft-page">
+    <form method="post" action="/dashboard/tools/schriftsatz/generate"
+          enctype="multipart/form-data" class="dashboard-form" style="max-width: none;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+
+      <div class="settings-section">
+        <h2 class="settings-section__title">Akte</h2>
+        <p class="settings-section__hint">
+          Entweder eine bestehende offene Akte wählen oder eine neue anlegen - der Entwurf
+          benötigt in jedem Fall einen Aktenbezug (Aktenisolation).
+        </p>
+
+        <label class="form-label">
+          Bestehende Akte
+          <select name="matter_id" id="matter-select">
+            <option value=""{% if not preselected_matter_id %} selected{% endif %}>— Neue Akte anlegen —</option>
+            {% for matter in open_matters %}
+              <option value="{{ matter.id }}"{% if matter.id == preselected_matter_id %} selected{% endif %}>{{ matter.title }}{% if matter.reference_number %} ({{ matter.reference_number }}){% endif %}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <div id="new-matter-fields" class="settings-grid" style="margin-top: 12px;">
+          <label class="form-label">
+            Betreff der neuen Akte
+            <input type="text" name="new_matter_title" placeholder="z. B. Kündigungsschutzklage Muster GmbH" />
+          </label>
+          <label class="form-label">
+            Mandant (optional)
+            <input type="text" name="new_client_name" placeholder="z. B. Muster GmbH" />
+          </label>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h2 class="settings-section__title">Vorgaben</h2>
+        <p class="settings-section__hint">
+          Alle drei Felder sind optional und durchlaufen denselben Datenschutz-Check wie der
+          restliche Sachverhalt, bevor irgendetwas die Maschine verlässt.
+        </p>
+        <label class="form-label">
+          Gewünschter Stil
+          <input type="text" name="stil" placeholder="z. B. sachlich-formell, kurz und präzise" />
+        </label>
+        <label class="form-label">
+          Schreibvorlage / Muster
+          <textarea name="vorlage" rows="4" placeholder="Optionaler Referenztext, an dem sich der Entwurf orientieren soll"></textarea>
+        </label>
+        <label class="form-label">
+          Anwaltliche Anmerkungen
+          <textarea name="attorney_anmerkungen" rows="4" placeholder="Konkrete Arbeitsaufträge an den Entwurf"></textarea>
+        </label>
+      </div>
+
+      <div class="settings-section">
+        <h2 class="settings-section__title">Dokumente</h2>
+        <p class="settings-section__hint">
+          Akten, Vorlagen oder Belege (PDF, Word) per Drag &amp; Drop hinzufügen - sie werden
+          als Dokumente der Akte gespeichert, per OCR/Textextraktion verarbeitet und fließen in
+          den generierten Entwurf ein.
+        </p>
+
+        <div id="dropzone" class="dropzone" tabindex="0" role="button"
+             aria-label="Dokumente hierher ziehen oder klicken, um Dateien auszuwählen">
+          {{ icons.upload(class_="dropzone__icon") }}
+          <div class="dropzone__text">Dateien hierher ziehen oder klicken</div>
+          <div class="dropzone__hint">
+            PDF, Word (.docx) · max. {{ max_upload_files }} Dateien · je 25 MB
+          </div>
+        </div>
+        <input type="file" name="documents" id="file-input" multiple
+               accept="{{ allowed_upload_extensions | join(',') }}" style="display: none;" />
+        <div id="file-list" class="dropzone__file-list"></div>
+      </div>
+
+      <button type="submit" class="btn btn--primary">Schriftsatz generieren</button>
+    </form>
+  </div>
+
+  <script>
+    (function () {
+      var matterSelect = document.getElementById("matter-select");
+      var newMatterFields = document.getElementById("new-matter-fields");
+      var dropzone = document.getElementById("dropzone");
+      var fileInput = document.getElementById("file-input");
+      var fileList = document.getElementById("file-list");
+
+      function toggleNewMatterFields() {
+        newMatterFields.style.display = matterSelect.value ? "none" : "grid";
+      }
+      matterSelect.addEventListener("change", toggleNewMatterFields);
+      toggleNewMatterFields();
+
+      // Haelt die aktuell ausgewaehlten Dateien selbst nach (statt sich auf
+      // fileInput.files direkt zu verlassen), damit einzelne Dateien wieder
+      // entfernt werden koennen (DataTransfer ist der einzige Weg, ein
+      // <input type="file">.files-FileList aus JS heraus zu veraendern).
+      var currentFiles = [];
+
+      function renderFileList() {
+        fileList.innerHTML = "";
+        currentFiles.forEach(function (file, index) {
+          var chip = document.createElement("span");
+          chip.className = "doc-chip dropzone__file-chip";
+          var label = document.createElement("span");
+          label.textContent = file.name;
+          chip.appendChild(label);
+          var removeBtn = document.createElement("button");
+          removeBtn.type = "button";
+          removeBtn.className = "dropzone__file-remove";
+          removeBtn.setAttribute("aria-label", "Entfernen: " + file.name);
+          removeBtn.textContent = "✕";
+          removeBtn.addEventListener("click", function (evt) {
+            evt.stopPropagation();
+            currentFiles.splice(index, 1);
+            syncFileInput();
+          });
+          chip.appendChild(removeBtn);
+          fileList.appendChild(chip);
+        });
+      }
+
+      function syncFileInput() {
+        var transfer = new DataTransfer();
+        currentFiles.forEach(function (file) {
+          transfer.items.add(file);
+        });
+        fileInput.files = transfer.files;
+        renderFileList();
+      }
+
+      function addFiles(fileListToAdd) {
+        for (var i = 0; i < fileListToAdd.length; i++) {
+          currentFiles.push(fileListToAdd[i]);
+        }
+        syncFileInput();
+      }
+
+      dropzone.addEventListener("click", function () {
+        fileInput.click();
+      });
+      dropzone.addEventListener("keydown", function (evt) {
+        if (evt.key === "Enter" || evt.key === " ") {
+          evt.preventDefault();
+          fileInput.click();
+        }
+      });
+      fileInput.addEventListener("change", function () {
+        addFiles(fileInput.files);
+      });
+
+      ["dragenter", "dragover"].forEach(function (evtName) {
+        dropzone.addEventListener(evtName, function (evt) {
+          evt.preventDefault();
+          dropzone.classList.add("dropzone--dragover");
+        });
+      });
+      ["dragleave", "drop"].forEach(function (evtName) {
+        dropzone.addEventListener(evtName, function (evt) {
+          evt.preventDefault();
+          dropzone.classList.remove("dropzone--dragover");
+        });
+      });
+      dropzone.addEventListener("drop", function (evt) {
+        if (evt.dataTransfer && evt.dataTransfer.files) {
+          addFiles(evt.dataTransfer.files);
+        }
+      });
+    })();
+  </script>
+{% endblock %}

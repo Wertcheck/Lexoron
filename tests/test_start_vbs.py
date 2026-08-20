@@ -1,0 +1,103 @@
+"""Smoke-Test für Start.vbs (Schritt 3): stummer Startprozess ohne
+sichtbares Konsolenfenster.
+
+Kein automatisierter cscript-Lauf (würde einen echten Server-Prozess
+starten) - Textprüfung der sicherheitskritischen/funktionalen Eigenschaften.
+Die eigentliche Lauffähigkeit wurde während der Umsetzung dieses Schritts
+manuell auf dem echten Windows-Zielsystem verifiziert (echter cscript-Lauf,
+app.log korrekt befüllt, /health erreichbar, Prozess sauber beendet) - dabei
+wurde auch ein echter cmd.exe-/c-Quoting-Bug gefunden und behoben (siehe
+Kommentar in Start.vbs)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+_VBS_PATH = Path(__file__).resolve().parent.parent / "Start.vbs"
+
+
+def _read_vbs() -> str:
+    return _VBS_PATH.read_text(encoding="utf-8")
+
+
+def test_start_vbs_exists_in_project_root() -> None:
+    assert _VBS_PATH.exists()
+
+
+def test_hides_the_window_for_normal_silent_start() -> None:
+    content = _read_vbs()
+    # 0 = SW_HIDE, muss fuer den stummen Pfad verwendet werden.
+    assert 'objShell.Run "cmd /c """ & strRedirectedCommand & """", 0, False' in content
+
+
+def test_shows_the_window_for_the_interactive_first_run() -> None:
+    """Der allererste Start (noch keine .env im Datenverzeichnis) MUSS
+    sichtbar bleiben - der Setup-Assistent fragt interaktiv E-Mail/
+    Passwort ab (siehe app/setup/wizard.py)."""
+    content = _read_vbs()
+    assert "objShell.Run strCommand, 1, False" in content
+
+
+def test_checks_for_env_file_before_deciding_visibility() -> None:
+    content = _read_vbs()
+    assert "objFSO.FileExists(strEnvPath)" in content
+
+
+def test_redirects_stdout_and_stderr_to_app_log() -> None:
+    content = _read_vbs()
+    assert '">> """' in content or ">> \"\"\"" in content
+    assert "app.log" in content
+    assert "2>&1" in content
+
+
+def test_uses_the_outer_quote_wrap_workaround_for_cmd_c() -> None:
+    """Regressionsschutz für den waehrend der Umsetzung gefundenen echten
+    Bug: ohne ein zusaetzliches, die GESAMTE Befehlszeile umschliessendes
+    Anfuehrungszeichenpaar entfernt cmd.exe bei einer mit einem zitierten
+    Pfad beginnenden /c-Befehlszeile faelschlich beide aeusseren
+    Anfuehrungszeichen und die Befehlszeile zerfaellt (kein Fehler, aber
+    auch keine Wirkung - app.log entsteht nie)."""
+    content = _read_vbs()
+    assert 'cmd /c """ & strRedirectedCommand & """"' in content
+
+
+def test_falls_back_to_dev_python_when_no_packaged_exe_present() -> None:
+    content = _read_vbs()
+    assert ".venv\\Scripts\\python.exe" in content
+    assert "run.py" in content
+
+
+def test_resolves_data_dir_consistent_with_python_setup_paths() -> None:
+    """Muss dieselbe Ableitung wie app/setup/paths.py verwenden - sonst
+    prüft dieses Skript die .env am falschen Ort und triggert faelschlich
+    den sichtbaren Erststart-Zweig auch bei laengst eingerichteten
+    Installationen."""
+    content = _read_vbs()
+    assert "KANZLEI_AI_DATA_DIR" in content
+    assert "PROGRAMDATA" in content
+    assert "KanzleiAI" in content
+
+
+def test_checks_local_ollama_before_starting_the_server() -> None:
+    """Local-First-Architektur (20.08., ARCHITECTURE.md §60): der
+    Ollama-Check muss VOR beiden objShell.Run-Aufrufen passieren, damit die
+    Ergebniszeile in app.log auch dann steht, wenn der eigentliche
+    Server-Start aus irgendeinem Grund scheitert."""
+    content = _read_vbs()
+    ollama_check_pos = content.index("CheckOllamaAndLog strLogPath")
+    first_run_pos = content.index('objShell.Run "cmd /c')
+    second_run_pos = content.index("objShell.Run strCommand, 1, False")
+    assert ollama_check_pos < first_run_pos
+    assert ollama_check_pos < second_run_pos
+
+
+def test_ollama_check_never_blocks_startup_on_error() -> None:
+    content = _read_vbs()
+    assert "On Error Resume Next" in content
+    assert "localhost:11434" in content
+
+
+def test_ollama_check_writes_to_app_log() -> None:
+    content = _read_vbs()
+    assert 'Sub CheckOllamaAndLog(strLogFilePath)' in content
+    assert "objLogFile.WriteLine" in content

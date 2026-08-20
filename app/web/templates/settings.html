@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}Einstellungen{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">Einstellungen</h1>
+    <div class="topbar__meta">Nur für Administratoren sichtbar · Änderungen wirken sofort, kein Neustart nötig</div>
+  </div>
+
+  {% if success %}
+    <div class="banner banner--success">{{ success }}</div>
+  {% endif %}
+  {% if error %}
+    <div class="banner banner--error">{{ error }}</div>
+  {% endif %}
+
+  <div class="draft-page">
+    <div class="settings-section">
+      <h2 class="settings-section__title">Scan-Ordner</h2>
+      <p class="settings-section__hint">
+        Verzeichnisse, die auf neue Dokumente überwacht werden (INTAKE_WATCHED_FOLDERS).
+      </p>
+
+      <div class="settings-list">
+        {% if intake_watched_folders %}
+          {% for folder in intake_watched_folders %}
+            <div class="settings-list__item">
+              {{ icons.folder(class_="icon") }}
+              <span class="settings-list__item-path">{{ folder }}</span>
+              <form method="post" action="/dashboard/settings/intake-folders/remove" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                <input type="hidden" name="path" value="{{ folder }}" />
+                <button type="submit" class="header-icons__btn" title="Entfernen" aria-label="Ordner entfernen" style="width:24px;height:24px;">
+                  {{ icons.warning(class_="icon") }}
+                </button>
+              </form>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="settings-list__empty">Noch kein Scan-Ordner eingerichtet.</div>
+        {% endif %}
+      </div>
+
+      <button type="button" class="settings-add-btn" onclick="document.getElementById('modal-add-folder').showModal()">
+        {{ icons.plus(class_="icon") }}
+        Scan-Ordner hinzufügen
+      </button>
+    </div>
+
+    <div class="settings-section">
+      <h2 class="settings-section__title">E-Mail-Postfach (IMAP)</h2>
+      <p class="settings-section__hint">
+        Zugangsdaten für den automatischen Nachrichtenabruf (MAIL_*). Das Passwort wird nie angezeigt.
+      </p>
+      <form method="post" action="/dashboard/settings/mail" class="dashboard-form" style="max-width: none;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <div class="settings-grid">
+          <label class="form-label">
+            IMAP-Server
+            <input type="text" name="mail_host" value="{{ mail_host or '' }}" placeholder="imap.beispiel-kanzlei.de" />
+          </label>
+          <label class="form-label">
+            Port
+            <input type="number" name="mail_port" value="{{ mail_port }}" min="1" max="65535" />
+          </label>
+          <label class="form-label">
+            Benutzername
+            <input type="text" name="mail_username" value="{{ mail_username or '' }}" autocomplete="off" />
+          </label>
+          <label class="form-label">
+            Passwort
+            <input type="password" name="mail_password" placeholder="{{ 'hinterlegt - leer lassen, um es zu behalten' if mail_configured else 'noch nicht hinterlegt' }}" autocomplete="new-password" />
+          </label>
+          <label class="form-label">
+            Postfach
+            <input type="text" name="mail_mailbox" value="{{ mail_mailbox or 'INBOX' }}" />
+          </label>
+          <label class="checkbox-label" style="align-self: end;">
+            <input type="checkbox" name="mail_use_ssl" value="true" {% if mail_use_ssl %}checked{% endif %} />
+            SSL/TLS verwenden
+          </label>
+        </div>
+        <button type="submit" class="btn btn--primary" style="align-self: flex-start; margin-top: 8px;">Speichern</button>
+      </form>
+    </div>
+
+    <div class="settings-section">
+      <h2 class="settings-section__title">Aufbewahrung</h2>
+      <p class="settings-section__hint">
+        Automatische Löschfrist in Tagen (RETENTION_DAYS) - 0 = keine automatische Löschung.
+      </p>
+      <form method="post" action="/dashboard/settings/retention" class="dashboard-form" style="max-width: none; flex-direction: row; align-items: flex-end; gap: 12px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <label class="form-label" style="max-width: 160px;">
+          Tage
+          <input type="number" name="retention_days" value="{{ retention_days }}" min="0" />
+        </label>
+        <button type="submit" class="btn btn--primary">Speichern</button>
+      </form>
+    </div>
+
+    <div class="settings-section">
+      <h2 class="settings-section__title">KI-Modus &amp; lokales Modell</h2>
+      <p class="settings-section__hint">
+        Standard ist <strong>LOCAL_ONLY</strong> (ausschließlich das lokale Ollama-Modell,
+        keine Anfrage verlässt diese Maschine). <strong>HYBRID</strong> leitet Text - erst
+        NACH lokaler Pseudonymisierung - zusätzlich an Anthropic weiter.
+      </p>
+
+      <div class="ollama-status-row" style="margin-bottom: 16px;">
+        <span class="tag {% if ai_mode == 'LOCAL_ONLY' %}tag--matched{% else %}tag--outbound{% endif %}">{{ ai_mode }}</span>
+        <span id="ollama-reachability-result">Ollama-Erreichbarkeit noch nicht geprüft</span>
+        <form hx-post="/dashboard/monitoring/check-ollama" hx-target="#ollama-reachability-result" hx-swap="innerHTML" style="display:inline;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <button type="submit" class="btn">Jetzt prüfen</button>
+        </form>
+        {% if ai_mode == 'HYBRID' %}
+          <span class="tag {% if anthropic_api_key_configured %}tag--matched{% else %}tag--unmatched{% endif %}">
+            Anthropic-Schlüssel {{ "hinterlegt" if anthropic_api_key_configured else "fehlt" }}
+          </span>
+        {% endif %}
+        {% include "partials/ollama_install_widget.html" %}
+      </div>
+
+      <form method="post" action="/dashboard/settings/ollama" class="dashboard-form" style="max-width: none;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <div class="settings-grid">
+          <label class="form-label">
+            Ollama-URL
+            <input type="text" name="ollama_base_url" value="{{ ollama_base_url }}" />
+          </label>
+          <label class="form-label">
+            Modellname
+            <input type="text" name="ollama_model_name" value="{{ ollama_model_name }}" />
+            <span class="form-hint">Muss lokal über "ollama pull &lt;modell&gt;" bereits heruntergeladen sein.</span>
+          </label>
+        </div>
+        <button type="submit" class="btn btn--primary" style="align-self: flex-start; margin-top: 8px;">Speichern</button>
+      </form>
+    </div>
+  </div>
+
+  <dialog id="modal-add-folder" class="modal">
+    <div class="modal__header">
+      <h3 class="modal__title">Scan-Ordner hinzufügen</h3>
+      <button type="button" class="modal__close" onclick="document.getElementById('modal-add-folder').close()" aria-label="Schließen">✕</button>
+    </div>
+    <div class="modal__body">
+      <p class="modal__hint">
+        Vollständiger Verzeichnispfad auf diesem Rechner, z. B. <span class="mono">C:\Kanzlei\Eingang</span>.
+        Der Ordner wird auf neue Dokumente überwacht.
+      </p>
+      <form method="post" action="/dashboard/settings/intake-folders/add" class="dashboard-form" style="max-width:none;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <label class="form-label">
+          Ordnerpfad
+          <div style="display:flex; gap:8px;">
+            <input type="text" name="path" id="scan-folder-path-input" placeholder="C:\Kanzlei\Eingang" required autofocus style="flex:1;" />
+            {# Nativer Ordnerauswahl-Dialog (20.08.) - nur im gebuendelten
+               WebView2-Fenster verfuegbar (run.py: _NativeApi.pick_folder,
+               ueber webview.create_window(js_api=...) als
+               window.pywebview.api.pick_folder() bereitgestellt). Im reinen
+               Browser-/--no-window-Modus existiert window.pywebview nicht -
+               der Button bleibt dann per Feature-Detection unten
+               ausgeblendet, das Textfeld bleibt voll nutzbar. #}
+            <button type="button" id="scan-folder-browse-btn" class="btn" style="display:none; flex-shrink:0;">Ordner auswählen…</button>
+          </div>
+        </label>
+        <button type="submit" class="btn btn--primary">Hinzufügen</button>
+      </form>
+    </div>
+  </dialog>
+
+  <script>
+    (function () {
+      var browseBtn = document.getElementById("scan-folder-browse-btn");
+      var pathInput = document.getElementById("scan-folder-path-input");
+
+      function showBrowseButtonIfNativeApiAvailable() {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.pick_folder) {
+          browseBtn.style.display = "";
+        }
+      }
+      // Beim Laden bereits vorhanden (z. B. erneuter Modal-Aufruf) ODER
+      // erst spaeter per "pywebviewready"-Event (pywebview injiziert
+      // die Bruecke asynchron NACH dem eigentlichen Seitenladen).
+      showBrowseButtonIfNativeApiAvailable();
+      window.addEventListener("pywebviewready", showBrowseButtonIfNativeApiAvailable);
+
+      browseBtn.addEventListener("click", function () {
+        window.pywebview.api.pick_folder().then(function (selectedPath) {
+          if (selectedPath) {
+            pathInput.value = selectedPath;
+          }
+        });
+      });
+    })();
+  </script>
+{% endblock %}

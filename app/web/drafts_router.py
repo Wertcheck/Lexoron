@@ -19,7 +19,7 @@ manueller Platzhalter für den Actor, bis Prompt 26 echte Anmeldung bringt.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session, joinedload
@@ -40,6 +40,8 @@ from app.auth.permissions import (
 )
 from app.db.session import get_db
 from app.drafting.versioning import create_manual_edit_version
+from app.export.docx_export_service import DOCX_MEDIA_TYPE, DraftDocxExportService
+from app.firm_profile import get_firm_profile
 from app.feedback.schema import DraftFeedbackInput
 from app.feedback.service import DraftFeedbackService
 from app.models import (
@@ -255,6 +257,46 @@ def draft_detail_page(
         "can_reject": has_permission(current_user, PERM_DRAFT_REJECT),
     }
     return templates.TemplateResponse(request, "draft_detail.html", context)
+
+
+@router.get("/{draft_id}/export.docx")
+def export_draft_docx(
+    draft_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_login),
+) -> Response:
+    """Exportiert diese Entwurfsversion als formatiertes `.docx`
+    (Schriftsatz-Generator, 20.08. - siehe app/export/docx_export_service.py
+    für die Begründung, warum bewusst OHNE Briefkopf/Logo). Reine Ausgabe
+    ohne KI-Aufruf/Kostenrisiko - erlaubt für alle drei Rollen, wie das
+    Lesen der Entwurfsansicht selbst (`require_login` ohne zusätzliche
+    Berechtigungsprüfung, siehe Rechte-Matrix)."""
+    draft = get_or_404(db, Draft, draft_id, "Entwurf")
+
+    firm_profile = get_firm_profile(db)
+    buffer = DraftDocxExportService().export_draft(draft, draft.matter, firm_profile)
+
+    db.add(
+        AuditEvent(
+            entity_type="Draft",
+            entity_id=draft.id,
+            event_type="draft_exported_docx",
+            actor=current_user.email,
+            details=f"Entwurf v{draft.version} als DOCX exportiert",
+        )
+    )
+    db.commit()
+
+    safe_title = "".join(
+        c for c in (draft.matter.title or "Schriftsatz") if c.isalnum() or c in " -_"
+    ).strip() or "Schriftsatz"
+    filename = f"{safe_title}_v{draft.version}.docx"
+
+    return Response(
+        content=buffer.getvalue(),
+        media_type=DOCX_MEDIA_TYPE,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/{draft_id}/manual-edit")

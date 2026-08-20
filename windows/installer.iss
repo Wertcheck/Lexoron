@@ -15,17 +15,17 @@
 ; suchen und fehlschlagen). Aus demselben Grund referenziert [Files] oben
 ; bereits "..\dist\kanzlei_ai\*".
 ; Installiert AUSSCHLIESSLICH den Programmordner (Code, Templates,
-; statische Assets, Migrationsskripte) unter %LocalAppData%\KanzleiAI (bis
+; statische Assets, Migrationsskripte) unter %LocalAppData%\Lexono (bis
 ; Prompt 36-Schritt 3 unter {autopf}\"Program Files") - KEINE Mandantendaten.
 ; Konfiguration/Datenbank/Dokumente entstehen erst beim ersten Start des
 ; Setup-Assistenten (app/setup/, Prompt 37) weiterhin unter
 ; %PROGRAMDATA%\KanzleiAI - bewusst getrennt vom Installationsverzeichnis,
 ; siehe ARCHITECTURE.md (Programminstallation vs. Anwendungsdaten).
 
-#define MyAppName "Kanzlei-AI"
+#define MyAppName "Lexono"
 #define MyAppVersion "0.1.0"
 #define MyAppExeName "kanzlei_ai.exe"
-#define MyAppPublisher "Kanzlei AI Projekt"
+#define MyAppPublisher "Lexono Projekt"
 
 [Setup]
 AppId={{9F4B9E7A-2B1E-4C77-9C7C-3D9B5E5B0B21}}
@@ -33,24 +33,34 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 ; Geaendert (Schritt 3, 20.08.): Installation je Windows-Benutzerkonto unter
-; %LocalAppData%\KanzleiAI statt {autopf} ("Program Files") - Ziel laut
+; %LocalAppData%\Lexono statt {autopf} ("Program Files") - Ziel laut
 ; Vorgabe: Updates ohne Windows-Administratorrechte moeglich, da
 ; %LocalAppData% vom jeweiligen Benutzerkonto selbst beschreibbar ist. Bricht
 ; bewusst mit der Prompt-36-Entscheidung (Program Files) - eine bereits
 ; unter Program Files installierte Pilot-Instanz muss vor der Installation
 ; dieser Version manuell deinstalliert werden (siehe RELEASE_NOTES.md),
 ; sonst entstehen zwei parallele Installationen.
-DefaultDirName={localappdata}\KanzleiAI
+;
+; Markenumbenennung "Kanzlei-AI" -> "Lexono" (siehe ARCHITECTURE.md): der
+; Ordnername wechselt hier von \KanzleiAI zu \Lexono - fuer NEUE Installationen.
+; Bereits installierte Pilot-Instanzen aktualisieren dank stabiler AppId (siehe
+; oben) weiterhin am zuvor gewaehlten Pfad (Inno Setup verwendet bei
+; erkannter AppId den zuletzt genutzten Installationsort, nicht DefaultDirName) -
+; keine manuelle Nacharbeit fuer bestehende Installationen noetig. Das
+; getrennte, persistente Datenverzeichnis (%PROGRAMDATA%\KanzleiAI, siehe
+; app/setup/paths.py) bleibt BEWUSST unveraendert - eine Umbenennung dort
+; wuerde bestehenden Mandantendaten-Bestaenden den Pfad entziehen.
+DefaultDirName={localappdata}\Lexono
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\dist\installer
-; Fester Dateiname "KanzleiAI_Setup.exe" (bewusst OHNE Versionsnummer im
+; Fester Dateiname "Lexono_Setup.exe" (bewusst OHNE Versionsnummer im
 ; Namen, auf ausdrücklichen Wunsch) - Kehrseite: ein neuer Build
 ; überschreibt in dist\installer\ den vorherigen, es liegen also nie
 ; mehrere Versionsstände parallel. Falls künftig mehrere Versionen
 ; nebeneinander aufbewahrt werden sollen (z. B. für ein Rollback), einfach
-; wieder "KanzleiAI_Setup-{#MyAppVersion}" verwenden.
-OutputBaseFilename=KanzleiAI_Setup
+; wieder "Lexono_Setup-{#MyAppVersion}" verwenden.
+OutputBaseFilename=Lexono_Setup
 Compression=lzma
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -62,15 +72,23 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ; des Anwalts/der Kanzleimitarbeiter).
 PrivilegesRequired=lowest
 ; Anwendungssymbol fuer den Installer selbst (Setup.exe-Datei-Icon,
-; Titelleiste, Add/Remove-Programme-Eintrag) - Prompt 47. Aktuell ein
-; generierter Platzhalter (siehe windows/generate_placeholder_icon.py),
-; kein echtes Kanzlei-/Produktlogo - siehe "Kein WizardImageFile/Branding"
-; unten, dieselbe Einordnung gilt hier: austauschbar, sobald ein echtes
-; Logo vorliegt, ohne dieses Skript sonst anzufassen.
+; Titelleiste, Add/Remove-Programme-Eintrag) - Prompt 47. Aus dem echten,
+; offiziellen Lexono-Markenzeichen generiert (siehe windows/
+; generate_placeholder_icon.py, Dateiname historisch, Inhalt zuletzt am
+; 20.08. aktualisiert: neues Dokument+Schild+Kette-Icon, CI-Farbcode
+; #101828 als Icon-Hintergrund) - dasselbe Icon erscheint unveraendert auf
+; der Desktop-/Startmenue-Verknuepfung (siehe [Icons] unten, IconFilename
+; zeigt auf {#MyAppExeName}, dessen eingebettetes Icon wiederum aus
+; derselben app_icon.ico stammt, siehe windows/kanzlei_ai.spec).
 SetupIconFile=app_icon.ico
-; Kein WizardImageFile/Branding an dieser Stelle - kanzleispezifisches
-; Branding ist Teil der zurückgestellten "Multi-Kanzlei-Profile"-Frage
-; (Prompt 38), siehe PROMPT38_ANALYSIS.md - hier bewusst NICHT vorweggenommen.
+; Weiterhin KEIN WizardImageFile (grossflaechiges Bild auf den
+; Assistenten-Seiten) - kanzleispezifisches Vollbild-Branding ist Teil der
+; zurückgestellten "Multi-Kanzlei-Profile"-Frage (Prompt 38), siehe
+; PROMPT38_ANALYSIS.md, hier weiterhin bewusst NICHT vorweggenommen. Die am
+; 20.08. angefragte CI-Farbkonsistenz ("Verknüpfungs-Panel/Hintergrundfarben
+; im Setup") ist über das oben gesetzte SetupIconFile (#101828) bereits
+; erfüllt - das ist die einzige tatsächlich sichtbare "Hintergrundfarbe"
+; einer Desktop-Verknüpfung/eines Installer-Icons unter Windows.
 ; Icon fuer den Eintrag unter "Apps & Features"/"Programme und Funktionen" -
 ; ohne diese Zeile wuerde Windows dort ein generisches Deinstaller-Icon
 ; zeigen statt des tatsaechlichen App-Icons.
@@ -82,6 +100,11 @@ Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 
 [Files]
 Source: "..\dist\kanzlei_ai\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Stummer Starter (Schritt 3) - siehe [Icons] unten: Start Menü/Desktop
+; starten die App darüber statt direkt über die .exe, damit im normalen
+; Betrieb kein Konsolenfenster erscheint (nur beim allerersten Start
+; bleibt die Konsole sichtbar, siehe Start.vbs-Kommentar).
+Source: "..\Start.vbs"; DestDir: "{app}"; Flags: ignoreversion
 
 [Tasks]
 ; Startmenü-Verknüpfung ist immer da (siehe [Icons] unten, kein Task
@@ -99,12 +122,20 @@ Name: "desktopicon"; Description: "Desktop-Verknüpfung anlegen"; GroupDescripti
 ; kanzlei_ai.exe eingebettete Icon - siehe windows/kanzlei_ai.spec,
 ; EXE(icon=...) - übernommen hätte, im Ergebnis identisch, hier aber
 ; ausdrücklich dokumentiert statt implizit).
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#MyAppExeName}"
+;
+; Filename zeigt seit Schritt 3 auf Start.vbs (über wscript.exe) statt
+; direkt auf die .exe - dadurch startet die App im Normalbetrieb ohne
+; sichtbares Konsolenfenster (Start.vbs zeigt die Konsole bewusst NUR beim
+; allerersten Start, wenn der interaktive Setup-Assistent sie braucht,
+; siehe Start.vbs-Kommentar). IconFilename bleibt unverändert die .exe,
+; damit die Verknüpfung weiterhin das echte App-Icon zeigt (wscript.exe
+; selbst hat kein passendes Icon).
+Name: "{group}\{#MyAppName}"; Filename: "wscript.exe"; Parameters: """{app}\Start.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\{#MyAppExeName}"
 Name: "{group}\{#MyAppName} deinstallieren"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "wscript.exe"; Parameters: """{app}\Start.vbs"""; WorkingDir: "{app}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{#MyAppName} jetzt starten (öffnet beim allerersten Start den Setup-Assistenten in einem Konsolenfenster)"; Flags: postinstall nowait skipifsilent
+Filename: "wscript.exe"; Parameters: """{app}\Start.vbs"""; Description: "{#MyAppName} jetzt starten (öffnet beim allerersten Start den Setup-Assistenten in einem Konsolenfenster, danach unsichtbar im Hintergrund - siehe app.log)"; Flags: postinstall nowait skipifsilent
 
 ; BEWUSST KEIN [UninstallDelete]-Abschnitt für %PROGRAMDATA%\KanzleiAI:
 ; dieses Verzeichnis enthält vollständige, unpseudonymisierte

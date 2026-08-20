@@ -5,7 +5,7 @@ description = "Konfigurierbare KI-gestuetzte Workflow-Plattform fuer eine Anwalt
 readme = "README.md"
 requires-python = ">=3.13"
 license = { text = "Proprietary" }
-authors = [{ name = "Kanzlei AI Projekt" }]
+authors = [{ name = "Lexono Projekt" }]
 
 # Bewusst minimal fuer Prompt 02-16 + Privacy-Architektur Schritt 1-4.
 # Ab Schritt 5 (Claude-API-Anbindung) kommt das offizielle Anthropic-SDK
@@ -26,8 +26,19 @@ dependencies = [
     "python-docx>=1.1",
     "pytesseract>=0.3.10",
     "pillow>=10.0",
+    "openpyxl>=3.1",
     "fastembed>=0.4",
     "anthropic>=0.40",
+    # HTTP-Client fuer app/updater/checker.py (Update-Manifest-Abruf) UND,
+    # seit der Local-First-Umstellung (20.08., ARCHITECTURE.md §60), fuer
+    # die Ollama-Anbindung (app/ai_providers/ollama_writing_provider.py,
+    # app/review/ollama_review_provider.py, app/system_health/service.py).
+    # War zuvor nur unter [dev] gelistet (dort ueber FastAPIs eigenen
+    # httpx-Bedarf fuer TestClient bereits vorhanden) - echter, bisher
+    # unbemerkter Laufzeit-Bedarf, jetzt korrekt als Kernabhaengigkeit
+    # gefuehrt, damit auch der PyInstaller-Build (windows/kanzlei_ai.spec)
+    # sie bundlet.
+    "httpx>=0.27",
     # Natives Fensterfenster um den bestehenden Web-Stack (Prompt 46) - zieht
     # unter Windows automatisch "pythonnet" nach (eigenes Umgebungs-Marker
     # "sys_platform == 'win32'" in pywebviews eigenen Metadaten), das die
@@ -39,7 +50,6 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
-    "httpx>=0.27",
 ]
 # Nur fuer das Erzeugen des Windows-Installers (Prompt 36) benoetigt -
 # bewusst getrennt von "dev", damit ein normaler Entwicklungs-/Testlauf

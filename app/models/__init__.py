@@ -13,7 +13,7 @@ from app.models.attorney_instruction import (
 )
 from app.models.audit_event import AuditEvent, AuditLogImmutableError
 from app.models.base import Base
-from app.models.client import Client
+from app.models.client import VALID_CLIENT_STATUSES, Client
 from app.models.deadline import Deadline
 from app.models.document import Document
 from app.models.draft import Draft
@@ -21,7 +21,10 @@ from app.models.draft_feedback import DraftFeedback
 from app.models.draft_quality_rating import DraftQualityRating
 from app.models.draft_reference_links import DraftKnowledgeItemLink, DraftSourceLink
 from app.models.embedding import Embedding
+from app.models.firm_profile import FirmProfile
 from app.models.knowledge_item import KnowledgeItem
+from app.models.law import Law
+from app.models.law_section import LawSection
 from app.models.matter import Matter
 from app.models.message import Message
 from app.models.outbox_entry import VALID_OUTBOX_STATUSES, OutboxEntry
@@ -48,6 +51,7 @@ from app.models.workflow_run import VALID_WORKFLOW_STATUSES, WorkflowRun
 __all__ = [
     "Base",
     "Client",
+    "VALID_CLIENT_STATUSES",
     "Matter",
     "Party",
     "Policy",
@@ -82,4 +86,7 @@ __all__ = [
     "VALID_FEEDBACK_CATEGORIES",
     "VALID_REVIEW_STATUSES",
     "PromptTemplate",
+    "FirmProfile",
+    "Law",
+    "LawSection",
 ]

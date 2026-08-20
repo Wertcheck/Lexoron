@@ -14,10 +14,10 @@
         <span class="account-card__title">Anonymisierung &amp; Datenschutz</span>
         <span class="account-card__text">PII-Filter-Status, Verschlüsselung, Aufbewahrungsfrist</span>
       </a>
-      <a href="/dashboard/account/profile" class="account-card">
+      <a href="/dashboard/settings/profile" class="account-card">
         {{ icons.folder(class_="account-card__icon") }}
         <span class="account-card__title">Kanzlei-Profil &amp; Briefkopf</span>
-        <span class="account-card__text">Kanzlei-Name, Logo, Export-Einstellungen</span>
+        <span class="account-card__text">Kanzleiname, Anschrift, Kontaktdaten</span>
       </a>
       <a href="/dashboard/account/license" class="account-card">
         {{ icons.chart(class_="account-card__icon") }}
@@ -30,10 +30,31 @@
         <span class="account-card__text">Profildaten, Passwort, Logout</span>
       </a>
       {% if is_admin %}
+        <a href="/dashboard/settings" class="account-card">
+          {{ icons.settings(class_="account-card__icon") }}
+          <span class="account-card__title">Einstellungen</span>
+          <span class="account-card__text">Scan-Ordner, E-Mail-Zugang, Aufbewahrung, KI-Modus (nur Admin)</span>
+        </a>
         <a href="/dashboard/admin/users" class="account-card">
           {{ icons.users(class_="account-card__icon") }}
           <span class="account-card__title">Nutzerverwaltung</span>
           <span class="account-card__text">Kanzlei-Nutzerkonten anlegen/verwalten (nur Admin)</span>
+        </a>
+        {# Systemstatus/Backup sind seit der bereinigten Fuenf-Module-
+           Sidebar (20.08., siehe base.html) keine eigenen Hauptmenue-
+           Eintraege mehr - Systemstatus lebt jetzt in "Kanzleiwissen &
+           KI", Backup & Export ausschliesslich hier, analog zu
+           "Einstellungen"/"Nutzerverwaltung" (beides Admin-Funktionen ohne
+           eigenes Kernmodul). #}
+        <a href="/dashboard/monitoring" class="account-card">
+          {{ icons.chart(class_="account-card__icon") }}
+          <span class="account-card__title">Systemstatus</span>
+          <span class="account-card__text">KI-Modus, Ollama-Erreichbarkeit, Kosten, Fehlerstatistik (nur Admin)</span>
+        </a>
+        <a href="/dashboard/backup" class="account-card">
+          {{ icons.archive(class_="account-card__icon") }}
+          <span class="account-card__title">Backup &amp; Export</span>
+          <span class="account-card__text">Datensicherung, Wiederherstellung, Export-Protokolle (nur Admin)</span>
         </a>
       {% endif %}
     </div>

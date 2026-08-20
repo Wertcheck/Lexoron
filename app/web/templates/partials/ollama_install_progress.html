@@ -1,0 +1,17 @@
+{# Fortschritts-Partial für den geführten Ollama-Installations-/Update-
+   Assistenten (20.08.) - von POST /dashboard/monitoring/ollama-install/start
+   UND GET .../status zurückgegeben (app/web/monitoring_router.py), damit
+   das Frontend (partials/ollama_install_widget.html) denselben Markup per
+   Polling einfach ersetzen kann. #}
+<div class="install-progress" data-status="{{ progress.status }}">
+  <progress class="install-progress__bar" value="{{ progress.percent }}" max="100"></progress>
+  <p class="install-progress__message">
+    {% if progress.status == "error" %}
+      {{ progress.error }}
+    {% elif progress.status == "done" %}
+      {{ progress.message }} Die Seite kann jetzt neu geladen werden.
+    {% else %}
+      {{ progress.message }}
+    {% endif %}
+  </p>
+</div>

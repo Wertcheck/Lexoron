@@ -3,13 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Gesperrt · Kanzlei-AI</title>
+  <title>Gesperrt · Lexono</title>
   <link rel="stylesheet" href="/dashboard/static/css/app.css" />
 </head>
 <body>
   <div class="login-shell">
     <div class="login-box">
-      <div class="sidebar__brand" style="color: var(--ink-900);">Kanzlei&nbsp;AI</div>
+      <div class="sidebar__brand" style="color: var(--ink-900);">
+        <img src="/dashboard/static/img/logo.svg" alt="Lexono" class="sidebar__brand-logo" />
+        <span>Lexono</span>
+      </div>
       <div class="sidebar__brand-sub" style="color: var(--ink-500); margin-bottom: 24px;">
         Gesperrt - {{ current_user.email }}
       </div>

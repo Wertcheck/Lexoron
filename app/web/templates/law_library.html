@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}Gesetzesbibliothek{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">Gesetzesbibliothek</h1>
+    <div class="topbar__meta">
+      Lokale Paragraphen-Bibliothek{% if selected_law %} · <strong>{{ selected_law.code }}</strong>{% endif %}
+    </div>
+  </div>
+
+  <div class="banner banner--info">
+    Kuratierte Auswahl bekannter Kernvorschriften als lokale Fixture-Daten (amtliche Werke,
+    § 5 UrhG urheberrechtsfrei) - kein vollständiger oder live aktualisierter Gesetzestext.
+    Für die verbindliche aktuelle Fassung bitte eine offizielle Quelle (z. B.
+    gesetze-im-internet.de) konsultieren.
+  </div>
+
+  <div class="split">
+    <div class="message-list law-sidebar">
+      <div class="law-sidebar__laws">
+        {% for law in laws %}
+          <a href="/dashboard/laws/{{ law.code }}"
+             class="law-sidebar__law-link{% if selected_law and selected_law.code == law.code %} law-sidebar__law-link--active{% endif %}">
+            <span class="law-sidebar__law-code">{{ law.code }}</span>
+            <span class="law-sidebar__law-title">{{ law.title }}</span>
+          </a>
+        {% else %}
+          <div class="empty-state">Noch keine Gesetzeswerke importiert.</div>
+        {% endfor %}
+      </div>
+      {% if selected_law %}
+        <div class="law-sidebar__search">
+          {{ icons.search(class_="icon law-sidebar__search-icon") }}
+          <input type="search" name="q" value="{{ search }}" placeholder="Paragraph durchsuchen…"
+                 autocomplete="off" spellcheck="false"
+                 hx-get="/dashboard/laws/{{ selected_law.code }}/sections-partial"
+                 hx-trigger="input changed delay:250ms, search"
+                 hx-target="#law-sections-list"
+                 hx-swap="innerHTML" />
+        </div>
+      {% endif %}
+      <div id="law-sections-list">
+        {% include "partials/law_sections_list.html" %}
+      </div>
+    </div>
+    <div class="detail-pane">
+      {% if selected_section %}
+        <div class="law-reading-pane">
+          <div class="law-reading-pane__meta">
+            {{ selected_law.code }} · {{ selected_law.title }} · Fixture-Stand:
+            {{ selected_section.last_updated.strftime("%d.%m.%Y") }}
+          </div>
+          <h1 class="law-reading-pane__heading">{{ selected_section.section_number }} {{ selected_section.title }}</h1>
+          <p class="law-reading-pane__text">{{ selected_section.text_content }}</p>
+        </div>
+      {% elif selected_law %}
+        <div class="detail-empty">Paragraph in der Seitenleiste auswählen.</div>
+      {% else %}
+        <div class="detail-empty">Gesetzeswerk in der Seitenleiste auswählen, um Paragraphen zu lesen.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

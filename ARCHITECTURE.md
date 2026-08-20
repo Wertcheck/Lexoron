@@ -3249,3 +3249,726 @@ durchgeführt (siehe oben) - nicht Teil der automatisierten Suite (würde bei pa
 Testläufen denselben systemweiten Mutex-Namen teilen), aber ein starker Beleg, dass die
 injizierte Logik der echten API-Semantik entspricht. Gesamte Suite: 951 bestanden, 1 Skip,
 unverändert 4 Umgebungslimitierungen der Sandbox.
+
+## 57. Abgelehnt: Portkey-Gateway-Umleitung; Presidio-Umbau zurückgestellt (20.08.)
+
+Ein Prompt verlangte drei Dinge: (1) die bestehende lokale Pseudonymisierung
+(`app/privacy/`) durch Microsoft Presidio + spaCy `de_core_news_lg` zu ersetzen, (2) die
+Anthropic-Anbindung über **Portkey** (`api.portkey.ai`, Header `x-portkey-api-key`, fester
+Provider-Slug `@lexono-1/claude-3-5-sonnet-20241022`) umzuleiten, (3) API-Keys/Einstellungen
+im Frontend auf die Admin-Rolle zu beschränken.
+
+**Punkt 2 widersprach direkt der in §54 bereits bestätigten Entscheidung** ("kein zentraler
+Proxy, direkte Anthropic-API-Anbindung") - Portkey ist strukturell genau das, was dort
+explizit abgelehnt wurde: ein KI-Gateway eines Drittanbieters im Anfragepfad. Zusätzlich war
+der Provider-Slug `@lexono-1` ein nicht verifizierbares, wirkend spezifisches externes
+Konto, und die begleitende Anweisung "entferne alle Ollama-Abhängigkeiten" bezog sich auf
+eine im Projekt nie vorhandene Integration (nur als offene, nie umgesetzte Option
+dokumentiert, siehe §10) - beides Hinweise, dass der Prompt möglicherweise nicht für dieses
+Projekt vorgesehen war. Rückgefragt und **explizit abgelehnt**: die Anthropic-Anbindung
+bleibt direkt über das offizielle `anthropic`-Python-SDK, kein Gateway/Proxy.
+
+**Punkt 1 (Presidio) wurde zurückgestellt**, nicht umgesetzt: "Behalte das bestehende Modul
+`app/privacy/` für die lokale Pseudonymisierung unverändert bei." Keine Code-Änderung an
+diesem Modul in diesem Schritt.
+
+**Punkt 3 war bereits erfüllt** - es existiert an keiner Stelle im Dashboard ein
+Eingabefeld für den API-Key, für keine Rolle (siehe §54,
+`tests/test_no_editable_api_key_in_ui.py`).
+
+**Neu ergänzt:** `tests/test_no_ai_gateway_proxy.py` - verankert die Entscheidung aus Punkt 2
+strukturell und dauerhaft (unabhängig von künftigen Prompt-Formulierungen): kein
+`portkey`/`openrouter`/`litellm`-Marker im Anwendungscode, `anthropic.Anthropic(...)` wird
+nie mit `base_url`-Override konstruiert (weder im Schreib- noch im Review-Provider), kein
+Gateway-spezifischer Header in einem tatsächlichen `messages.create`-Aufruf, kein
+entsprechendes `Settings`-Feld. Modell-Default bewusst NICHT auf das im (abgelehnten) Prompt
+genannte `claude-3-5-sonnet-20241022` geändert - `claude_model_name` bleibt beim
+bestehenden, aktuelleren `claude-sonnet-5`; die ältere, datierte Modell-ID war Teil der
+verworfenen Portkey-Konfiguration und wirkt wie ein Rückschritt ohne erkennbaren Grund. Bei
+Bedarf weiterhin über `CLAUDE_MODEL_NAME` in `.env` änderbar.
+
+### Getestet
+
+`tests/test_no_ai_gateway_proxy.py` (5 neue Tests). Gesamte Suite: 956 bestanden, 1 Skip,
+unverändert 4 Umgebungslimitierungen der Sandbox.
+
+## 58. Produktiver Piloteinsatz: stummer Start, Premium-Legal-Tech-Design (20.08.)
+
+Dritter Auftrag desselben Tages, diesmal ohne Architekturkonflikt (Backend/API-Punkt war
+identisch zu §57 und bereits erfüllt - keine Änderung nötig, nur erneut geprüft). Zwei
+tatsächlich neue Teile: ein stummer Startprozess (Start.vbs) und ein Design-Refresh.
+
+### Stummer Startprozess (Start.vbs)
+
+`Start.vbs` (Projekt-Root) startet die Anwendung ohne sichtbares Konsolenfenster, Server-Logs
+(stdout/stderr) landen in `app.log` neben dem Skript. **Bewusste Ausnahme:** beim ALLERERSTEN
+Start (noch keine `.env` im persistenten Datenverzeichnis, geprüft über dieselbe Ableitung wie
+`app/setup/paths.py: resolve_data_dir`) bleibt die Konsole SICHTBAR - der interaktive
+Setup-Assistent fragt dort E-Mail/Passwort ab (`app/setup/wizard.py`); eine von Anfang an
+versteckte Konsole würde unsichtbar auf eine Eingabe warten, die nie ankommen kann, und die
+App würde scheinbar hängen, ohne dass der Anwalt/die Kanzleimitarbeiterin einen Hinweis
+bekäme. Jeder weitere Start ist dann still.
+
+`windows/installer.iss` wurde entsprechend angepasst: `Start.vbs` wird mit ausgeliefert
+(`[Files]`), Startmenü-/Desktop-Verknüpfung und der Post-Install-Autostart zeigen jetzt auf
+`wscript.exe "{app}\Start.vbs"` statt direkt auf `kanzlei_ai.exe` (`IconFilename` bleibt die
+.exe, damit weiterhin das echte App-Icon angezeigt wird). Direkter Konsolenzugriff für
+Fehlersuche bleibt über `kanzlei_ai.exe serve --no-window` manuell möglich, sonst ist `app.log`
+das Diagnosewerkzeug.
+
+**Echter, während der Umsetzung gefundener und behobener Bug:** ein klassischer
+`cmd.exe /c`-Quirk - beginnt die an `cmd /c` übergebene Befehlszeile mit einem zitierten Pfad
+(hier: der `.exe`-/`python.exe`-Pfad), entfernt cmd.exe bei bestimmten Konstellationen
+fälschlich BEIDE äußeren Anführungszeichen (das öffnende vor dem Programmpfad und das
+schließende nach dem Log-Pfad) und die Befehlszeile zerfällt - kein Fehlercode, aber auch
+keine Wirkung, `app.log` entsteht nie. Beim ersten Implementierungsversuch reproduziert
+(mehrere isolierte Testläufe mit `cscript`, siehe Session), behoben durch den
+Standard-Workaround: ein zusätzliches, die GESAMTE Befehlszeile umschließendes
+Anführungszeichenpaar. Live auf dem echten Windows-Zielsystem (dieselbe Maschine, auf der
+diese Sitzung läuft) end-to-end verifiziert: `cscript Start.vbs` → `app.log` korrekt befüllt
+(Migration, Uvicorn-Start, Request-Logs) → `/health` antwortet → Prozess sauber per
+`Stop-Process` beendbar. Zusätzlich der komplette Installer real mit `ISCC.exe` kompiliert
+(nicht nur Text geprüft) - `Start.vbs` korrekt eingebunden, keine Syntaxfehler in der neuen
+`Parameters`-Direktive.
+
+### Premium-Legal-Tech-Design-Refresh
+
+Betrifft ausschließlich `app/web/static/css/app.css` (Design-Token + einzelne Regeln) und
+`app/web/templates/base.html` (Logo, Footer-Text) - **bewusst weiterhin handgeschriebenes CSS,
+kein Tailwind/React/Vite eingeführt**: die im Auftrag verwendeten Tailwind-Klassennamen
+(`max-w-6xl`, `rounded-lg`, `shadow-sm`, `border-slate-200`, Pfad `src/assets/logo.svg`) passen
+nicht zur tatsächlichen Projektstruktur (Jinja2 + HTMX, bewusst ohne Node.js-Build-Schritt,
+siehe ARCHITECTURE.md) - als Beschreibung des gewünschten VISUELLEN Ergebnisses interpretiert
+und mit den vorhandenen Bordmitteln umgesetzt.
+
+- **Typografie:** `--font-display` (vorher `'Source Serif 4'`, für Überschriften) ist jetzt
+  identisch zu `--font-body` (`'Inter', system-ui, ...`) - keine Serifenschrift mehr an
+  irgendeiner Stelle.
+- **Farben:** `--paper-100` (Seitenhintergrund) neu `#F8FAFC`; neues eigenständiges Token
+  `--sidebar-bg: #0F172A` (bewusst NICHT `--ink-900` mitbenutzt, um Sidebar-Hintergrund von der
+  allgemeinen Text-Tinte-Farbe zu entkoppeln). Akzentfarbe für primäre Buttons
+  (`--seal-green`) war inhaltlich schon ein gedecktes Dunkelgrün, unverändert.
+- **Layout:** neues Token `--content-max-width: 1280px`, angewendet auf `.topbar`/
+  `.draft-page` (zentriert per `margin: 0 auto`) - verhindert, dass Seiteninhalt auf
+  Breitbildmonitoren über den gesamten Bildschirm läuft. `.dashboard-form` (die tatsächlichen
+  Eingabeformulare, z. B. Feedback/PIN/Kontoeinstellungen) zusätzlich auf `640px` begrenzt.
+  Bewusst NICHT `.instructions-panel` generell verengt - dieser Container wird projektweit
+  auch für breite Tabellen verwendet, eine pauschale Verengung hätte dort falsch ausgesehen.
+- **Logo:** vom Anwalt bereitgestellte `icon.svg` nach `app/web/static/img/logo.svg` kopiert
+  (Bit-für-Bit-Kopie, keine manuelle Transkription des SVG-Pfaddatensatzes) und in
+  `.sidebar__brand` eingebunden.
+- **Details:** "Interner Prototyp · Session-Login (Prompt 26)"-Fußzeile entfernt; `.tag` jetzt
+  `border-radius: var(--radius-pill)` (999px, elegante Pille statt kleiner Eckenradius);
+  `.instructions-panel`/`.draft-content-box`/`.login-box` erhalten `box-shadow: var(--shadow-sm)`
+  (neues Token, dezenter Schatten); `--radius-md` von 6px auf 10px erhöht.
+
+**Live im Browser verifiziert** (echter Server auf dieser Maschine, `.venv313`-Python direkt
+statt über `run.py` gestartet - `run.py` wechselt für den `%PROGRAMDATA%`-Datenpfad bewusst das
+Arbeitsverzeichnis, was für einen Dashboard-Login-Test mit dem lokalen Repo-`.env` nicht
+passend ist): `getComputedStyle()` bestätigt `body`-Schrift `Inter, system-ui, ...`,
+Hintergrund `rgb(248, 250, 252)` (= `#F8FAFC`), Sidebar-Hintergrund `rgb(15, 23, 42)`
+(= `#0F172A`), Primärbutton-Hintergrund `rgb(47, 111, 98)`, Logo lädt erfolgreich. Bei
+2560×1080 (Ultrawide-Simulation): `.draft-page`/`.topbar` bleiben bei 1280px, zentriert mit
+etwa symmetrischen Rändern.
+
+**Zweiter, während der Umsetzung gefundener und behobener Bug** (nicht Teil des ursprünglichen
+Auftrags, aber beim echten Browser-Test dieser Sitzung entdeckt): die drei
+Hintergrund-Endpunkte, die jede angemeldete Seite per HTMX/`fetch()` nachlädt
+(`budget-badge`/`update-badge`/`lock-config`, siehe §54/§56), waren nicht von
+`_PASSWORD_CHANGE_EXEMPT_PATHS` (`app/auth/permissions.py`) ausgenommen - bei einem Nutzer mit
+erzwungener Passwortänderung folgten `fetch()`/HTMX dem 303-Redirect auf
+`/dashboard/change-password` und erhielten die VOLLSTÄNDIGE HTML-Seite statt JSON/eines leeren
+Partials; bei den HTMX-Badges hätte das die komplette Seite in ein winziges `<span>`
+eingeschleust. Behoben durch Erweiterung der Ausnahmeliste um alle drei Pfade, per Test
+abgesichert (`tests/test_background_badges_password_change_exempt.py`).
+
+### Getestet
+
+`tests/test_start_vbs.py` (8), `tests/test_installer_config.py` (2 neue: Start.vbs
+ausgeliefert, Post-Install-Lauf nutzt den stummen Starter; 2 bestehende an die neue
+Verknüpfungs-Ziel-Syntax angepasst), `tests/test_design_refresh.py` (11),
+`tests/test_background_badges_password_change_exempt.py` (4, Regressionsfund). Gesamte Suite:
+981 bestanden, 1 Skip, unverändert 4 Umgebungslimitierungen der Sandbox.
+
+### Offene Punkte
+
+1. `.instructions-panel` bleibt bewusst ohne pauschale Breitenbegrenzung (siehe oben) - falls
+   einzelne, tatsächlich formularartige Panels zusätzlich verengt werden sollen, wäre das ein
+   gezielter Folgeschritt pro Seite (mit visueller Prüfung), nicht pauschal per CSS-Selektor.
+2. Modell-Default weiterhin bewusst NICHT auf `claude-3-5-sonnet-20241022` geändert (siehe §57)
+   - im aktuellen Auftrag erneut genannt, aber ohne erkennbaren Bezug zur (bereits verworfenen)
+   Portkey-Konfiguration, aus der dieser Wert ursprünglich stammte; unverändert `claude-sonnet-5`,
+   überschreibbar über `CLAUDE_MODEL_NAME`.
+3. Kein automatisierter `cscript`-Testlauf in der CI-Suite (würde einen echten Serverprozess
+   starten) - die Lauffähigkeit wurde stattdessen einmalig manuell auf dem echten
+   Windows-Zielsystem verifiziert (siehe oben).
+
+## 59. Markenumbenennung "Kanzlei-AI" -> "Lexono" (20.08.)
+
+Vierter Auftrag desselben Tages: Neuausrichtung auf den Markennamen "Lexono" inklusive
+eines vom Anwalt bereitgestellten Logo-Entwurfs (Schild-Symbol mit integriertem "L",
+Rasterbild). Betrifft Logo/Branding, UI-Designsprache und Layout-Breitenbegrenzung - Letztere
+beiden waren durch §58 (Premium-Legal-Tech-Design-Refresh, off-white Hintergrund, dunkle
+Sidebar `#0F172A`, `--content-max-width: 1280px`, `--paper-line: #e2e8f0`, Pill-Badges,
+`box-shadow: var(--shadow-sm)`) bereits erfüllt - keine erneute Änderung nötig, nur gegen den
+neuen Auftrag verifiziert.
+
+### Logo als echte Vektorgrafik
+
+Der Anwalt lieferte einen Rasterbild-Export (kein editierbares Vektor-Ausgangsmaterial) mit
+vier Logo-Varianten; die angeforderte war die erste (Schild + integriertes "L"). Per
+Konturerkennung (`cv2.findContours` + `cv2.approxPolyDP` auf dem freigestellten Icon-Ausschnitt,
+Toleranz 0.6 % des Konturumfangs) wurde die exakte Polygongeometrie zweier sich überlappender
+Formen extrahiert (das "L" separat, das Schild inkl. der X-förmigen negativen Aussparung als
+eine einzige, in sich geschlossene Kontur, da die Aussparung an zwei Stellen zum Rand hin offen
+ist) - keine manuelle Freihand-Nachzeichnung. Ergebnis gegen das Referenzbild
+pixelgenau zurückgerastert und visuell verglichen (siehe Session), bevor die Pfaddaten
+übernommen wurden.
+
+- `app/web/static/img/logo.svg` - Icon (weiß, `viewBox="0 0 240 290"`) für die dunkle
+  Sidebar/dunkle Hintergründe. Ersetzt die alte, fachfremde Kanzlei-AI-Platzhaltergrafik
+  (blaue "N"-artige Balkenform).
+- `app/web/static/img/logo-dark.svg` - identische Geometrie, Füllfarbe `#0F172A` (=
+  `--ink-900`/`--sidebar-bg`), für helle Hintergründe (Login-/Sperrbildschirm, künftige
+  Exporte).
+- Bewusst weiterhin NUR das Icon als SVG, kein kombiniertes Icon+Schriftzug-SVG: die
+  bestehende Sidebar-Struktur (`.sidebar__brand` = `<img>` + `<span>Lexono</span>`,
+  `app/web/templates/base.html`) trennt Icon und Schriftzug bereits sauber - der
+  Wortmarken-Text wird über `--font-body` (Inter, bereits Projektstandard seit §58)
+  gesetzt statt einzelne Buchstaben als Pfade nachzuzeichnen, das bleibt änderbar/lokalisierbar
+  und ist konsistent mit der bestehenden Architektur.
+- `windows/app_icon.ico` (Taskleisten-/Datei-Icon der .exe, Installer-Icon,
+  "Apps & Features"-Eintrag) aus derselben Pfadgeometrie neu generiert - ein abgerundetes
+  Quadrat in `#0F172A` mit dem weißen Markenzeichen mittig, alle Standardgrößen (16-256 px).
+  `windows/generate_placeholder_icon.py` (Dateiname bewusst NICHT geändert, siehe die sechs
+  bestehenden Referenzen darauf in installer.iss/kanzlei_ai.spec/README.md/TODO.md) rendert
+  jetzt die echte Marke statt des früheren Kreissiegel-Platzhalters mit Initialen "KA".
+- Die einzige zuvor im Projekt vorhandene `.svg`-Datei (`app/web/static/img/logo.svg`, das
+  alte Platzhalterlogo) wurde ersetzt, nicht als Leiche belassen - keine weiteren leeren/
+  unvollständigen `.svg`-Dateien im Projekt gefunden (`**/*.svg` ergab vor dieser Änderung
+  genau eine Trefferdatei).
+
+### Bewusst NICHT umbenannt: Datenverzeichnis- und Paket-Identität
+
+Anders als beim reinen UI-/Dokumentations-Branding wurde die technische Kennung des
+persistenten Datenverzeichnisses **bewusst unverändert gelassen**:
+
+- `app/setup/paths.py: _APP_DIR_NAME = "KanzleiAI"` (→ `%PROGRAMDATA%\KanzleiAI`) und die
+  Override-Variable `KANZLEI_AI_DATA_DIR` bleiben exakt so bestehen.
+- Grund: dies ist kein rein kosmetischer String, sondern der tatsächliche Pfad, unter dem
+  eine bereits laufende Pilot-Installation Datenbank, Dokumente und `.env` ablegt (siehe
+  PILOT_PLAYBOOK.md). Eine Umbenennung hier würde für ein bestehendes Pilot-System beim
+  nächsten Start so aussehen, als wären sämtliche Mandantendaten verschwunden (das Programm
+  würde unter einem neuen, leeren `%PROGRAMDATA%\Lexono` neu anfangen) - ein
+  Datenverlust-Risiko, das keine reine Branding-Anfrage rechtfertigt. Widerspricht sonst
+  keiner bestehenden Entscheidung, ist aber genau die Art impliziter Nebenwirkung, vor der
+  CLAUDE.md warnt ("Aktenkontext strikt isolieren", "keine autonome... Entscheidung" bei
+  fachlich unklaren Punkten) - deshalb hier dokumentiert statt still mitgezogen.
+- Ebenso unverändert: das Python-Distributionspaket (`pyproject.toml: name = "kanzlei-ai"`),
+  der PyInstaller-Programmname (`kanzlei_ai.exe`, `windows/kanzlei_ai.spec`) und alle
+  Testfixture-Pfade, die diese Namen nur beispielhaft verwenden (`tests/test_run_entrypoint.py`,
+  `tests/test_setup_paths.py`) - Build-/Paket-Identität ist eine tiefere technische
+  Entscheidung als das im Auftrag verlangte UI-/Konfigurations-/Installer-/Dokumentations-
+  Branding, eine Umbenennung hier hätte Auswirkungen auf Build-Tooling, die in diesem Schritt
+  nicht geprüft wurden.
+- **Wohl umbenannt** (technisch, aber ohne Datenkontinuitäts-Risiko, da nicht persistiert):
+  FastAPI-`app.title` (`"Kanzlei-AI-Pipeline"` → `"Lexono-Pipeline"`, `app/main.py`,
+  `tests/test_health.py` angepasst), Single-Instance-Mutex-Name (`run.py:
+  _SINGLE_INSTANCE_MUTEX_NAME`, pro Prozessstart neu erzeugt, nie gespeichert), native
+  Fenstertitel (`webview.create_window`), Installer-Anzeigename/-Publisher/-Ausgabedateiname
+  (`windows/installer.iss: MyAppName/MyAppPublisher/OutputBaseFilename`) sowie
+  `DefaultDirName` (`{localappdata}\KanzleiAI` → `{localappdata}\Lexono`) - Letzteres betrifft
+  nur den reinen Programmordner (nicht die Mandantendaten) und ist für bereits installierte
+  Pilot-Instanzen ungefährlich: Inno Setup verwendet bei einer über `AppId` (stabile GUID,
+  unverändert) erkannten Vorinstallation deren zuvor gewählten Installationsort, nicht
+  `DefaultDirName` - nur Neuinstallationen landen unter dem neuen Pfad.
+
+### UI-Text/Konfiguration/Dokumentation umbenannt
+
+`<title>`, Sidebar-Markenname, Login-/Sperrbildschirm (dort zusätzlich das dunkle Icon
+ergänzt, vorher nur Text auf hellem Hintergrund), Onboarding-Banner-Überschrift,
+Backup-/Export-/Wiederherstellungs-Textmarker (`app/backup/service.py`,
+`app/backup/restore_service.py`, `app/export/service.py`, `scripts/restore_backup.py`),
+`app/__init__.py`-Docstring sowie README.md/RELEASE_NOTES.md/PILOT_PLAYBOOK.md/
+PILOT_CHECKLIST.md/00_START_HERE.txt/RELEASE_MANIFEST.txt/FINAL_REVIEW_REPORT.md/
+SECURITY_REVIEW.md. Bewusst NICHT angetastet: generische Verwendungen des deutschen Worts
+"Kanzlei" (= Anwaltskanzlei, z. B. "Kanzleimitarbeiter", "Multi-Kanzlei-Profile",
+"Pilot-Kanzlei") - das ist kein Markenname und wurde nicht mit einem Regex/Suchen-Ersetzen-
+Lauf verwechselt, jede Fundstelle wurde einzeln geprüft. Historische, mit Datum versehene
+Abschnitte in ARCHITECTURE.md selbst (§1-58) sowie zeitpunktbezogene Formulierungen in
+FINAL_REVIEW_REPORT.md/RELEASE_MANIFEST.txt (konkrete Testzahlen, Datumsangaben) bleiben
+unverändert - nur die Markennennungen darin wurden aktualisiert, keine Tatsachenbehauptungen
+rückwirkend umgeschrieben.
+
+### UI-Designsprache/Layout
+
+Keine Änderung an `app/web/static/css/app.css` nötig - `--paper-100: #f8fafc`,
+`--sidebar-bg: #0f172a`, `--paper-line: #e2e8f0` (= Slate-200-Äquivalent),
+`--content-max-width: 1280px` (zwischen den angefragten `max-w-6xl`/`max-w-7xl`),
+`.dashboard-form` bei 640px (innerhalb `max-w-2xl`-`max-w-3xl`) und `--shadow-sm` erfüllen
+die angefragte Apple/Stripe-Designsprache bereits seit §58. Keine nachgebauten
+OS-Fensterelemente im Projekt gefunden (keine `.mac-window`/Ampel-Punkte-Klassen).
+
+### Getestet
+
+`tests/test_health.py` (App-Titel angepasst), `tests/test_installer_config.py`
+(`DefaultDirName`/`OutputBaseFilename` angepasst) - beide bewusst NICHT für
+`%PROGRAMDATA%\KanzleiAI` angepasst (siehe oben, unverändert). Vollständige Suite erneut
+ausgeführt: 981 bestanden, 1 Skip, unverändert dieselben 4 Umgebungslimitierungen der
+Sandbox wie in §57/§58 (kein Tesseract-Binary, fehlendes Symlink-Recht) - keine neuen
+Fehlschläge durch die Umbenennung.
+
+### Offene Punkte
+
+1. `windows/app_icon.ico` wurde neu generiert und lokal verifiziert (PNG-Export aus dem
+   `.ico` visuell mit dem Referenzbild abgeglichen), aber NICHT erneut per echtem
+   PyInstaller-/Inno-Setup-Kompilierlauf in die `.exe`/den Installer eingebettet und
+   verifiziert (siehe §56 für das dortige frühere Vorgehen mit `verify_icon_embedding.ps1`)
+   - reiner Text-/Bild-Schritt in dieser Sitzung, kein Build-Toolchain-Zugriff genutzt.
+2. Kein Favicon (`<link rel="icon">`) im Projekt vorhanden, auch nicht ergänzt - im Auftrag
+   nicht explizit verlangt (nur `<title>`-Tab-Titel), aus dem neuen Icon aber jederzeit
+   ableitbar, falls gewünscht.
+
+## 60. Local-First-Architektur: Ollama als Standard, §57 bewusst überschrieben (20.08.)
+
+Fünfter Auftrag desselben Tages, in zwei Teilen: (1) ein UI-Refactoring auf ein
+durchgehend helles Layout (keine dunkle Sidebar mehr) und (2) eine Umstellung der
+KI-Anbindung auf "Local-First" mit Ollama als Standard-Provider, HYBRID-Modus als
+expliziter Opt-in für Anthropic.
+
+**Teil 2 widersprach direkt der in §57 - noch am selben Tag - getroffenen und
+dokumentierten Entscheidung** ("kein zentraler Proxy, direkte Anthropic-API-Anbindung",
+Ollama als "weiterhin offene, nicht getroffene Entscheidung"). Der Widerspruch wurde vor
+der Umsetzung ausdrücklich benannt und zurückgefragt (siehe Session). Anders als bei §57
+wurde diesmal **nach Rückfrage explizit die Umkehr bestätigt** ("wähle Option B:
+Überschreibe die frühere Entscheidung in ARCHITECTURE.md §57 bewusst") - §57 bleibt als
+historischer Eintrag unverändert stehen (Grundsatz dieses Dokuments: bereits geschriebene
+Abschnitte werden nicht rückwirkend umgeschrieben, siehe §59 zur selben Praxis), gilt aber
+ab hier nicht mehr als aktuelle Architekturentscheidung.
+
+### Teil 1: Durchgehend helles Layout
+
+Betrifft ausschließlich `app/web/static/css/app.css` (Sidebar-Regeln) - keine
+Template-/Strukturänderung nötig, `.sidebar` bezog Text-/Hintergrundfarben bereits
+vollständig über CSS Custom Properties:
+
+- Neues Token `--paper-200: #f1f5f9` (Slate-100) für Hover-/Aktiv-Zustände, abgesetzt vom
+  allgemeinen Seitenhintergrund `--paper-100` (sonst wäre ein aktiver Menüpunkt unsichtbar).
+- `--sidebar-bg`/`--sidebar-bg-line` ENTFERNT (nicht nur ungenutzt gelassen) - die Sidebar
+  nutzt jetzt `background: var(--paper-100); border-right: 1px solid var(--paper-line);`
+  statt eines Farbkontrasts zur Abgrenzung ("Stripe-Präzision": eine hauchfeine 1px-Linie
+  statt eines dunklen Panels).
+- Alle Text-/Icon-/Rahmenfarben in `.sidebar__*` von `rgba(243, 244, 240, ...)`-Werten
+  (near-white, für dunklen Hintergrund) auf `--ink-900`/`--ink-700`/`--ink-500`/
+  `rgba(15, 23, 42, ...)`-Äquivalente umgestellt (dunkle Tinte auf hellem Grund).
+- Aktive Sidebar-Links: `background: var(--paper-200); color: var(--ink-900);` (= exakt
+  `bg-slate-100`/`text-slate-900` aus dem Auftrag) statt eines Farbwechsels auf Weiß.
+- Logo-Dateien getauscht statt einer zusätzlichen CSS-Filter-Invertierung:
+  `app/web/static/img/logo.svg` enthält jetzt die dunkle (`#0F172A`) Fassung (Standard,
+  da es keinen dunklen Hintergrund mehr im Projekt gibt), die vorherige weiße Fassung liegt
+  als `logo-white.svg` für einen etwaigen künftigen dunklen Kontext bereit (aktuell nirgends
+  referenziert). `logo-dark.svg` (aus §59) entfernt - überflüssig geworden, da `logo.svg`
+  jetzt dieselbe Datei ist; Login-/Sperrbildschirm zeigen wieder auf `logo.svg`.
+- Kein nachgebautes OS-Fensterchrome (Ampel-Punkte o. Ä.) im Projekt gefunden oder ergänzt.
+
+`tests/test_design_refresh.py` angepasst: `test_sidebar_is_dark_slate_0f172a` (bestätigte
+bisher explizit eine dunkle Sidebar) ersetzt durch `test_sidebar_is_light_not_dark` +
+`test_active_sidebar_link_uses_slate_100_and_slate_900`.
+
+### Teil 2: `AI_MODE` ersetzt `llm_provider` als Provider-Schalter
+
+`app/ai_providers/factory.py` blieb strukturell die EINZIGE Stelle, die den Provider
+auswählt (wie in §-34/§59 dokumentiert vorgesehen) - das hat sich exakt ausgezahlt: die
+Umstellung brauchte NULL Änderungen an `DraftingService`, `ReviewEngine`,
+`app/web/drafts_router.py` oder `app/web/service_factory.py` (Letzteres bekommt weiterhin
+einfach eine `ClaudeWritingProvider`/`ClaudeReviewProvider`-Instanz, ohne zu wissen, ob
+dahinter Ollama oder Anthropic steckt).
+
+- **Neues Setting `ai_mode`** (`app/config/settings.py`, Werte `"LOCAL_ONLY"` [Standard]
+  oder `"HYBRID"`) **ersetzt** das alte `llm_provider`-Feld vollständig (nicht nur
+  umbenannt - Feld, Validator, alle Referenzen entfernt: `app/api/schemas.py`
+  (`SettingsOut.llm_provider` -> `.ai_mode`), `app/system_health/service.py`,
+  `tests/test_ai_provider_factory.py` neu geschrieben). Bewusst EIN Schalter statt zwei
+  potenziell widersprüchlichen Feldern.
+- **`OllamaWritingProvider`/`OllamaReviewProvider`** (`app/ai_providers/
+  ollama_writing_provider.py`, `app/review/ollama_review_provider.py`) implementieren
+  dieselben Protocols (`ClaudeWritingProvider`/`ClaudeReviewProvider`) wie die
+  Anthropic-Varianten - strukturell identische Datenschutz-Garantie: beide bekommen
+  AUSSCHLIESSLICH eine bereits pseudonymisierte `ClaudeRequestPayload`, kein Zugriff auf
+  Mandantendaten-Modelle. HTTP über `httpx.post(f"{base_url}/api/chat", ...)`, Standard
+  `http://localhost:11434`/`llama3.1`. Erreichbarkeitsfehler zur LAUFZEIT (Ollama nicht
+  gestartet) werfen `OllamaUnavailableError` - getrennt von `ProviderNotConfiguredError`
+  (Konfigurationsfehler zur BAUZEIT, z. B. fehlender `ANTHROPIC_API_KEY` bei HYBRID).
+- **Der Privacy-Gateway-Datenfluss bleibt strukturell UNVERÄNDERT und gilt für BEIDE
+  Modi**: `ClaudePrivacyGateway.prepare_request()` (Pseudonymisierung +
+  `SecurityCheckService`) sitzt in `app/web/service_factory.py` bereits VOR der
+  Provider-Auswahl, unabhängig davon, welcher Provider dahinter gebaut wird (das war
+  schon vor dieser Änderung so, siehe §-Gateway-Kommentar in `app/privacy/gateway.py`).
+  Das erfüllt die HYBRID-Vorgabe ("Text MUSS zwingend zuerst durch das lokale
+  Privacy-Modul laufen, bevor er anonymisiert an Anthropic übergeben wird") ohne jede
+  Codeänderung an dieser Stelle - sie war strukturell bereits erfüllt, für JEDEN Provider,
+  nicht nur Anthropic. Bei LOCAL_ONLY durchläuft die Anfrage denselben Gateway (inkl.
+  Security-Check gegen Prompt-Injection aus Dokumenten/E-Mails) und verlässt zusätzlich
+  die Maschine überhaupt nicht.
+- **`AnthropicClaudeWritingProvider`/`AnthropicClaudeReviewProvider` UNVERÄNDERT
+  belassen** (nicht gelöscht) - HYBRID braucht sie weiterhin per Auftrag ("...bevor er
+  anonymisiert an Anthropic übergeben wird"), direkte SDK-Nutzung ohne
+  Gateway/Proxy-Override bleibt bestehen (siehe `tests/test_no_ai_gateway_proxy.py` -
+  weiterhin grün, unverändert gültig: der Test bewacht kommerzielle Gateways wie
+  Portkey/OpenRouter/LiteLIM, nicht die Existenz eines lokalen Ollama-Providers oder
+  mehrerer Provider nebeneinander). "Restlos entfernen" aus dem Auftrag wird als
+  "nicht mehr der unbedingte Standardpfad" gelesen, nicht als Löschung des für HYBRID
+  weiterhin ausdrücklich geforderten Codes - beide Vorgaben im selben Auftrag (Ollama als
+  Standard UND Anthropic via HYBRID) wären sonst widersprüchlich.
+- **`httpx` von `[dev]` zu echten Kern-Abhängigkeiten verschoben** (`pyproject.toml`) -
+  wurde bereits zuvor unbemerkt von `app/updater/checker.py` zur Laufzeit importiert
+  (funktionierte nur, weil `[dev]` beim Testen/Entwickeln ohnehin installiert ist), jetzt
+  korrekt als Laufzeit-Abhängigkeit geführt, damit auch der PyInstaller-Build sie bündelt.
+- **Startup-Check** (`app/main.py: lifespan`): analog zum bestehenden stummen
+  Update-Check (`_run_silent_update_check`) ein neuer `_run_silent_ollama_check` -
+  nicht-blockierender Hintergrund-Task, nur bei `AI_MODE=LOCAL_ONLY`, schreibt
+  ausschließlich ins Log (`logger.info`/`logger.warning`), kein Dashboard-Hinweis, kein
+  Start-Abbruch bei nicht erreichbarem Ollama.
+- **Start.vbs**: zusätzlicher, komplett fehlertoleranter (`On Error Resume Next`)
+  Ollama-Check via `WinHttp.WinHttpRequest.5.1` (in Windows integriert, keine neue
+  Abhängigkeit) gegen den Standardport, EINE Ergebniszeile nach `app.log` VOR dem
+  eigentlichen Server-Start - rein informativ/redundant zum Python-seitigen Check oben
+  (der die tatsächlich konfigurierte `OLLAMA_BASE_URL` aus der echten `.env` prüft), deckt
+  aber den Fall ab, dass der Server aus anderen Gründen gar nicht bis zu seiner eigenen
+  Prüfung kommt. Blockiert den Start unter keinen Umständen.
+- **Systemstatus-Seite** (`app/web/monitoring_router.py`, `monitoring.html`): die bisher
+  statische, ehrlich-negative Zeile "Lokales LLM (Ollama): nicht Teil dieser Installation"
+  (§10/§54) durch einen echten, admin-ausgelösten Erreichbarkeitscheck ersetzt (neue Route
+  `POST /dashboard/monitoring/check-ollama`, `SystemHealthService.check_ollama_reachability`
+  - `GET /api/tags`, analog zu `check_claude_api_reachability`s `GET /v1/models`), plus
+  neue Zeile "KI-Modus" mit dem aktuellen `ai_mode`-Wert.
+- **`.env.example`** um `AI_MODE`/`OLLAMA_BASE_URL`/`OLLAMA_MODEL_NAME` ergänzt, mit
+  Verweis auf diesen Abschnitt.
+
+### Bewusst NICHT angetastet
+
+Die in §59 dokumentierte Trennung zwischen Branding (überall umbenannt) und technischen
+Bestandsidentitäten (Datenverzeichnis `%PROGRAMDATA%\KanzleiAI`, Python-/PyInstaller-
+Paketname) gilt unverändert und ist von dieser Umstellung nicht betroffen - reine
+KI-Provider-Frage, keine Datenpfad-Frage.
+
+### Getestet
+
+`tests/test_design_refresh.py` (2 Tests ersetzt/ergänzt), `tests/test_ai_provider_factory.py`
+(vollständig neu geschrieben, 14 Tests: Provider-Auswahl je Modus, fehlende Zugangsdaten nur
+bei HYBRID relevant, `ai_mode`-Validierung), `tests/test_ollama_providers.py` (neu, 9 Tests:
+Konstruktion, erfolgreicher Aufruf, `format: "json"` bei Review, `OllamaUnavailableError` bei
+Verbindungsfehlern, kein Zugriff auf Mandantendaten-Modelle auf Typebene),
+`tests/test_web_system_health.py` (Selbstdiagnose-Test an neue Ollama-Check-Zeile angepasst,
+2 neue Tests für `/check-ollama`), `tests/test_start_vbs.py` (3 neue Tests für den
+Ollama-Check-Block). Gesamte Suite: 1001 bestanden, 1 Skip, unverändert dieselben 4
+Umgebungslimitierungen der Sandbox wie in §57/§58/§59 - keine neuen Fehlschläge durch die
+Umstellung.
+
+### Offene Punkte
+
+1. Kein echter `ollama pull`/Modell-Download-Schritt Teil dieses Projekts - `llama3.1`
+   (Standard-`OLLAMA_MODEL_NAME`) muss lokal bereits über die Ollama-Installation
+   heruntergeladen sein, sonst liefert `/api/chat` einen Fehler (wird als
+   `OllamaUnavailableError` gemeldet, keine Unterscheidung "Dienst down" vs.
+   "Modell fehlt" - ein möglicher Folgeschritt, falls das im Pilotbetrieb relevant wird).
+   Ollama selbst wird von diesem Projekt nicht installiert/mitgeliefert.
+2. Kein echter Ende-zu-Ende-Testlauf gegen eine tatsächlich laufende Ollama-Instanz in
+   dieser Sitzung (Sandbox ohne Ollama) - `tests/test_ollama_providers.py` mockt `httpx`
+   vollständig, analog zu den bestehenden Anthropic-Provider-Tests, die ebenfalls nie
+   gegen die echte Anthropic-API laufen.
+3. HYBRID-Modus wurde nicht end-to-end mit einem echten `ANTHROPIC_API_KEY` erneut manuell
+   durchgespielt - die Anthropic-Provider-Klassen selbst sind unverändert (nur die
+   Aufrufbedingung in `factory.py` geändert), bereits an anderer Stelle verifizierter Code.
+
+## 61. Offizielles Logo (Dokument+Schild+Kette), CI-Farbcode #101828 (20.08.)
+
+Sechster Auftrag desselben Tages: der Anwalt lieferte das erste tatsächlich OFFIZIELLE
+Lexono-Logo (`Desktop\Lexono Logo.png`, 1394×451px) - ein Icon (Dokument mit umgeknickter
+Ecke und zwei Textzeilen, darunter ein Schild mit Kettenglied-Symbol) plus Wortmarke
+"Lexono". Ersetzt das in §59 nachgezeichnete Schild+"L"-Icon, das laut Auftragstext dort
+bereits "als Vorlage" diente, aber offenbar nicht das eigentliche finale Logo war.
+
+### Icon als echte Vektorgrafik (zweite Runde derselben Technik)
+
+Wie in §59: `cv2.findContours` (diesmal `RETR_CCOMP` statt `RETR_EXTERNAL`, da dieses Icon
+im Gegensatz zum vorherigen aus Konturlinien statt Vollflächen besteht - Dokumentrand,
+zwei Textbalken, Schildrand und das Kettenglied-Symbol bilden mehrfach verschachtelte
+Löcher, z. B. das hohle Schild-Innere und die weißen Zwischenräume im Kettenglied) +
+`cv2.approxPolyDP` extrahierten die exakte Polygongeometrie aller 7 tatsächlichen Konturen
+(eine 8., der Bildrand der Analyse-Ausschnittsdatei, wurde als Artefakt verworfen). Die
+korrekte Loch-Darstellung wurde VOR der Übernahme verifiziert: alle 7 Polygone einzeln als
+Maske gerendert und per XOR übereinandergelegt (exakt das, was SVGs `fill-rule="evenodd"`
+zur Laufzeit ohnehin tut) - das Ergebnis visuell pixelgenau mit der Vorlage verglichen
+(siehe Session), erst danach in die finalen Dateien übernommen.
+
+- `app/web/static/img/logo.svg` / `logo-white.svg` (viewBox `"0 0 180 320"`,
+  `fill-rule="evenodd"`) - ersetzen die bisherige Schild+"L"-Geometrie aus §59 komplett,
+  Dateirollen (dunkel = Standard seit §60, weiß = Ersatzvariante für einen etwaigen
+  künftigen dunklen Kontext) unverändert.
+- Neues Seitenverhältnis (180:320, schmaler/höher als zuvor 240:290) machte
+  `.sidebar__brand-logo` (app/web/static/css/app.css) sichtbar unpassend - vorher ein
+  festes 26×26-Quadrat, das die neue Geometrie horizontal gestaucht hätte. Umgestellt auf
+  `height: 28px; width: auto;` (Seitenverhältnis bleibt erhalten, wie bei Logos in
+  Navigationsleisten üblich).
+- `windows/generate_placeholder_icon.py` umgeschrieben: rendert jetzt per XOR-Masken-Technik
+  (PIL kennt kein natives `evenodd`) statt der vorherigen einfachen `draw.polygon()`-Füllung
+  - notwendig, weil die neue Geometrie (anders als die vorherige) echte Löcher besitzt.
+  `windows/app_icon.ico` daraus neu generiert und visuell gegen die Vorlage verifiziert.
+
+### Neuer CI-Farbcode `#101828`
+
+Ersetzt für Icon/Marken-Assets die bisherige Ink-Farbe `#0F172A` (= `--ink-900`,
+Tailwind slate-900) - beide liegen nur wenige Werte auseinander (`#0F172A` vs. `#101828`),
+eine Pixelfarbmessung im offiziellen Logo selbst ergab einen Kernfarbwert nahe `#0d1526`
+(Antialiasing-bedingt etwas dunkler als beide Kandidaten) - `#101828` wurde als der vom
+Auftrag EXPLIZIT genannte, verbindliche CI-Wert übernommen, nicht `#0F172A` weiterverwendet.
+
+**Bewusst eng gefasster Anwendungsbereich** - NUR die Icon-/Marken-Assets, NICHT das
+allgemeine UI-Farbschema:
+- `app/web/static/img/logo.svg` (Fill-Farbe) und `windows/app_icon.ico`
+  (Hintergrundfarbe des abgerundeten Quadrats, `windows/generate_placeholder_icon.py:
+  _CI_INK`) verwenden jetzt `#101828`.
+- `app/web/static/css/app.css` bewusst UNVERÄNDERT gelassen - `--ink-900` (allgemeine
+  Text-/UI-Tinte, exakt Tailwind slate-900) und `--seal-green`/`-dark`/`-tint` (Primär-
+  Button-/Akzentfarbe, aus §-Farbwechsel-Auftrag desselben Tages auf Slate umgestellt)
+  sind ein eigenständiges, bereits bewusst getroffenes Designsystem-Thema - der aktuelle
+  Auftrag war explizit auf "Logo/Icon" und "Desktop-Verknüpfung/Installer-Elemente"
+  begrenzt, keine Anfrage, das gesamte Farbschema erneut anzufassen.
+- "Verknüpfungs-Panel/Hintergrundfarben im Setup" (Auftragstext) wird als das
+  `SetupIconFile`/eingebettete `.exe`-Icon interpretiert - das ist unter Windows die
+  einzige tatsächlich sichtbare "Hintergrundfarbe" einer Desktop-Verknüpfung/eines
+  Installer-Icons; ein zusätzliches, großflächiges `WizardImageFile` bleibt weiterhin
+  bewusst NICHT gesetzt (siehe windows/installer.iss, unverändert seit der in Prompt 38
+  zurückgestellten Multi-Kanzlei-Branding-Frage).
+
+### Neu gebaut und verifiziert
+
+`pyinstaller windows\kanzlei_ai.spec` + `ISCC.exe windows\installer.iss` erneut
+ausgeführt (beide erfolgreich) - das neue Icon ist damit sowohl im PyInstaller-Bundle
+(`dist\kanzlei_ai\kanzlei_ai.exe`) als auch im fertigen `dist\installer\Lexono_Setup.exe`
+eingebettet, nicht nur als lose `.ico`-Datei im Repo.
+
+### Getestet
+
+`tests/test_design_refresh.py` weiterhin grün (prüft nur Dateiexistenz/gültiges SVG/
+Einbindungspfad, keine geometrieabhängigen Werte). Vollständige Suite erneut ausgeführt.
+
+## 62. Echte Einstellungen, sichtbares Ollama, Navigations-/Design-Feinschliff, heller
+Fensterrahmen (20.08.)
+
+Siebter und größter Auftrag desselben Tages, in fünf Teilen. Ein sechster, ebenfalls
+angefragter Punkt (live per API angebundene Aktualisierung von Rechtsquellen) wurde
+NICHT umgesetzt - siehe eigener Abschnitt unten.
+
+### Teil 1: "Steuerrecht"-Unterzeile entfernt
+
+`app/web/templates/base.html`: `.sidebar__brand-sub` mit dem Text "Steuerrecht" ersatzlos
+entfernt. Dieselbe CSS-Klasse wird in `login.html`/`unlock.html` weiterhin für einen
+ANDEREN Zweck verwendet (Seitenkontext-Label "Anmelden"/"Gesperrt - ...") - bewusst NICHT
+angetastet, semantisch eine andere Verwendung derselben Klasse.
+
+### Teil 2: CI-Farbcode `#101828` auf primäre UI-Elemente ausgeweitet
+
+§61 beschränkte `#101828` bewusst auf Icon/Installer - dieser Auftrag verlangt es explizit
+auch für "primäre UI-Elemente". Da `--seal-green`/`-dark`/`-tint` bereits die EINZIGE
+Quelle für Primärbutton-/Akzentfarben im gesamten CSS ist (kein zweiter, konkurrierender
+Farbwert irgendwo), genügte die Änderung der drei Token-WERTE selbst
+(`app/web/static/css/app.css`) - keine der ca. 30 Verwendungsstellen musste einzeln
+angefasst werden:
+- `--seal-green: #101828` (vorher `#0f172a`/Tailwind slate-900), `--seal-green-dark:
+  #0c1220` (Hover-/Fokus-Zustand, ca. 25 % dunkler), `--seal-green-tint: #f1f5f9`
+  (unverändert, = `--paper-200`).
+- Zwei HARTCODIERTE `rgba(15, 23, 42, ...)`-Werte, die denselben alten Farbwert dezimal
+  statt über die Variable referenzierten (`.tag--matched` in app.css,
+  `admin_users.html`s Erfolgs-Banner) - auf `rgba(16, 24, 40, ...)` (= `#101828`)
+  nachgezogen, sonst wären genau diese zwei Stellen stumm beim alten Grün-Farbton
+  hängengeblieben.
+- `--ink-900` (allgemeine Text-/UI-Tinte, exakt Tailwind slate-900, `#0f172a`) BEWUSST
+  NICHT angetastet - der Auftrag betraf "primäre UI-Elemente" (Buttons/Akzente/Badges),
+  nicht die allgemeine Textfarbe; beide Werte unterscheiden sich ohnehin nur in 1-2
+  Werten je Kanal, keine wahrnehmbare Inkonsistenz.
+- Nebenbefund beim Ausweiten der Eingabefeld-Selektoren (Teil 5 unten): bislang war NUR
+  `input[type="text"]` gestylt - E-Mail-/Passwort-/Zahlenfelder (u. a. die Login-Seite
+  selbst) liefen unbemerkt auf den nativen Browser-Standardstil hinaus. Behoben durch
+  einen vollständigen Satz an Eingabefeld-Selektoren (`email`/`password`/`number`/`url`/
+  `search`/`select`) plus eine neue `.checkbox-label`-Komponente (für die SSL-Checkbox im
+  neuen E-Mail-Formular, siehe Teil 3).
+
+### Teil 3: Echte, bedienbare Einstellungsseite ("kritischer Bugfix")
+
+Der Auftrag benannte einen konkreten Bug: ein Klick auf das "+"-Symbol bei "Scan-Ordner
+festlegen"/"E-Mail verknüpfen" (`partials/onboarding_banner.html`) landete bislang auf
+einem toten Link zur Profil-Übersicht (`account_overview.html`) - Konfiguration war
+bis dahin ausschließlich über Handbearbeitung der `.env`-Datei möglich (siehe
+`onboarding_banner.html`s bisheriger Kommentar, jetzt entfernt).
+
+**Neues Modul `app/web/settings_router.py`** (admin-only, wie Nutzerverwaltung/
+Systemstatus/Backup): eine echte Seite unter `/dashboard/settings` mit vier
+unabhängigen, sofort speichernden Formularabschnitten - Scan-Ordner (Hinzufügen/
+Entfernen, `INTAKE_WATCHED_FOLDERS`), E-Mail-Postfach (`MAIL_*`, IMAP-Zugangsdaten),
+Aufbewahrungsfrist (`RETENTION_DAYS`) und KI-Modus/lokales Modell (`OLLAMA_*`, siehe
+Teil 4). Ersetzt den bisherigen Redirect `/dashboard/settings` -> `/dashboard/account`
+(Prompt 49) vollständig - `placeholder_router.py` verliert diese Route.
+
+**Neuer Schreibmechanismus** (`app/setup/env_writer.py: update_env_values` +
+`format_env_value`, neu): ändert GEZIELT einzelne Schlüssel der bestehenden `.env`, ohne
+die übrigen Zeilen (insbesondere `SESSION_SECRET_KEY`) anzutasten oder die Reihenfolge zu
+verändern - bewusst NICHT `write_env_file` (voller Dateiersatz, für die Ersteinrichtung
+gedacht) wiederverwendet. Nach jedem Schreibvorgang `get_settings.cache_clear()`
+(derselbe, bereits für Tests dokumentierte Mechanismus, siehe app/config/settings.py) -
+Änderungen wirken damit SOFORT im laufenden Prozess, kein Neustart nötig. Live per
+Testsuite bewiesen (`test_settings_changes_apply_immediately_without_restart`), nicht nur
+behauptet.
+
+**Modales Eingabefenster statt Redirect**: natives HTML `<dialog>`-Element (kein
+JS-Framework - Fokus-Trapping/ESC-Schließen/`::backdrop` kommen browsereigen mit, konsistent
+mit "kein Build-Schritt"). Neue, wiederverwendbare `.modal`/`.settings-*`-CSS-Klassen.
+`onboarding_banner.html` komplett neu geschrieben: Schritt 1 (Scan-Ordner) und Schritt 2
+(E-Mail, vorher zwei separate, redundante Schritte für dieselbe Sache - jetzt EIN Schritt
+"E-Mail verknüpfen") öffnen echte Formulare in einem `<dialog>`, die direkt gegen die neuen
+Endpunkte posten; Schritt 3 ist der Ollama-Check (siehe Teil 4) statt eines dritten
+Formulars - entspricht exakt den im Auftrag genannten drei Onboarding-Schritten
+("Scan-Ordner wählen, E-Mail anbinden, Ollama-Check").
+
+**E-Mail-Passwort-Hygiene**: wird nie aus den bestehenden Einstellungen vorausgefüllt
+zurückgegeben (Feld bleibt leer) und bei leerem Absenden NICHT überschrieben (Standardmuster
+für Passwortfelder) - testet `test_update_mail_settings_blank_password_does_not_overwrite_existing`.
+
+**Bewusste, im Auftrag mehrfach wiederholte Umkehrung eines Teilaspekts von Schritt-3-Punkt-1**
+("API-Sicherheit: blende API-Key-Eingabefelder aus", siehe
+`tests/test_no_editable_api_key_in_ui.py`): jener Test verbot bislang JEDES editierbare
+Secret-Feld inkl. `mail_password`. Der heutige Auftrag verlangt ausdrücklich ("echte
+Einstellungen... E-Mail-Zugangsdaten", "kritischer Bugfix": IMAP/SMTP-Eingabe) genau das
+Gegenteil für E-Mail-Zugangsdaten. Test entsprechend chirurgisch verengt: `mail_password`
+aus der verbotenen Feldliste entfernt, `anthropic_api_key`/`api_key` (der eigentliche
+Cloud-API-Schlüssel, von diesem Auftrag an keiner Stelle erwähnt) bleiben weiterhin
+verboten und ungetestet unverändert editierbar - die ursprüngliche Sicherheitsabsicht
+("kein Cloud-API-Schlüssel im UI") bleibt vollständig erhalten, nur der versehentlich
+mitgefangene E-Mail-Passwort-Fall wird bewusst gelockert.
+
+### Teil 4: Sichtbares Ollama, "veraltete Claude-API-Hinweise" bereinigt
+
+**Neue Kopfzeilen-Badge** (`partials/ollama_badge.html`, `GET /dashboard/monitoring/
+ollama-badge`, in `base.html` wie `budget-badge`/`update-badge` per HTMX geladen, für JEDE
+angemeldete Person sichtbar, nicht nur Admin): zeigt `AI_MODE` und bei `LOCAL_ONLY` den
+konfigurierten Modellnamen + einen Status-Punkt. Bewusst KEIN eigener Live-Netzwerkaufruf
+pro Seitenaufruf/Badge-Laden - liest ausschließlich `app.state.ollama_check`, das EINMALIG
+beim Start ermittelte Ergebnis (`app/main.py: _run_silent_ollama_check`, seit §60
+vorhanden, jetzt zusätzlich in `app.state` abgelegt statt nur geloggt) - derselbe
+Grundsatz wie bei der admin-only Claude-API-/Ollama-Erreichbarkeitsprüfung
+(`app/system_health/service.py`-Docstring: "kein automatischer Hintergrundaufruf pro
+Seitenaufruf"). Getestet inkl. eines expliziten Beweises, dass der Badge-Endpunkt selbst
+KEINEN `httpx`-Aufruf auslöst (`test_ollama_badge_does_not_trigger_a_network_call`).
+
+**"Veraltete Claude-API-Hinweise" bereinigt** (Bestandsaufnahme aller Fundstellen via
+Agent-Recherche, siehe Session) - NICHT pauschal jede Anthropic-Erwähnung gelöscht (HYBRID
+nutzt Anthropic weiterhin real, siehe §60 - das zu verschweigen wäre selbst wieder
+unehrlich), sondern moduswabhängig neu formuliert:
+- `account_privacy.html`/`account_router.py`: neue Zeile "KI-Modus" (immer sichtbar), die
+  Claude-API-Zeile nur noch bei `ai_mode == "HYBRID"` sichtbar, als "(HYBRID-Anteil)"
+  gekennzeichnet. Pseudonymisierungs-Satz moduswabhängig ergänzt ("verlassen bei
+  AI_MODE=LOCAL_ONLY zusätzlich diesen Rechner gar nicht").
+- `draft_detail.html`: zwei Berechtigungshinweise ("löst einen Claude-API-Aufruf aus") auf
+  provider-neutral "KI-Aufruf" umformuliert - die tatsächliche Provider-Auswahl bleibt
+  ohnehin `app/ai_providers/factory.py` vorbehalten (§60), diese Texte sind reine
+  UI-Hinweise ohne Bezug zur Implementierung.
+- `monitoring.html`: "KI-Modus"-Zeile und Ollama-Erreichbarkeitscheck bereits seit §60
+  vorhanden, hier unverändert.
+- BEWUSST NICHT geändert: `tests/test_no_ai_gateway_proxy.py` (bewacht kommerzielle
+  Gateways, nicht Anthropic-Erwähnungen an sich), historische ARCHITECTURE.md-Abschnitte,
+  Code-Kommentare, die die tatsächliche HYBRID-Anthropic-Anbindung technisch korrekt
+  beschreiben (z. B. `app/ai_providers/anthropic_writing_provider.py`) - "veraltete
+  Hinweise" wurde als "im UI sichtbare, jetzt falsche/irreführende Aussagen" gelesen, nicht
+  als "jede Erwähnung des Wortes Claude im gesamten Repository".
+
+### Teil 5: Navigation & Apple-Design-Feinschliff
+
+- **Konsistenter Zurück-Pfeil** (`base.html`, neue `.header-back`-Zeile über jedem
+  `.topbar`, EINMAL zentral ergänzt statt in den ~16 Templates einzeln, die `.topbar`
+  verwenden - derselbe "eine Stelle statt viele Templates"-Ansatz wie bei
+  `.header-icons`): nutzt `window.history.back()` mit Fallback-Ziel `/dashboard`,
+  sichtbar auf jeder Unterseite außer dem Dashboard-Wurzelpfad
+  (`active_nav != "Schnellstart"`). `placeholder.html`s bisheriger, redundant gewordener
+  hartcodierter "Zurück zum Posteingang"-Link entfernt, durch einen kleinen
+  "v0.2.0"-Hinweis-Badge ersetzt (Apple-Polish, weiterhin ehrlich - keine vorgetäuschte
+  Funktion, nur ein aufgeräumteres Erscheinungsbild: `box-shadow`, engere Abstände).
+- **"Einstellungen"-Kachel** in `account_overview.html` ergänzt (admin-only, wie
+  "Nutzerverwaltung"), verlinkt auf die neue echte Seite aus Teil 3.
+- Neue `.banner--success`-Variante (bisher existierte nur `.banner--error`) für die
+  Erfolgsmeldungen der neuen Einstellungsformulare.
+
+### Teil 6: Heller nativer Fensterrahmen ("kritischer Design-Fix")
+
+pywebview spiegelt unter Windows automatisch den System-Dunkelmodus auf die native
+Titelleiste (`.venv/Lib/site-packages/webview/platforms/winforms.py:
+update_title_bar_theme`, per `DwmSetWindowAttribute`/`DWMWA_USE_IMMERSIVE_DARK_MODE`) -
+auf einem Rechner mit systemweitem Dunkelmodus wurde die Titelleiste dadurch SCHWARZ,
+ein deutlicher Bruch mit dem durchgehend hellen Layout (siehe Screenshot in der Session).
+
+`run.py`: neue Funktion `_apply_light_title_bar`, an `window.events.shown` gehängt
+(`webview.create_window(...)` liefert seit dieser Änderung das `Window`-Objekt zurück,
+vorher wurde der Rückgabewert verworfen) - ruft NACH pywebviews eigener,
+theme-abhängiger Einstellung dieselbe DWM-API erneut auf und überschreibt sie bewusst:
+`DWMWA_USE_IMMERSIVE_DARK_MODE` (Attribut 20) fest auf 0 (hell), zusätzlich
+`DWMWA_CAPTION_COLOR`/`DWMWA_TEXT_COLOR` (Attribute 35/36, nur Windows 11 22H2+) auf die
+exakten Marken-Farbwerte `#F8FAFC`/`#101828` aus `app.css`. Auf älteren Windows-Versionen
+schlagen die beiden Farb-Aufrufe folgenlos fehl (kein Python-Fehler, nur ein nicht
+erfolgreicher HRESULT), der Dunkelmodus-Aufruf (seit Windows 10 2004 unterstützt) greift
+trotzdem - im schlimmsten Fall keine exakte Markenfarbe, aber nie mehr schwarz. Zusätzlich
+`background_color="#F8FAFC"` an `create_window` ergänzt (Farbe, bevor die Seite geladen
+ist - vorher pywebviews Standard-Weiß, jetzt exakt der Marken-Ton). Rein kosmetisch, kann
+den App-Start unter keinen Umständen verhindern (try/except, wie alle anderen
+Diagnose-/Komfortfunktionen in diesem Projekt).
+
+Nicht automatisiert end-to-end testbar (kein echtes natives Fenster in der Sandbox, siehe
+bereits bestehende Einschränkung in tests/test_run_entrypoint.py) - stattdessen auf
+Aufrufebene bewiesen: `dwmapi.DwmSetWindowAttribute` wird mit den korrekten drei
+Attributen/Werten aufgerufen (gemockt), die COLORREF-Konstanten kodieren nachweislich die
+richtigen Hex-Farben (COLORREF = `0x00BBGGRR`, umgekehrte Byte-Reihenfolge), und ein
+fehlendes/unerwartetes `window`-Objekt darf die Funktion nie zum Absturz bringen.
+
+### NICHT umgesetzt: Live-Gesetzesdaten-API
+
+Der Auftrag verlangte zusätzlich eine "optionale, per API angebundene Live-Aktualisierung"
+externer Rechtsquellen, damit die lokale Ollama-KI "stets auf dem neuesten rechtlichen
+Stand" arbeitet. **Bewusst nicht gebaut**, nach Prüfung von `app/models/source.py`:
+
+> "Die KI darf keine Quelle erfinden - technisch durchgesetzt dadurch, dass Quellen
+> ausschliesslich ueber `SourceService.import_source` (manuelle Eingabe durch den Anwalt)
+> entstehen, nie automatisch generiert werden."
+
+Das ist die technische Durchsetzung der CLAUDE.md-Kernregel "Niemals Rechtsquellen,
+Fundstellen oder Zitate erfinden" - ein automatischer Import (selbst nur admin-ausgelöst,
+selbst ohne einen konkreten Anbieter vorwegzunehmen) würde genau diese Absicherung
+umkehren. Anders als die Ollama-Umstellung (§60, dort nach ausdrücklicher Rückfrage UND
+Bestätigung umgesetzt) wurde dieser konkrete Punkt dem Anwalt in dieser Sitzung noch nicht
+zur Bestätigung vorgelegt - die Tragweite (fehlerhafte/veraltete/erfundene Fundstellen
+könnten unbemerkt in echte Mandantenschreiben einfließen) rechtfertigt eine bewusste
+Rückfrage statt einer stillen Umsetzung. `/dashboard/sources` ("Rechtsquellen") bleibt
+zudem ohnehin weiterhin ein ehrlicher Platzhalter (siehe `placeholder_router.py`) - selbst
+die manuelle Verwaltungsoberfläche existiert noch nicht.
+
+### Getestet
+
+`tests/test_setup_env_writer.py` (10 neue Tests für `update_env_values`/
+`format_env_value`), `tests/test_web_settings.py` (neu, 17 Tests: Zugriffsschutz,
+alle vier Formularabschnitte, Passwort-Hygiene, sofortige Wirksamkeit ohne Neustart),
+`tests/test_web_system_health.py` (3 neue Tests für die Ollama-Badge, inkl. Beweis "kein
+Netzwerkaufruf"), `tests/test_run_entrypoint.py` (4 neue Tests für
+`_apply_light_title_bar`), `tests/test_no_editable_api_key_in_ui.py` (chirurgisch
+angepasst, siehe Teil 3), `tests/test_web_placeholder.py` (1 Test an die echte
+Einstellungsseite angepasst). Vollständige Suite erneut ausgeführt, keine neuen
+Fehlschläge außerhalb der bekannten 4 Umgebungslimitierungen der Sandbox.
+
+### Offene Punkte
+
+1. Live-Gesetzesdaten-API bewusst nicht umgesetzt (siehe oben) - Rückfrage an den Anwalt
+   nötig: welcher konkrete Anbieter/welche API, und ob ein admin-ausgelöster (nicht
+   automatischer) Import mit Pflicht-Review vor Freigabe (`approval_level`) als Kompromiss
+   akzeptabel wäre, statt die bestehende "nur manuell"-Regel vollständig aufzuheben.
+2. `_apply_light_title_bar` nicht auf einem echten Windows-11-22H2+-Rechner mit
+   systemweitem Dunkelmodus manuell verifiziert (nur auf Aufrufebene getestet, siehe
+   oben) - sollte vor dem nächsten echten Pilot-Rollout einmal real gegengeprüft werden,
+   analog zum bisherigen Vorgehen bei anderen nur-manuell-testbaren nativen
+   Fenster-Änderungen (siehe §46/§56).

@@ -88,7 +88,7 @@ class BackupService:
             archive.writestr(
                 "BACKUP_INFO.txt",
                 (
-                    f"Kanzlei-AI Backup, erstellt {timestamp} UTC\n"
+                    f"Lexono Backup, erstellt {timestamp} UTC\n"
                     "Enthaelt: Datenbank-Snapshot (database.db), "
                     "intake/, mail_attachments/, settings.json\n"
                     "WICHTIG: Enthaelt vollstaendige, unpseudonymisierte "

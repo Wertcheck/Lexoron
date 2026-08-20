@@ -1,4 +1,4 @@
-"""Prompt-Bibliothek: 'Vorlagen & Muster' -> 'Standard-Prompts' (Schritt 3, Teil 2)."""
+"""Prompt-Bibliothek: 'Kanzleiwissen & KI' -> 'Standard-Prompts' (Schritt 3, Teil 2)."""
 
 from app.prompt_library.rendering import extract_variables, render_template
 from app.prompt_library.schema import PromptTemplateInput

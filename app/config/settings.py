@@ -66,6 +66,16 @@ class Settings(BaseSettings):
     # intake_storage_dir für den Scan-Eingang, aber bewusst eigener
     # Ordner, um die Herkunft nachvollziehbar zu halten).
     mail_attachment_storage_dir: str = "data/mail_attachments"
+    # Getrennter Ablagebereich für Drag&Drop-Uploads im Schriftsatz-
+    # Generator (20.08., analog zu intake_storage_dir/
+    # mail_attachment_storage_dir - eigener Ordner pro Eingangsquelle,
+    # damit die Herkunft einer Datei am Speicherort erkennbar bleibt).
+    schriftsatz_upload_storage_dir: str = "data/schriftsatz_uploads"
+    # Ablagebereich für Kanzlei-Profil-Bilder (Logo/Unterschrift, 20.08.) -
+    # eigener Ordner analog zu den obigen, KEINE Dokumente im fachlichen
+    # Sinn (keine Akte/kein OCR), daher bewusst getrennt von
+    # intake_storage_dir/schriftsatz_upload_storage_dir gehalten.
+    firm_profile_asset_storage_dir: str = "data/firm_profile_assets"
 
     # --- Klassifikation ---
     # Ab welchem Konfidenzwert (0.0-1.0) eine Klassifikation als
@@ -113,35 +123,44 @@ class Settings(BaseSettings):
     # Reste faelschlich als vollstaendiger Text gewertet werden).
     min_extracted_text_length: int = 20
 
-    # --- LLM / Claude API ---
-    # Seit Prompt 34 TATSÄCHLICH zur Provider-Auswahl genutzt (siehe
-    # app/ai_providers/factory.py) - bis dahin nur ein reines Anzeigefeld
-    # (Konzept Prompt 03: "Platzhalter, echte Anbindung erst Prompt 17"),
-    # das seit Prompt 17 zwar in der Konfigurationsanzeige erschien, aber
-    # nie tatsächlich etwas auswählte (`AnthropicClaudeWritingProvider`
-    # war hart in `app/web/service_factory.py` verdrahtet). Aktuell ist
-    # "anthropic" der einzige unterstützte Wert - die Prüfung existiert
-    # trotzdem bereits jetzt, damit ein Tippfehler sofort beim Start
-    # auffällt statt erst beim ersten Entwurfsversuch.
-    llm_provider: str = "anthropic"
+    # --- LLM / KI-Modus (Local-First-Architektur, 20.08.) ---
+    # Ersetzt das fruehere reine `llm_provider`-Feld ("anthropic" als
+    # einziger Wert) - siehe ARCHITECTURE.md §60 fuer die Entscheidung:
+    # §57 (direkte Anthropic-API, kein lokales LLM) wurde an diesem Tag
+    # noch einmal ausdruecklich angefragt UND diesmal bewusst bestaetigt
+    # umgekehrt - `ai_mode` ist jetzt der EINZIGE Schalter fuer die
+    # Provider-Auswahl (siehe app/ai_providers/factory.py):
+    #   - "LOCAL_ONLY" (Standard): ausschliesslich das lokale Ollama-Modell
+    #     (ollama_base_url/ollama_model_name) - keine Anfrage verlaesst die
+    #     Kanzlei-Maschine.
+    #   - "HYBRID": Text durchlaeuft weiterhin ZUERST das lokale
+    #     Privacy-Modul (app/privacy/gateway.py: ClaudePrivacyGateway -
+    #     Pseudonymisierung + SecurityCheckService) und wird ERST DANACH,
+    #     ausschliesslich in bereits anonymisierter Form, an Anthropic
+    #     uebergeben. Das war strukturell auch vorher schon so (der Gateway
+    #     sitzt in app/web/service_factory.py IMMER vor der eigentlichen
+    #     Provider-Auswahl, unabhaengig vom Provider) - HYBRID macht nur
+    #     explizit, dass der Cloud-Pfad ueberhaupt aktiv ist.
+    ai_mode: str = "LOCAL_ONLY"
+    # Lokaler Ollama-Dienst (Standard-Port der offiziellen Ollama-
+    # Installation) - siehe app/ai_providers/ollama_writing_provider.py.
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model_name: str = "llama3.1"
     anthropic_api_key: SecretStr | None = None
-    # Nur der Modellname fuer Protokollierungs-/Konfigurationszwecke
-    # (Schritt 5 der Privacy-Architektur) - keine echte API-Anbindung an
-    # dieser Stelle, siehe app/ai_providers/claude_writing_provider.py.
+    # Nur relevant bei ai_mode="HYBRID" (siehe app/ai_providers/factory.py).
     claude_model_name: str = "claude-sonnet-5"
     claude_max_tokens: int = 2000
 
-    @field_validator("llm_provider")
+    @field_validator("ai_mode")
     @classmethod
-    def llm_provider_must_be_supported(cls, value: str) -> str:
-        supported = {"anthropic"}
-        if value not in supported:
+    def ai_mode_must_be_supported(cls, value: str) -> str:
+        supported = {"LOCAL_ONLY", "HYBRID"}
+        upper = value.upper()
+        if upper not in supported:
             raise ValueError(
-                f"llm_provider muss einer von {sorted(supported)} sein, war: {value!r} "
-                "(weitere Provider - z. B. ein lokales Modell via Ollama - sind eine "
-                "eigene, noch offene Entscheidung, siehe TODO.md)"
+                f"ai_mode muss einer von {sorted(supported)} sein, war: {value!r}"
             )
-        return value
+        return upper
 
     # --- Rechtsquellen (Platzhalter, echte Logik erst Prompt 14/15) ---
     # Generische Liste erlaubter Quellen-Identifier; keine architektonische
@@ -387,6 +406,20 @@ class Settings(BaseSettings):
     def intake_storage_dir_must_not_be_blank(cls, value: str) -> str:
         if not value or not value.strip():
             raise ValueError("intake_storage_dir darf nicht leer sein")
+        return value
+
+    @field_validator("schriftsatz_upload_storage_dir")
+    @classmethod
+    def schriftsatz_upload_storage_dir_must_not_be_blank(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError("schriftsatz_upload_storage_dir darf nicht leer sein")
+        return value
+
+    @field_validator("firm_profile_asset_storage_dir")
+    @classmethod
+    def firm_profile_asset_storage_dir_must_not_be_blank(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError("firm_profile_asset_storage_dir darf nicht leer sein")
         return value
 
     @field_validator("intake_watched_folders", "legal_sources_allowed")

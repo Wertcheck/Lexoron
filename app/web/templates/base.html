@@ -1,19 +1,36 @@
 {# Basis-Layout (Prompt 22, Login/Rollen Prompt 26, Icon-/Navigations-
-   Ueberarbeitung Prompt 48, juristische Menuestruktur Prompt 49). Sidebar
-   nach juristischen Arbeitsablaeufen in fuenf aufklappbare Gruppen
-   gegliedert (<details>/<summary>, wie bereits bei "Entwurf manuell
-   bearbeiten" verwendet - kein JavaScript noetig). Bereiche ohne eigene
-   Fachlogik fuehren bewusst auf eine ehrliche Platzhalterseite
-   (app/web/placeholder_router.py) statt auf tote Links oder vorgetaeuschte
-   Funktionen. Profil/Einstellungen bewusst GETRENNT vom Hauptmenue ganz
-   unten links (app/web/account_router.py) - siehe ARCHITECTURE.md §53. #}
+   Ueberarbeitung Prompt 48, juristische Menuestruktur Prompt 49, bereinigte
+   Fuenf-Module-Navigation + moderner Sidebar-Footer 20.08.). Sidebar EXAKT
+   auf fuenf Kernmodule fokussiert (Uebersicht, Akten & Ordner, E-Mail &
+   Posteingang, Kanzleiwissen & KI, Mandantendatenbank) statt der
+   vorherigen sechs Gruppen - "Historie & Audit" und "Pilot-Feedback &
+   Support" sind KEINE eigenen Gruppen mehr, ihre Seiten bleiben aber
+   erreichbar: Fehler -> in "E-Mail & Posteingang" (haengt inhaltlich an
+   der Zustellung), Gespeicherte Analysen/Systemstatus -> in
+   "Kanzleiwissen & KI", Backup & Export -> als Kachel auf der
+   Profil-/Einstellungen-Uebersicht (templates/account_overview.html,
+   analog zu "Nutzerverwaltung"/"Einstellungen"), Pilot-Feedback & Support
+   -> neu im Sidebar-Footer unter "Hilfe" (siehe unten). "Uebersicht" und
+   "Mandantendatenbank" sind bewusst FLACHE Einzel-Links (kein <details>
+   mit nur einem Unterpunkt) - genau das war die zu vermeidende
+   Redundanz ("Dashboard" als Unterpunkt eines "Dashboard"-Obermenues).
+   Bereiche ohne eigene Fachlogik fuehren weiterhin auf eine ehrliche
+   Platzhalterseite (app/web/placeholder_router.py) statt auf tote Links
+   oder vorgetaeuschte Funktionen. Profil/Einstellungen bewusst GETRENNT
+   vom Hauptmenue ganz unten links (app/web/account_router.py) - siehe
+   ARCHITECTURE.md §53 - jetzt als zweigeteilter SaaS-Footer: oben ein
+   dezenter Hilfe-/Systemstatus-Streifen (Ollama-Erreichbarkeit +
+   Pilot-Feedback), darunter Account-Zeile (Avatar/Initialen + Rolle) mit
+   einem EIGENEN Zahnrad-Button, der direkt auf die Einstellungsseite
+   fuehrt (Admin: /dashboard/settings, sonst die Profil-Uebersicht - fuer
+   Nicht-Admins gibt es keine eigene Einstellungsseite). #}
 {% import "_icons.html" as icons %}
 <!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Kanzlei-AI{% endblock %} · Kanzlei-AI</title>
+  <title>{% block title %}Lexono{% endblock %} · Lexono</title>
   <link rel="stylesheet" href="/dashboard/static/css/app.css" />
   <script src="/dashboard/static/js/htmx.min.js"></script>
   <script>
@@ -42,108 +59,160 @@
 <body>
   <div class="app-shell">
     <nav class="sidebar">
-      <div class="sidebar__brand">Kanzlei&nbsp;AI</div>
-      <div class="sidebar__brand-sub">Steuerrecht&nbsp;· Prototyp</div>
+      <div class="sidebar__brand">
+        <img src="/dashboard/static/img/logo.svg" alt="Lexono" class="sidebar__brand-logo" />
+        <span>Lexono</span>
+      </div>
+      {% if current_user %}
+        {# Universal Command Bar (Strg+K/⌘K, 20.08.) - Sidebar-Einstiegspunkt
+           fuer sofortige Sichtbarkeit (Aufgabenstellung), oeffnet dasselbe
+           globale Modal weiter unten im Body. Siehe app/web/
+           global_search_router.py + app/search/global_search_service.py
+           fuer die Trennung "Lokal" (Mandant/Akte/Dokument, reine SQL-
+           Abfrage) vs. "Extern" (Rechtsquellen). #}
+        <button type="button" class="sidebar__search-trigger" data-command-bar-open
+                aria-label="Suche öffnen (Strg+K)">
+          {{ icons.search(class_="icon") }}
+          <span>Suchen…</span>
+          <span class="sidebar__search-trigger-kbd" data-command-bar-kbd>Strg+K</span>
+        </button>
+      {% endif %}
       <div class="sidebar__nav">
         {% set is_admin = current_user and current_user.role and current_user.role.name.lower() == "admin" %}
         {% set nav_groups = [
           {
-            "label": "Dashboard",
+            "label": "Übersicht",
             "icon": icons.dashboard,
-            "links": [
-              ("Schnellstart", "/dashboard", icons.dashboard, false),
-              ("Letzte Akten", "/dashboard/recent", icons.clock, false),
-              ("Systemstatus", "/dashboard/monitoring", icons.chart, true),
-            ],
+            "href": "/dashboard",
+            "flat": true,
           },
           {
-            "label": "Akten & Dokumente",
+            "label": "Akten & Ordner",
             "icon": icons.folder,
             "links": [
-              ("Posteingang", "/dashboard/inbox", icons.envelope, false),
               ("Aktive Akten", "/dashboard/matters", icons.folder, false),
+              ("Letzte Akten", "/dashboard/recent", icons.clock, false),
               ("Dokumenten-Viewer", "/dashboard/documents", icons.document, false),
               ("Archiv", "/dashboard/archive", icons.archive, false),
-              ("Postausgang", "/dashboard/outbox", icons.send, false),
             ],
           },
           {
-            "label": "KI-Werkzeuge",
+            "label": "E-Mail & Posteingang",
+            "icon": icons.envelope,
+            "links": [
+              ("Posteingang", "/dashboard/inbox", icons.envelope, false),
+              ("Postausgang", "/dashboard/outbox", icons.send, false),
+              ("Entwürfe zur Prüfung", "/dashboard/drafts", icons.document, false),
+              ("Fehler", "/dashboard/errors", icons.warning, false),
+            ],
+          },
+          {
+            "label": "Kanzleiwissen & KI",
             "icon": icons.bulb,
             "links": [
-              ("Entwürfe zur Prüfung", "/dashboard/drafts", icons.document, false),
               ("Schriftsatz-Generator", "/dashboard/tools/schriftsatz", icons.printer, false),
               ("Fristen-Check", "/dashboard/tools/fristen", icons.clock, false),
               ("Zeitleiste", "/dashboard/tools/zeitleiste", icons.chart, false),
               ("Beleg-Extraktion", "/dashboard/tools/beleg-extraktion", icons.upload, false),
               ("Rechtsquellen", "/dashboard/sources", icons.book, false),
-            ],
-          },
-          {
-            "label": "Vorlagen & Muster",
-            "icon": icons.book,
-            "links": [
+              ("Gesetzesbibliothek", "/dashboard/laws", icons.book, false),
               ("Kanzlei-Mustertexte", "/dashboard/library/mustertexte", icons.document, false),
               ("Standard-Prompts", "/dashboard/library/prompts", icons.bulb, false),
               ("Kanzlei-Wissen", "/dashboard/knowledge", icons.bulb, false),
-            ],
-          },
-          {
-            "label": "Historie & Audit",
-            "icon": icons.archive,
-            "links": [
-              ("Fehler", "/dashboard/errors", icons.warning, false),
               ("Gespeicherte Analysen", "/dashboard/history/analysen", icons.chart, false),
-              ("Export-Protokolle", "/dashboard/backup", icons.archive, true),
+              ("Systemstatus", "/dashboard/monitoring", icons.chart, true),
             ],
           },
           {
-            "label": "Pilot-Feedback & Support",
-            "icon": icons.bulb,
-            "links": [
-              ("Pilot-Feedback & Support", "/dashboard/feedback", icons.bulb, false),
-            ],
+            "label": "Mandantendatenbank",
+            "icon": icons.users,
+            "href": "/dashboard/clients",
+            "flat": true,
           },
         ] %}
         {% for group in nav_groups %}
-          {% set ns = namespace(has_active=false) %}
-          {% for label, href, icon, admin_only in group.links %}
-            {% if active_nav == label %}{% set ns.has_active = true %}{% endif %}
-          {% endfor %}
-          <details class="sidebar__group"{% if ns.has_active %} open{% endif %}>
-            <summary class="sidebar__group-summary">
-              {{ group.icon(class_="icon sidebar__group-icon") }}
-              <span class="sidebar__group-label">{{ group.label }}</span>
-            </summary>
-            <div class="sidebar__group-items">
-              {% for label, href, icon, admin_only in group.links %}
-                {% if not admin_only or is_admin %}
-                  <a class="sidebar__link{% if active_nav == label %} sidebar__link--active{% endif %}"
-                     href="{{ href }}">
-                    {{ icon(class_="icon sidebar__link-icon") }}
-                    <span class="sidebar__link-label">{{ label }}</span>
-                  </a>
-                {% endif %}
-              {% endfor %}
+          {% if group.flat %}
+            <div class="sidebar__group sidebar__group--flat">
+              <a class="sidebar__group-summary sidebar__group-summary--flat{% if active_nav == group.label %} sidebar__group-summary--active{% endif %}"
+                 href="{{ group.href }}">
+                {{ group.icon(class_="icon sidebar__group-icon") }}
+                <span class="sidebar__group-label">{{ group.label }}</span>
+              </a>
             </div>
-          </details>
+          {% else %}
+            {% set ns = namespace(has_active=false) %}
+            {% for label, href, icon, admin_only in group.links %}
+              {% if active_nav == label %}{% set ns.has_active = true %}{% endif %}
+            {% endfor %}
+            <details class="sidebar__group"{% if ns.has_active %} open{% endif %}>
+              <summary class="sidebar__group-summary">
+                {{ group.icon(class_="icon sidebar__group-icon") }}
+                <span class="sidebar__group-label">{{ group.label }}</span>
+              </summary>
+              <div class="sidebar__group-items">
+                {% for label, href, icon, admin_only in group.links %}
+                  {% if not admin_only or is_admin %}
+                    <a class="sidebar__link{% if active_nav == label %} sidebar__link--active{% endif %}"
+                       href="{{ href }}">
+                      {{ icon(class_="icon sidebar__link-icon") }}
+                      <span class="sidebar__link-label">{{ label }}</span>
+                    </a>
+                  {% endif %}
+                {% endfor %}
+              </div>
+            </details>
+          {% endif %}
         {% endfor %}
       </div>
       {% if current_user %}
-        <a href="/dashboard/account" class="sidebar__profile{% if active_nav in ['Profil & Einstellungen', 'Anonymisierung & Datenschutz', 'Kanzlei-Profil & Briefkopf', 'System & Lizenz', 'Mein Konto & Abmelden'] %} sidebar__profile--active{% endif %}">
-          <span class="sidebar__profile-avatar">{{ current_user.email[0]|upper }}</span>
-          <span class="sidebar__profile-info">
-            <span class="sidebar__profile-email">{{ current_user.email }}</span>
-            <span class="sidebar__profile-role">{{ current_user.role.name if current_user.role else "?" }}</span>
-          </span>
-          {{ icons.settings(class_="icon sidebar__profile-gear") }}
-        </a>
+        {% set settings_href = "/dashboard/settings" if is_admin else "/dashboard/account" %}
+        {% set account_active = active_nav in ['Profil & Einstellungen', 'Anonymisierung & Datenschutz', 'Kanzlei-Profil & Briefkopf', 'System & Lizenz', 'Mein Konto & Abmelden', 'Einstellungen', 'Backup'] %}
+        <div class="sidebar__footer">
+          {# Dezenter Hilfe-/Systemstatus-Streifen - ersetzt die vorherige
+             eigene Sidebar-Gruppe "Pilot-Feedback & Support" (die Seite
+             existiert unveraendert weiter, ist aber kein Hauptmodul). Der
+             Ollama-Badge nutzt bewusst denselben HTMX-Endpunkt/dieselbe
+             Partial wie die Kopfzeile (partials/ollama_badge.html) statt
+             einer eigenen Kopie - kein zusaetzlicher Netzwerkaufruf pro
+             Ladevorgang (siehe dortige Begruendung), nur ein zweites
+             Rendering derselben bereits gecachten Ollama-Erreichbarkeit. #}
+          <div class="sidebar__footer-status">
+            <span class="sidebar__footer-status-ollama" hx-get="/dashboard/monitoring/ollama-badge" hx-trigger="load" hx-swap="innerHTML"></span>
+            <a href="/dashboard/feedback" class="sidebar__footer-help" title="Hilfe &amp; Support">
+              {{ icons.help(class_="icon") }}
+              <span>Hilfe &amp; Support</span>
+            </a>
+          </div>
+          <div class="sidebar__footer-account">
+            <a href="/dashboard/account" class="sidebar__profile{% if account_active %} sidebar__profile--active{% endif %}">
+              <span class="sidebar__profile-avatar">{{ current_user.email[0]|upper }}</span>
+              <span class="sidebar__profile-info">
+                <span class="sidebar__profile-email">{{ current_user.email }}</span>
+                <span class="sidebar__profile-role">{{ current_user.role.name if current_user.role else "?" }}</span>
+              </span>
+            </a>
+            <a href="{{ settings_href }}" class="sidebar__settings-btn" title="Einstellungen" aria-label="Einstellungen">
+              {{ icons.settings(class_="icon") }}
+            </a>
+          </div>
+        </div>
       {% endif %}
-      <div class="sidebar__footer">
-        Interner Prototyp &middot; Session-Login (Prompt 26)
-      </div>
     </nav>
     <div class="main">
+      {% if current_user and active_nav and active_nav != "Schnellstart" %}
+        {# Konsistenter "Zurueck"-Pfeil auf JEDER Unterseite (20.08.) - bewusst
+           EINMAL hier statt in jedem einzelnen .topbar der ~16 Templates
+           ergaenzt (derselbe "eine Stelle statt viele Templates"-Ansatz wie
+           bei .header-icons unten). Nutzt die Browser-History (history.back())
+           statt eines festen Ziels - funktioniert unabhaengig davon, von wo
+           die Seite aufgerufen wurde; href="/dashboard" ist der Fallback,
+           falls kein Verlaufseintrag existiert (z. B. Direktaufruf/neuer Tab). #}
+        <a href="/dashboard" class="header-back" title="Zurück" aria-label="Zurück"
+           onclick="if (window.history.length > 1) { window.history.back(); return false; }">
+          {{ icons.back_arrow(class_="icon") }}
+          <span>Zurück</span>
+        </a>
+      {% endif %}
       {% if current_user %}
         {# Kopfzeilen-Icon-Leiste (Prompt 48, nach Design-Vorlage) - bewusst
            absolut positioniert statt in jede einzelne .topbar eingebaut:
@@ -161,6 +230,10 @@
              diese Werte einzeln in seinen Kontext aufnehmen muss. #}
           <span hx-get="/dashboard/monitoring/budget-badge" hx-trigger="load" hx-swap="innerHTML"></span>
           <span hx-get="/dashboard/monitoring/update-badge" hx-trigger="load" hx-swap="innerHTML"></span>
+          {# KI-Modus/Ollama-Status (20.08.) - "prominent, ueberall sichtbar",
+             siehe partials/ollama_badge.html fuer die Begruendung, warum
+             das keinen Netzwerkaufruf pro Seitenaufruf ausloest. #}
+          <span hx-get="/dashboard/monitoring/ollama-badge" hx-trigger="load" hx-swap="innerHTML"></span>
           <a href="/dashboard/inbox" class="header-icons__btn" title="Posteingang" aria-label="Posteingang">
             {{ icons.envelope(class_="icon") }}
           </a>
@@ -184,6 +257,108 @@
     </div>
   </div>
   {% if current_user %}
+  <dialog id="command-bar-modal" class="modal command-bar-modal">
+    <div class="command-bar__input-row">
+      {{ icons.search(class_="icon command-bar__input-icon") }}
+      <input type="search" id="command-bar-input" name="q" class="command-bar__input"
+             placeholder="Mandanten, Akten, Dokumente, Rechtsquellen durchsuchen…"
+             autocomplete="off" spellcheck="false"
+             hx-get="/dashboard/search/results"
+             hx-trigger="input changed delay:300ms, search"
+             hx-target="#command-bar-results"
+             hx-swap="innerHTML" />
+      <button type="button" class="command-bar__close"
+              onclick="document.getElementById('command-bar-modal').close()" aria-label="Schließen">✕</button>
+    </div>
+    <div id="command-bar-results" class="command-bar__results-wrap">
+      <div class="command-bar__hint">Mindestens 2 Zeichen eingeben, um Mandanten, Akten, Dokumente
+        und Rechtsquellen zu durchsuchen.</div>
+    </div>
+  </dialog>
+  <script>
+    // Universal Command Bar (Strg+K/⌘K, 20.08.) - reines Vanilla-JS, kein
+    // Build-Schritt (ARCHITECTURE.md). Live-Suche/Debounce selbst laeuft
+    // ueber HTMX (siehe hx-trigger="input changed delay:300ms" oben) -
+    // dieses Skript kuemmert sich nur um Oeffnen/Schliessen, die
+    // Tastenkombination und die Pfeiltasten-Navigation der Ergebnisliste.
+    (function () {
+      var modal = document.getElementById("command-bar-modal");
+      var input = document.getElementById("command-bar-input");
+      var resultsWrap = document.getElementById("command-bar-results");
+      if (!modal || !input || !resultsWrap) {
+        return;
+      }
+
+      function openCommandBar() {
+        modal.showModal();
+        input.focus();
+        input.select();
+      }
+
+      document.querySelectorAll("[data-command-bar-open]").forEach(function (btn) {
+        btn.addEventListener("click", openCommandBar);
+      });
+
+      document.addEventListener("keydown", function (evt) {
+        if ((evt.ctrlKey || evt.metaKey) && evt.key.toLowerCase() === "k") {
+          evt.preventDefault();
+          if (modal.open) {
+            modal.close();
+          } else {
+            openCommandBar();
+          }
+        }
+      });
+
+      // Plattformabhaengiger Tastenkuerzel-Hinweis (Mac: Cmd, sonst Strg) -
+      // rein kosmetisch, die Tastenkombination selbst reagiert oben
+      // ohnehin auf BEIDE (ctrlKey || metaKey).
+      var isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+      document.querySelectorAll("[data-command-bar-kbd]").forEach(function (el) {
+        el.textContent = isMac ? "⌘K" : "Strg+K";
+      });
+
+      // Erstes Ergebnis nach jeder HTMX-Aktualisierung automatisch aktiv
+      // markieren, damit Enter direkt nach dem Tippen funktioniert (ohne
+      // vorheriges Pfeiltasten-Druecken) - uebliche Command-Palette-UX.
+      resultsWrap.addEventListener("htmx:afterSwap", function () {
+        var first = resultsWrap.querySelector("[data-command-bar-result]");
+        if (first) {
+          first.classList.add("command-bar__result--active");
+        }
+      });
+
+      input.addEventListener("keydown", function (evt) {
+        var items = resultsWrap.querySelectorAll("[data-command-bar-result]");
+        if (!items.length) {
+          return;
+        }
+        var currentIndex = Array.prototype.findIndex.call(items, function (el) {
+          return el.classList.contains("command-bar__result--active");
+        });
+        if (evt.key === "ArrowDown" || evt.key === "ArrowUp") {
+          evt.preventDefault();
+          if (currentIndex >= 0) {
+            items[currentIndex].classList.remove("command-bar__result--active");
+          }
+          var nextIndex;
+          if (evt.key === "ArrowDown") {
+            nextIndex = currentIndex < items.length - 1 ? currentIndex + 1 : 0;
+          } else {
+            nextIndex = currentIndex > 0 ? currentIndex - 1 : items.length - 1;
+          }
+          items[nextIndex].classList.add("command-bar__result--active");
+          items[nextIndex].scrollIntoView({ block: "nearest" });
+        } else if (evt.key === "Enter") {
+          var active = resultsWrap.querySelector(".command-bar__result--active") || items[0];
+          if (active) {
+            evt.preventDefault();
+            window.location = active.getAttribute("href");
+          }
+        }
+      });
+    })();
+  </script>
   <script>
     // App-Sperre / PIN-Lock (Schritt 3): laedt einmalig, ob eine PIN
     // eingerichtet ist (app/web/lock_router.py: /dashboard/lock-config) -

@@ -53,6 +53,19 @@ PERM_DRAFT_APPROVE = "draft:approve"
 PERM_DRAFT_REJECT = "draft:reject"
 PERM_OUTBOX_MARK_SENT = "outbox:mark_sent"
 PERM_USER_MANAGE = "user:manage"
+# Mandantendatenbank (20.08.): Anlegen/Bearbeiten/CSV-Excel-Import/
+# Archivieren eines Mandanten - bewusst NICHT fuer Mitarbeiter, analog zur
+# bestehenden Einschraenkung "Mitarbeiter legt keine neuen Akten an"
+# (siehe PERM_CLAUDE_CALL-Gate in app/web/schriftsatz_router.py:
+# create_quick_matter laeuft nur ueber diese Berechtigung). Der DSGVO-
+# Datenauszug ist ebenfalls hierueber gegated - normale Fallarbeit, keine
+# Admin-exklusive Systemfunktion, daher auch fuer Anwalt.
+PERM_CLIENT_MANAGE = "client:manage"
+# Endgueltiges Loeschen eines Mandanten (nur ohne verknuepfte Akten
+# moeglich, siehe app/clients/service.py) - bewusst eine STRENGERE, admin-
+# exklusive Berechtigung als PERM_CLIENT_MANAGE: irreversibel, anders als
+# die Archivierung.
+PERM_CLIENT_DELETE = "client:delete"
 
 _ALL_PERMISSIONS = frozenset(
     {
@@ -64,6 +77,8 @@ _ALL_PERMISSIONS = frozenset(
         PERM_DRAFT_REJECT,
         PERM_OUTBOX_MARK_SENT,
         PERM_USER_MANAGE,
+        PERM_CLIENT_MANAGE,
+        PERM_CLIENT_DELETE,
     }
 )
 
@@ -78,6 +93,7 @@ PERMISSION_MATRIX: dict[str, frozenset[str]] = {
             PERM_DRAFT_APPROVE,
             PERM_DRAFT_REJECT,
             PERM_OUTBOX_MARK_SENT,
+            PERM_CLIENT_MANAGE,
         }
     ),
     "mitarbeiter": frozenset(
@@ -131,8 +147,29 @@ class CSRFError(HTTPException):
 
 # Pfade, die auch mit `must_change_password=True` erreichbar bleiben
 # müssen (sonst könnte sich der Nutzer nie ein neues Passwort setzen).
+#
+# Die vier HTMX-/Fetch-Hintergrund-Endpunkte (budget-badge/update-badge/
+# ollama-badge/lock-config, siehe base.html) sind bewusst ZUSAETZLICH
+# enthalten: sie werden von JEDER angemeldeten Seite geladen, auch von der
+# Passwort-Aendern-Seite selbst. Ohne diese Ausnahme wuerden `fetch()`/HTMX
+# dem 303-Redirect auf /dashboard/change-password folgen und die komplette
+# HTML-Seite als Antwort erhalten statt JSON/eines leeren Partials - bei
+# HTMX wuerde das die volle Seite (inkl. desselben hx-trigger="load"-Badges)
+# in ein winziges <span> einschleusen, das sich dadurch selbst rekursiv
+# immer wieder nachlaedt (gefunden beim echten Browser-Test dieses
+# Schritts - fehlte urspruenglich fuer ollama-badge, das erst nach diesem
+# Set ergaenzt wurde: sichtbar als dutzendfach verschachtelte Sidebar/Logo
+# auf der erzwungenen Passwort-Aendern-Seite). Siehe
+# tests/test_background_badges_password_change_exempt.py.
 _PASSWORD_CHANGE_EXEMPT_PATHS = frozenset(
-    {"/dashboard/change-password", "/dashboard/logout"}
+    {
+        "/dashboard/change-password",
+        "/dashboard/logout",
+        "/dashboard/monitoring/budget-badge",
+        "/dashboard/monitoring/update-badge",
+        "/dashboard/monitoring/ollama-badge",
+        "/dashboard/lock-config",
+    }
 )
 
 # Analog fuer die PIN-Sperre (Schritt 3): muessen auch mit `is_locked=True`

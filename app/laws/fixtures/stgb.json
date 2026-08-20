@@ -1,0 +1,42 @@
+{
+  "code": "StGB",
+  "title": "Strafgesetzbuch",
+  "sections": [
+    {
+      "section_number": "§ 1",
+      "title": "Keine Strafe ohne Gesetz",
+      "text_content": "Eine Tat kann nur bestraft werden, wenn die Strafbarkeit gesetzlich bestimmt war, bevor die Tat begangen wurde.",
+      "last_updated": "2026-08-20"
+    },
+    {
+      "section_number": "§ 15",
+      "title": "Vorsätzliches und fahrlässiges Handeln",
+      "text_content": "Strafbar ist nur vorsätzliches Handeln, wenn nicht das Gesetz fahrlässiges Handeln ausdrücklich mit Strafe bedroht.",
+      "last_updated": "2026-08-20"
+    },
+    {
+      "section_number": "§ 212",
+      "title": "Totschlag (Absatz 1)",
+      "text_content": "Wer einen Menschen tötet, ohne Mörder zu sein, wird als Totschläger mit Freiheitsstrafe nicht unter fünf Jahren bestraft.",
+      "last_updated": "2026-08-20"
+    },
+    {
+      "section_number": "§ 223",
+      "title": "Körperverletzung (Absatz 1)",
+      "text_content": "Wer eine andere Person körperlich misshandelt oder an der Gesundheit schädigt, wird mit Freiheitsstrafe bis zu fünf Jahren oder mit Geldstrafe bestraft.",
+      "last_updated": "2026-08-20"
+    },
+    {
+      "section_number": "§ 242",
+      "title": "Diebstahl (Absatz 1)",
+      "text_content": "Wer eine fremde bewegliche Sache einem anderen in der Absicht wegnimmt, die Sache sich oder einem Dritten rechtswidrig zuzueignen, wird mit Freiheitsstrafe bis zu fünf Jahren oder mit Geldstrafe bestraft.",
+      "last_updated": "2026-08-20"
+    },
+    {
+      "section_number": "§ 303",
+      "title": "Sachbeschädigung (Absatz 1)",
+      "text_content": "Wer rechtswidrig eine fremde Sache beschädigt oder zerstört, wird mit Freiheitsstrafe bis zu zwei Jahren oder mit Geldstrafe bestraft.",
+      "last_updated": "2026-08-20"
+    }
+  ]
+}

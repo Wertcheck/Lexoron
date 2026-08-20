@@ -15,6 +15,7 @@ nötig) - keine Mandantendaten verlassen dafür die Kanzlei-Umgebung.
 """
 
 from app.search.embeddings import EmbeddingProvider, FastEmbedProvider
+from app.search.global_search_service import GlobalSearchResult, GlobalSearchService
 from app.search.schema import SearchResult
 from app.search.service import DocumentSearchService
 
@@ -23,4 +24,6 @@ __all__ = [
     "FastEmbedProvider",
     "SearchResult",
     "DocumentSearchService",
+    "GlobalSearchResult",
+    "GlobalSearchService",
 ]

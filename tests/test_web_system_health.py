@@ -1,5 +1,17 @@
 """Tests für die neuen Selbstdiagnose-/Log-Endpunkte unter
-/dashboard/monitoring (Schritt 3, Teil 2)."""
+/dashboard/monitoring (Schritt 3, Teil 2).
+
+`get_settings` (app/config/settings.py) ist ein `@lru_cache`-Singleton fuer
+den GESAMTEN Testprozess - jede echte HTTP-Anfrage in DIESER oder einer
+ANDEREN Testdatei, die `APP_ENV=production` (o. Ae.) per `monkeypatch.setenv`
+setzt UND dabei `get_settings()` (nicht nur `Settings()` direkt) ausloest,
+haenterlaesst ohne eigenes `cache_clear()` einen fuer den Rest der Suite
+"vergifteten" Cache (production-Settings ohne SESSION_SECRET_KEY -> harter
+RuntimeError bei jedem folgenden Login/Auth-Check, siehe
+Settings.resolved_session_secret_key). Bewusst defensiv: Cache vor UND nach
+JEDEM Test in dieser Datei geleert, unabhaengig davon, welche andere
+Testdatei zuvor lief oder folgt (derselbe Schutz wie in
+tests/test_web_settings.py)."""
 
 from __future__ import annotations
 
@@ -11,10 +23,18 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.config import get_settings
 from app.db.session import get_db
 from app.main import app
 from app.models.base import Base
 from tests.auth_test_utils import create_test_user, login, seed_roles
+
+
+@pytest.fixture(autouse=True)
+def _clear_settings_cache() -> Iterator[None]:
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture()
@@ -63,7 +83,9 @@ def test_monitoring_page_shows_selbstdiagnose_section(
     response = client.get("/dashboard/monitoring")
     assert response.status_code == 200
     assert "Selbstdiagnose" in response.text
-    assert "nicht Teil dieser Installation" in response.text  # Ollama-Hinweis
+    assert "Lokales LLM (Ollama)" in response.text
+    assert "KI-Modus" in response.text
+    assert "LOCAL_ONLY" in response.text  # Standard-AI_MODE, siehe ARCHITECTURE.md §60
 
 
 def test_logs_preview_requires_admin(client: TestClient, db_session: Session, roles) -> None:
@@ -106,8 +128,18 @@ def test_check_api_endpoint_requires_admin_and_csrf(
 
 
 def test_check_api_endpoint_reports_not_configured_without_key(
-    client: TestClient, db_session: Session, roles
+    client: TestClient, db_session: Session, roles, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Bewusst `get_settings` explizit auf 'kein Key' gepatcht statt auf die
+    Umgebung zu vertrauen - eine lokale `.env` mit echtem
+    ANTHROPIC_API_KEY (z. B. auf einem Entwicklungsrechner) würde diesen
+    Test sonst nicht deterministisch machen (der Reachability-Check würde
+    dann tatsächlich gegen die echte Anthropic-API laufen)."""
+    import app.web.monitoring_router as monitoring_module
+    from app.config import Settings
+
+    monkeypatch.setattr(monitoring_module, "get_settings", lambda: Settings(anthropic_api_key=None))
+
     _login_admin(client, db_session, roles)
     page = client.get("/dashboard/monitoring")
     import re
@@ -117,3 +149,80 @@ def test_check_api_endpoint_reports_not_configured_without_key(
     response = client.post("/dashboard/monitoring/check-api", data={"csrf_token": csrf})
     assert response.status_code == 200
     assert "nicht geprüft" in response.text
+
+
+def test_check_ollama_endpoint_requires_admin_and_csrf(
+    client: TestClient, db_session: Session, roles
+) -> None:
+    create_test_user(db_session, roles["mitarbeiter"], "mitarbeiter@kanzlei.test")
+    login(client, "mitarbeiter@kanzlei.test")
+    response = client.post("/dashboard/monitoring/check-ollama", data={"csrf_token": "invalid"})
+    assert response.status_code == 403
+
+
+def test_check_ollama_endpoint_reports_unreachable_when_not_running(
+    client: TestClient, db_session: Session, roles, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wie test_check_api_endpoint_reports_not_configured_without_key: der
+    echte `httpx.get`-Aufruf wird gemockt statt gegen ein tatsächlich
+    laufendes (oder nicht laufendes) lokales Ollama zu testen - sonst wäre
+    dieser Test vom Zustand der Testmaschine abhängig."""
+    import httpx as httpx_module
+
+    monkeypatch.setattr(
+        httpx_module,
+        "get",
+        lambda *a, **k: (_ for _ in ()).throw(httpx_module.ConnectError("refused")),
+    )
+
+    _login_admin(client, db_session, roles)
+    page = client.get("/dashboard/monitoring")
+    import re
+
+    csrf = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
+
+    response = client.post("/dashboard/monitoring/check-ollama", data={"csrf_token": csrf})
+    assert response.status_code == 200
+    assert "nicht erreichbar" in response.text
+
+
+def test_ollama_badge_visible_to_any_logged_in_user(
+    client: TestClient, db_session: Session, roles
+) -> None:
+    """Anders als der Rest der Systemstatus-Seite (admin-only) - der Auftrag
+    verlangt "prominent" sichtbar, also fuer jede angemeldete Person, siehe
+    partials/ollama_badge.html."""
+    create_test_user(db_session, roles["mitarbeiter"], "mitarbeiter@kanzlei.test")
+    login(client, "mitarbeiter@kanzlei.test")
+
+    response = client.get("/dashboard/monitoring/ollama-badge")
+
+    assert response.status_code == 200
+    assert "Ollama" in response.text or "HYBRID" in response.text
+
+
+def test_ollama_badge_shows_local_only_by_default(
+    client: TestClient, db_session: Session, roles
+) -> None:
+    _login_admin(client, db_session, roles)
+    response = client.get("/dashboard/monitoring/ollama-badge")
+    assert response.status_code == 200
+    assert "Ollama" in response.text
+    assert "llama3.1" in response.text  # Standard-OLLAMA_MODEL_NAME
+
+
+def test_ollama_badge_does_not_trigger_a_network_call(
+    client: TestClient, db_session: Session, roles, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Kernanspruch aus dem Docstring: die Badge liest nur das beim Start
+    ermittelte app.state.ollama_check - kein eigener httpx-Aufruf hier."""
+    import httpx as httpx_module
+
+    def _fail(*a, **k):
+        raise AssertionError("Badge-Endpunkt darf keinen eigenen Netzwerkaufruf ausloesen")
+
+    monkeypatch.setattr(httpx_module, "get", _fail)
+
+    _login_admin(client, db_session, roles)
+    response = client.get("/dashboard/monitoring/ollama-badge")
+    assert response.status_code == 200

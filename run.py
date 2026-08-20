@@ -239,7 +239,7 @@ def _is_webview2_runtime_available() -> bool:
 #: Benutzerkonto, siehe windows/installer.iss). Ohne Präfix ist der Mutex
 #: sitzungslokal (effektiv: pro angemeldetem Benutzer) - genau eine
 #: laufende Instanz PRO NUTZER, nicht pro Maschine.
-_SINGLE_INSTANCE_MUTEX_NAME = "KanzleiAI_SingleInstance_Mutex"
+_SINGLE_INSTANCE_MUTEX_NAME = "Lexono_SingleInstance_Mutex"
 _ERROR_ALREADY_EXISTS = 183
 
 
@@ -314,13 +314,97 @@ def _release_single_instance_lock(
     close_handle(handle)
 
 
+#: COLORREF-Werte (0x00BBGGRR, umgekehrte Byte-Reihenfolge gegenueber
+#: RGB-Hex) fuer DWMWA_CAPTION_COLOR/DWMWA_TEXT_COLOR - exakt dieselben
+#: Marken-Farbwerte wie app/web/static/css/app.css: --paper-100 (#F8FAFC)
+#: und --seal-green/CI-Farbcode (#101828).
+_TITLE_BAR_CAPTION_COLORREF = 0x00FCFAF8  # #F8FAFC
+_TITLE_BAR_TEXT_COLORREF = 0x00281810  # #101828
+
+
+def _apply_light_title_bar(window: object | None = None) -> None:
+    """Erzwingt eine HELLE native Windows-Titelleiste fuer das WebView2-
+    Fenster (20.08., "kritischer Design-Fix") - unabhaengig vom
+    System-Dark-Mode.
+
+    Hintergrund: pywebview spiegelt auf Windows automatisch den
+    System-Theme-Modus auf die Titelleiste (siehe .venv/Lib/site-packages/
+    webview/platforms/winforms.py: update_title_bar_theme/is_dark_theme,
+    per DWMWA_USE_IMMERSIVE_DARK_MODE ueber die Windows-DWM-API) - bei
+    einem Windows-Rechner im systemweiten Dunkelmodus wurde die Titelleiste
+    dadurch SCHWARZ, ein deutlicher Bruch mit dem durchgehend hellen
+    Apple-Layout der eigentlichen Anwendung. Dieselbe DWM-API (`DwmSetWindow
+    Attribute`, siehe genau dieselbe Technik im o. g. pywebview-Modul) wird
+    hier ERNEUT aufgerufen, NACHDEM pywebview seine eigene (system-
+    theme-abhaengige) Einstellung bereits gesetzt hat (`window.events.shown`
+    feuert nach der internen `update_title_bar_theme()`-Zuweisung) - das
+    ueberschreibt pywebviews Wahl bewusst und dauerhaft mit "hell".
+
+    `DWMWA_CAPTION_COLOR`/`DWMWA_TEXT_COLOR` (Attribute 35/36) setzen
+    zusaetzlich die exakte Marken-Off-White-Farbe als Titelleisten-
+    Hintergrund - nur ab Windows 11 22H2 unterstuetzt; auf aelteren
+    Windows-Versionen schlaegt der Aufruf einfach folgenlos fehl (HRESULT
+    ungleich S_OK, kein Python-Fehler), `DWMWA_USE_IMMERSIVE_DARK_MODE`
+    (Attribut 20, seit Windows 10 2004) greift als Fallback trotzdem -
+    zumindest keine schwarze Titelleiste mehr, selbst ohne exakte Farbe.
+
+    Darf unter KEINEN Umstaenden den App-Start verhindern (rein kosmetisch)
+    - jeder Fehler (z. B. sehr alte Windows-Version, dwmapi fehlt) wird
+    daher verschluckt, analog zu allen anderen "darf nie hart fehlschlagen"
+    Diagnose-/Komfortfunktionen in diesem Projekt (siehe z. B.
+    app/updater/checker.py)."""
+    try:
+        import ctypes
+
+        hwnd = window.native.Handle.ToInt32()  # type: ignore[union-attr]
+        dwmapi = ctypes.windll.dwmapi  # type: ignore[attr-defined]
+
+        def _set(attribute: int, value: int) -> None:
+            dwmapi.DwmSetWindowAttribute(hwnd, attribute, ctypes.byref(ctypes.c_int(value)), 4)
+
+        _set(20, 0)  # DWMWA_USE_IMMERSIVE_DARK_MODE = aus -> helle Titelleiste
+        _set(35, _TITLE_BAR_CAPTION_COLORREF)  # DWMWA_CAPTION_COLOR
+        _set(36, _TITLE_BAR_TEXT_COLORREF)  # DWMWA_TEXT_COLOR
+    except Exception:  # noqa: BLE001 - rein kosmetisch, darf den Start nie gefaehrden
+        pass
+
+
+class _NativeApi:
+    """JS-Brücke für das native WebView2-Fenster (20.08., Scan-Ordner-Dialog)
+    - macht `webview.Window.create_file_dialog` als `window.pywebview.api.
+    pick_folder()` im Frontend aufrufbar (siehe app/web/templates/
+    settings.html: "Ordner auswählen"-Button neben dem Scan-Ordner-
+    Pfadfeld), damit Nutzer:innen einen echten nativen Windows-
+    Ordnerauswahldialog statt manueller Pfadeingabe bekommen.
+
+    `window` wird ERST NACH `webview.create_window(...)` gesetzt (die
+    js_api-Instanz muss bereits beim Erzeugen des Fensters existieren,
+    kennt das fertige Fenster-Objekt selbst aber noch nicht - siehe
+    `_serve_with_window` unten). Nur im gebündelten Fenster relevant: im
+    reinen Browser-/`--no-window`-Modus existiert `window.pywebview` im
+    Frontend gar nicht, das Textfeld bleibt dort die einzige Eingabe
+    (Feature-Detection im Template, kein Fehlerfall)."""
+
+    window: object | None = None
+
+    def pick_folder(self) -> str:
+        if self.window is None:
+            return ""
+        import webview
+
+        result = self.window.create_file_dialog(webview.FOLDER_DIALOG)  # type: ignore[attr-defined]
+        if not result:
+            return ""
+        return str(result[0])
+
+
 def cmd_serve(*, open_window: bool = True) -> int:
     from app.config import get_settings
 
     lock_handle = _acquire_single_instance_lock()
     if lock_handle is None:
         print(
-            "FEHLER: Kanzlei-AI läuft bereits - eine zweite gleichzeitige Instanz "
+            "FEHLER: Lexono läuft bereits - eine zweite gleichzeitige Instanz "
             "würde sich denselben Port und dieselbe Datenbankdatei teilen. Bitte das "
             "bereits geöffnete Fenster verwenden.",
             file=sys.stderr,
@@ -402,13 +486,18 @@ def _serve_with_window(settings) -> int:  # noqa: ANN001 - Settings-Typ nur lazy
 
     import webview
 
-    webview.create_window(
-        "Kanzlei-AI",
+    native_api = _NativeApi()
+    window = webview.create_window(
+        "Lexono",
         f"{base_url}/dashboard/login",
         width=1400,
         height=900,
         resizable=True,
+        background_color="#F8FAFC",
+        js_api=native_api,
     )
+    native_api.window = window
+    window.events.shown += _apply_light_title_bar
     # Blockiert im Hauptthread, bis der Nutzer das Fenster schließt.
     webview.start()
 
@@ -438,7 +527,7 @@ def cmd_setup(data_dir: Path, *, force: bool) -> int:
     from app.config.settings import Settings
     from app.setup import WizardError, run_setup_wizard
 
-    print("=== Kanzlei-AI Setup-Assistent ===")
+    print("=== Lexono Setup-Assistent ===")
     print(f"Datenverzeichnis: {data_dir}")
     admin_email = input("E-Mail-Adresse des ersten Admin-Nutzers: ").strip()
     entered_password = getpass.getpass(

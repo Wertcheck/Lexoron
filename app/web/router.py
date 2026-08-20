@@ -107,6 +107,10 @@ def inbox_page(
         "documents": [],
         "active_message_id": None,
         "current_user": current_user,
+        # Fuer partials/onboarding_banner.html (nur bei leerem Posteingang
+        # sichtbar) - dessen Formulare posten seit 20.08. echt gegen
+        # app/web/settings_router.py, brauchen also einen echten CSRF-Token.
+        "csrf_token": getattr(request.state, "csrf_token", ""),
     }
     return templates.TemplateResponse(request, "inbox.html", context)
 

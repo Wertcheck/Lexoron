@@ -22,13 +22,13 @@ Profil-/Einstellungen-Bereich.
 
 Bewusst EIN generischer, dict-getriebener Router statt vieler fast
 identischer Funktionen (Prompt 48 hatte noch vier Handfunktionen - bei
-jetzt 13 Platzhaltern wäre das reine Wiederholung ohne Mehrwert).
+jetzt 14 Platzhaltern wäre das reine Wiederholung ohne Mehrwert).
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from app.auth.permissions import require_login
@@ -62,11 +62,10 @@ _PLACEHOLDER_PAGES: dict[str, tuple[str, str]] = {
         "Eine Übersicht abgeschlossener/archivierter Akten befindet sich in der "
         "finalen Vorbereitung für das v0.2-Update.",
     ),
-    "/tools/schriftsatz": (
-        "Schriftsatz-Generator",
-        "Ein Generator für formatierte Schriftsätze (.docx) auf Basis freigegebener "
-        "Entwürfe befindet sich in der finalen Vorbereitung für das v0.2-Update.",
-    ),
+    # "/tools/schriftsatz" ("Schriftsatz-Generator") ist seit 20.08. KEIN
+    # Platzhalter mehr - siehe app/web/schriftsatz_router.py (echte
+    # Entwurfserstellung über DraftingService.create_draft, inkl.
+    # Drag&Drop-Dokumenten-Upload und DOCX-Export der fertigen Entwürfe).
     "/tools/fristen": (
         "Fristen-Check",
         "Eine dedizierte Übersicht erkannter Fristen (aufbauend auf der bestehenden "
@@ -107,18 +106,20 @@ _PLACEHOLDER_PAGES: dict[str, tuple[str, str]] = {
         "Ein durchsuchbares Verlaufsarchiv früherer KI-Analysen befindet sich in der "
         "finalen Vorbereitung für das v0.2-Update.",
     ),
-    "/account/profile": (
-        "Kanzlei-Profil & Briefkopf",
-        "Die Verwaltung von Kanzleiname, Logo und Briefkopf-Einstellungen für "
-        "Dokumentexporte befindet sich in der finalen Vorbereitung für das "
-        "v0.2-Update.",
-    ),
+    # "/account/profile" ("Kanzlei-Profil & Briefkopf") ist seit 20.08.
+    # KEIN Platzhalter mehr - siehe app/web/settings_router.py
+    # (echte Seite jetzt unter /dashboard/settings/profile, verlinkt aus
+    # templates/account_overview.html).
     "/account/license": (
         "System & Lizenz",
         "Eine Verbrauchs-/Lizenzübersicht befindet sich in der finalen Vorbereitung "
         "für das v0.2-Update. Die aktuelle Kostenauslastung ist schon heute unter "
         "Systemstatus (nur Admin) einsehbar.",
     ),
+    # "/clients" ("Mandantendatenbank") ist seit 20.08. KEIN Platzhalter
+    # mehr - siehe app/web/clients_router.py (echte CRM-Uebersicht:
+    # Suche/Filter, CSV-/Excel-Import, Detailansicht, DSGVO-Datenauszug/
+    # Archivierung).
 }
 
 
@@ -140,12 +141,7 @@ def _make_route(path_suffix: str, label: str, description: str) -> None:
 for _path_suffix, (_label, _description) in _PLACEHOLDER_PAGES.items():
     _make_route(_path_suffix, _label, _description)
 
-
-@router.get("/settings", response_class=HTMLResponse, include_in_schema=False)
-def settings_redirect() -> HTMLResponse:
-    """Rückwärtskompatibilität: die generische "Einstellungen"-Platzhalterseite
-    aus Prompt 48 wurde in Prompt 49 durch den strukturierten Profil-/
-    Einstellungen-Bereich (app/web/account_router.py) ersetzt. Ein Redirect
-    statt eines 404 hält alte Links (u. a. im bisherigen Onboarding-Banner-
-    Verlauf) funktionsfähig."""
-    return RedirectResponse(url="/dashboard/account")
+# Hinweis: "/dashboard/settings" war frueher ein Redirect hierher (Prompt 49,
+# Ruecksicht auf einen noch aelteren Prompt-48-Link) - seit 20.08. ist
+# "/dashboard/settings" eine ECHTE, bedienbare Seite (app/web/settings_router.py),
+# kein Platzhalter/Redirect mehr.

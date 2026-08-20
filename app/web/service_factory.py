@@ -30,6 +30,7 @@ from app.privacy.gateway import ClaudePrivacyGateway
 from app.research.service import LegalResearchService
 from app.review.engine import ReviewEngine
 from app.search.embeddings import FastEmbedProvider
+from app.search.global_search_service import GlobalSearchService
 from app.search.service import DocumentSearchService
 
 # Rückwärtskompatibler Alias (Prompt 34 verallgemeinert die vorher hier
@@ -52,11 +53,11 @@ def get_document_search_service() -> DocumentSearchService:
 
 def get_drafting_service() -> DraftingService:
     """Baut einen funktionsfähigen `DraftingService` mit dem konfigurierten
-    Schreib-Provider (Prompt 34: `settings.llm_provider`, aktuell immer
-    "anthropic" - siehe app/ai_providers/factory.py). Wirft
-    `ProviderNotConfiguredError`, wenn keine Zugangsdaten hinterlegt sind -
-    der Router zeigt dann eine freundliche Meldung statt eines
-    Serverfehlers."""
+    Schreib-Provider (Prompt 34, seit 20.08. `settings.ai_mode` -
+    "LOCAL_ONLY"/Ollama als Standard, "HYBRID"/Anthropic als Opt-in, siehe
+    app/ai_providers/factory.py). Wirft `ProviderNotConfiguredError`, wenn
+    ein HYBRID-Aufruf ohne hinterlegte Zugangsdaten versucht wird - der
+    Router zeigt dann eine freundliche Meldung statt eines Serverfehlers."""
     settings = get_settings()
     search_service = get_document_search_service()
     research_service = LegalResearchService(
@@ -78,6 +79,14 @@ def get_drafting_service() -> DraftingService:
 
 def get_feedback_service() -> DraftFeedbackService:
     return DraftFeedbackService()
+
+
+def get_global_search_service() -> GlobalSearchService:
+    """Universal Command Bar (Strg+K/⌘K, siehe app/web/global_search_router.py) -
+    nutzt fuer die "Extern"-Kategorie (Rechtsquellen) denselben bereits
+    gecachten `DocumentSearchService`-Singleton wie die uebrige
+    Rechtsrecherche (kein zweites Embedding-Modell im Speicher)."""
+    return GlobalSearchService(get_document_search_service())
 
 
 def get_review_engine() -> ReviewEngine:

@@ -27,7 +27,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="restore_backup",
         description=(
-            "Stellt Datenbank und Dokumentenspeicher aus einem Kanzlei-AI-"
+            "Stellt Datenbank und Dokumentenspeicher aus einem Lexono-"
             "Backup-Archiv wieder her. Die Anwendung MUSS dafür gestoppt sein."
         ),
     )
@@ -39,7 +39,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    print("=== Kanzlei-AI Wiederherstellung ===")
+    print("=== Lexono Wiederherstellung ===")
     print(f"Archiv: {args.archive}")
     print(
         "WARNUNG: Dies überschreibt die aktuelle Datenbank und die "

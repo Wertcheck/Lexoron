@@ -1,0 +1,42 @@
+{
+  "code": "BGB",
+  "title": "Bürgerliches Gesetzbuch",
+  "sections": [
+    {
+      "section_number": "§ 1",
+      "title": "Beginn der Rechtsfähigkeit",
+      "text_content": "Die Rechtsfähigkeit des Menschen beginnt mit der Vollendung der Geburt.",
+      "last_updated": "2026-08-20"
+    },
+    {
+      "section_number": "§ 90",
+      "title": "Begriff der Sache",
+      "text_content": "Sachen im Sinne des Gesetzes sind nur körperliche Gegenstände.",
+      "last_updated": "2026-08-20"
+    },
+    {
+      "section_number": "§ 133",
+      "title": "Auslegung einer Willenserklärung",
+      "text_content": "Bei der Auslegung einer Willenserklärung ist der wirkliche Wille zu erforschen und nicht an dem buchstäblichen Sinne des Ausdrucks zu haften.",
+      "last_updated": "2026-08-20"
+    },
+    {
+      "section_number": "§ 242",
+      "title": "Leistung nach Treu und Glauben",
+      "text_content": "Der Schuldner ist verpflichtet, die Leistung so zu bewirken, wie Treu und Glauben mit Rücksicht auf die Verkehrssitte es erfordern.",
+      "last_updated": "2026-08-20"
+    },
+    {
+      "section_number": "§ 823",
+      "title": "Schadensersatzpflicht (Absatz 1)",
+      "text_content": "Wer vorsätzlich oder fahrlässig das Leben, den Körper, die Gesundheit, die Freiheit, das Eigentum oder ein sonstiges Recht eines anderen widerrechtlich verletzt, ist dem anderen zum Ersatz des daraus entstehenden Schadens verpflichtet.",
+      "last_updated": "2026-08-20"
+    },
+    {
+      "section_number": "§ 985",
+      "title": "Herausgabeanspruch",
+      "text_content": "Der Eigentümer kann von dem Besitzer die Herausgabe der Sache verlangen.",
+      "last_updated": "2026-08-20"
+    }
+  ]
+}

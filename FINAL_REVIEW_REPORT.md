@@ -17,7 +17,7 @@
 
 ## Executive Summary
 
-Das Kanzlei-AI-Projekt hat alle **7 Erfolgskriterien** des Pilotbetriebs erfüllt und ist
+Das Lexono-Projekt hat alle **7 Erfolgskriterien** des Pilotbetriebs erfüllt und ist
 bereit für die Produktfreigabe in der Pilot-Kanzlei. Das System ist stabil, sicher und
 operativ einsatzfähig. Einige kleinere Optimierungsmöglichkeiten wurden dokumentiert für
 v0.2.0 (siehe FUTURE_ROADMAP.md).

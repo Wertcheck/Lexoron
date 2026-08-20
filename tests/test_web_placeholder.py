@@ -2,10 +2,10 @@
 
 Deckt ab: alle Platzhalter-Routen liefern 200 mit dem erwarteten Titel/
 Beschreibungstext (nicht als 404 oder stiller Redirect), erfordern eine
-Anmeldung wie jede andere Dashboard-Seite, bieten einen echten Rückweg zum
-Posteingang, und die alte generische "Einstellungen"-Route aus Prompt 48
-leitet auf den neuen Profil-/Einstellungen-Bereich (Prompt 49) weiter statt
-einen 404 zu liefern.
+Anmeldung wie jede andere Dashboard-Seite, und "/dashboard/settings" (Prompt
+48: generischer Platzhalter, Prompt 49: Redirect auf den Profil-Bereich) ist
+seit 20.08. eine echte Seite (app/web/settings_router.py, siehe
+tests/test_web_settings.py), kein Platzhalter/Redirect mehr.
 """
 
 from __future__ import annotations
@@ -72,7 +72,8 @@ _PLACEHOLDER_CASES = [
     ("/dashboard/matters", "Aktive Akten"),
     ("/dashboard/documents", "Dokumenten-Viewer"),
     ("/dashboard/archive", "Archiv"),
-    ("/dashboard/tools/schriftsatz", "Schriftsatz-Generator"),
+    # "/dashboard/tools/schriftsatz" ("Schriftsatz-Generator") ist seit
+    # 20.08. KEIN Platzhalter mehr - siehe tests/test_web_schriftsatz.py.
     ("/dashboard/tools/fristen", "Fristen-Check"),
     ("/dashboard/tools/zeitleiste", "Zeitleiste"),
     ("/dashboard/tools/beleg-extraktion", "Beleg-Extraktion"),
@@ -82,7 +83,9 @@ _PLACEHOLDER_CASES = [
     # KEIN Platzhalter mehr - siehe tests/test_web_prompt_library.py.
     ("/dashboard/knowledge", "Kanzlei-Wissen"),
     ("/dashboard/history/analysen", "Gespeicherte Analysen"),
-    ("/dashboard/account/profile", "Kanzlei-Profil & Briefkopf"),
+    # "/dashboard/account/profile" ("Kanzlei-Profil & Briefkopf") ist seit
+    # 20.08. KEIN Platzhalter mehr - siehe tests/test_web_settings.py
+    # (echte Seite jetzt unter /dashboard/settings/profile).
     ("/dashboard/account/license", "System & Lizenz"),
 ]
 
@@ -117,11 +120,12 @@ def test_unauthenticated_cannot_view_placeholder_page(
     assert "/dashboard/login" in response.headers["location"]
 
 
-def test_old_settings_route_redirects_to_account_overview(client: TestClient) -> None:
-    """Prompt 48s generische "Einstellungen"-Platzhalterseite wurde in
-    Prompt 49 durch den strukturierten Profil-/Einstellungen-Bereich
-    ersetzt - alte Links (z. B. Lesezeichen) sollen trotzdem funktionieren,
-    kein 404."""
+def test_settings_route_is_a_real_page_not_a_redirect(client: TestClient) -> None:
+    """"/dashboard/settings" war in Prompt 48/49 ein Redirect auf den
+    Profil-/Einstellungen-Bereich - seit 20.08. eine echte, bedienbare Seite
+    (app/web/settings_router.py), siehe tests/test_web_settings.py für die
+    volle Abdeckung. Hier nur der Regressionsschutz, dass es kein Redirect
+    mehr ist."""
     response = client.get("/dashboard/settings", follow_redirects=False)
-    assert response.status_code in (302, 303, 307, 308)
-    assert response.headers["location"] == "/dashboard/account"
+    assert response.status_code == 200
+    assert "Einstellungen" in response.text
