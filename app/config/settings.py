@@ -252,6 +252,52 @@ class Settings(BaseSettings):
             raise ValueError("budget_warning_threshold_percent muss zwischen 1 und 100 liegen")
         return value
 
+    # --- Lokales EUR-Softlimit pro Kanzlei (Schritt 3, 20.08.) ---
+    # Bewusst ZUSAETZLICH zu monthly_budget_usd (Prompt 33, weiterhin allein
+    # zustaendig fuer die harte Aufrufsperre in check_before_call) - dies
+    # hier ist ein rein WARNENDES, niemals blockierendes Limit in EUR
+    # (Vorgabe: 30,00 EUR/Monat je Kanzlei-Installation), das ausschliesslich
+    # einen unaufdringlichen Hinweis im Dashboard ausloest (siehe
+    # app/cost_control/service.py: get_soft_limit_status,
+    # app/web/monitoring_router.py: budget_badge). Kein zentraler
+    # Abgleich zwischen Kanzleien - jede Installation zaehlt ausschliesslich
+    # ihre eigenen ApiCallLog-Eintraege (siehe ARCHITECTURE.md, "kein
+    # SaaS-/Cloud-Bezug"). None = Hinweis deaktiviert.
+    monthly_soft_limit_eur: float | None = 30.0
+    # Naeherungsweiser, lokal konfigurierter Umrechnungskurs USD->EUR fuer
+    # die (ohnehin bereits als SCHAETZUNG gekennzeichnete, siehe
+    # app/cost_control/pricing.py) Kostenanzeige - bewusst KEIN Live-
+    # Wechselkurs-Abruf ueber eine externe API (keine weitere externe
+    # Abhaengigkeit fuer eine reine Komfort-Anzeige, konsistent mit dem
+    # Local-First-Prinzip).
+    usd_to_eur_rate: float = 0.92
+
+    @field_validator("monthly_soft_limit_eur")
+    @classmethod
+    def monthly_soft_limit_eur_must_be_positive_if_set(cls, value: float | None) -> float | None:
+        if value is not None and value <= 0:
+            raise ValueError("monthly_soft_limit_eur muss positiv sein, falls gesetzt")
+        return value
+
+    @field_validator("usd_to_eur_rate")
+    @classmethod
+    def usd_to_eur_rate_must_be_positive(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("usd_to_eur_rate muss positiv sein")
+        return value
+
+    # --- Auto-Updater (Schritt 3, 20.08.) ---
+    # Stumme Hintergrund-Pruefung auf neue Versionen beim Start (siehe
+    # app/updater/checker.py) - fragt AUSSCHLIESSLICH eine statische
+    # Version-JSON ab (Versionsnummer + Download-Link), laedt/installiert
+    # NIE automatisch etwas. Sicherer Default: deaktiviert (None) - es
+    # existiert aktuell keine von uns betriebene Update-Infrastruktur; erst
+    # wenn eine solche URL bewusst konfiguriert wird, findet ueberhaupt ein
+    # ausgehender Netzwerkaufruf statt. Kein zentraler Proxy/Backend-Dienst
+    # (siehe ARCHITECTURE.md, "kein SaaS-/Cloud-Bezug") - nur ein rein
+    # lesender Abruf einer statischen Datei.
+    update_manifest_url: str | None = None
+
     # --- Server-Bindung (Prompt 36, Windows-Installer) ---
     # Sicherer Default: nur lokal erreichbar (127.0.0.1), passend zum
     # Einzelinstallations-Modell ("getrennte Installation je Kanzlei", siehe

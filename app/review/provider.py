@@ -77,3 +77,45 @@ def build_review_prompt(payload: ClaudeRequestPayload) -> str:
         )
         parts.append(f"Zugrundeliegender Sachverhalt/Argumentationspunkte:\n{punkte}")
     return "\n\n".join(parts)
+
+
+def build_review_prompt_cache_blocks(payload: ClaudeRequestPayload) -> list[dict]:
+    """Wie `build_review_prompt`, aber als zwei Content-Blöcke für Anthropic
+    Prompt-Caching (Schritt 3).
+
+    Anders als beim Schreib-Prompt ist hier NICHT der Sachverhalt der
+    stabile Teil - `anonymisierter_sachverhalt` enthält bei der
+    Review-Engine den zu prüfenden ENTWURF selbst, der sich bei jeder neuen
+    Version gerade ändert. Stabil/wiederkehrend über mehrere Prüfungen
+    DESSELBEN Vorgangs sind stattdessen die zugelassenen Quellenverweise
+    und der zugrundeliegende Sachverhalt/Argumentationspunkte (Prompt 15) -
+    diese bilden den gecachten ersten Block, der zu prüfende Entwurfstext
+    bleibt variabel und steht danach."""
+    stable_parts: list[str] = []
+    if payload.anonymisierte_quellenverweise:
+        quellen = "\n".join(
+            f"- {quelle}" for quelle in payload.anonymisierte_quellenverweise
+        )
+        stable_parts.append(f"Verfügbare, zugelassene Quellen (für den Belegabgleich):\n{quellen}")
+    if payload.anonymisierte_argumentationspunkte:
+        punkte = "\n".join(
+            f"- {punkt}" for punkt in payload.anonymisierte_argumentationspunkte
+        )
+        stable_parts.append(f"Zugrundeliegender Sachverhalt/Argumentationspunkte:\n{punkte}")
+
+    variable_block = {
+        "type": "text",
+        "text": f"Zu prüfender Entwurf:\n{payload.anonymisierter_sachverhalt}",
+    }
+
+    if not stable_parts:
+        return [variable_block]
+
+    return [
+        {
+            "type": "text",
+            "text": "\n\n".join(stable_parts),
+            "cache_control": {"type": "ephemeral"},
+        },
+        variable_block,
+    ]

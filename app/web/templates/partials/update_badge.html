@@ -1,0 +1,9 @@
+{# Update-Hinweis (Schritt 3) - per HTMX in base.html geladen. Bewusst KEIN
+   Auto-Download/-Installation, nur ein Link zur manuellen Installation. #}
+{% if update_check and update_check.update_available %}
+<a class="update-badge"
+   {% if update_check.download_url %}href="{{ update_check.download_url }}" target="_blank" rel="noopener"{% endif %}
+   title="Manuelle Installation durch den Admin erforderlich">
+  Update verfügbar: v{{ update_check.latest_version }}
+</a>
+{% endif %}

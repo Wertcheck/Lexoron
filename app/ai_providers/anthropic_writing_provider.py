@@ -21,7 +21,7 @@ import anthropic
 from app.ai_providers.claude_writing_provider import (
     WRITING_SYSTEM_PROMPT,
     ClaudeWritingResult,
-    build_writing_prompt,
+    build_writing_prompt_cache_blocks,
 )
 from app.privacy.gateway_schema import ClaudeRequestPayload
 
@@ -37,13 +37,23 @@ class AnthropicClaudeWritingProvider:
         self.max_tokens = max_tokens
 
     def write(self, payload: ClaudeRequestPayload) -> ClaudeWritingResult:
-        prompt_text = build_writing_prompt(payload)
-
+        # Prompt-Caching (Schritt 3): das Systemprompt ist projektweit für
+        # JEDEN Aufruf identisch (siehe WRITING_SYSTEM_PROMPT) - als
+        # gecachter Block markiert, spart es ab dem zweiten Aufruf
+        # innerhalb des Cache-Fensters Eingabe-Tokens. Der Nachrichtentext
+        # trennt zusätzlich den wiederkehrenden Aktenkontext vom variablen
+        # Schreibauftrag (siehe build_writing_prompt_cache_blocks).
         response = self._client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
-            system=WRITING_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": prompt_text}],
+            system=[
+                {
+                    "type": "text",
+                    "text": WRITING_SYSTEM_PROMPT,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            messages=[{"role": "user", "content": build_writing_prompt_cache_blocks(payload)}],
         )
 
         text = "".join(

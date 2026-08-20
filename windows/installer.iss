@@ -1,5 +1,5 @@
 ; Inno-Setup-Skript für die Windows-Installation (Prompt 36; App-Icon
-; Prompt 47).
+; Prompt 47; Installation unter %LocalAppData% ohne Admin-Rechte Schritt 3).
 ;
 ; Voraussetzung: der PyInstaller-Build liegt bereits unter dist\kanzlei_ai\
 ; (siehe windows\kanzlei_ai.spec bzw. windows\build.ps1, das beide Schritte
@@ -15,9 +15,10 @@
 ; suchen und fehlschlagen). Aus demselben Grund referenziert [Files] oben
 ; bereits "..\dist\kanzlei_ai\*".
 ; Installiert AUSSCHLIESSLICH den Programmordner (Code, Templates,
-; statische Assets, Migrationsskripte) unter {autopf}\KanzleiAI - KEINE
-; Mandantendaten. Konfiguration/Datenbank/Dokumente entstehen erst beim
-; ersten Start des Setup-Assistenten (app/setup/, Prompt 37) unter
+; statische Assets, Migrationsskripte) unter %LocalAppData%\KanzleiAI (bis
+; Prompt 36-Schritt 3 unter {autopf}\"Program Files") - KEINE Mandantendaten.
+; Konfiguration/Datenbank/Dokumente entstehen erst beim ersten Start des
+; Setup-Assistenten (app/setup/, Prompt 37) weiterhin unter
 ; %PROGRAMDATA%\KanzleiAI - bewusst getrennt vom Installationsverzeichnis,
 ; siehe ARCHITECTURE.md (Programminstallation vs. Anwendungsdaten).
 
@@ -31,7 +32,15 @@ AppId={{9F4B9E7A-2B1E-4C77-9C7C-3D9B5E5B0B21}}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\KanzleiAI
+; Geaendert (Schritt 3, 20.08.): Installation je Windows-Benutzerkonto unter
+; %LocalAppData%\KanzleiAI statt {autopf} ("Program Files") - Ziel laut
+; Vorgabe: Updates ohne Windows-Administratorrechte moeglich, da
+; %LocalAppData% vom jeweiligen Benutzerkonto selbst beschreibbar ist. Bricht
+; bewusst mit der Prompt-36-Entscheidung (Program Files) - eine bereits
+; unter Program Files installierte Pilot-Instanz muss vor der Installation
+; dieser Version manuell deinstalliert werden (siehe RELEASE_NOTES.md),
+; sonst entstehen zwei parallele Installationen.
+DefaultDirName={localappdata}\KanzleiAI
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\dist\installer
@@ -39,13 +48,13 @@ OutputBaseFilename=KanzleiAI-Setup-{#MyAppVersion}
 Compression=lzma
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
-; Erfordert Administratorrechte, weil das Standard-Installationsverzeichnis
-; ({autopf} = "Program Files") das verlangt. Das persistente
-; Datenverzeichnis (%PROGRAMDATA%\KanzleiAI, siehe app/setup/paths.py) wird
-; NICHT hier angelegt, sondern erst beim ersten Programmstart durch den
-; Setup-Assistenten selbst - der läuft unter dem Konto des Anwalts/der
-; Kanzleimitarbeiter, nicht unter dem Installer-Administratorkonto.
-PrivilegesRequired=admin
+; Geaendert (Schritt 3): "lowest" statt "admin" - keine UAC-Erhoehung mehr
+; noetig, konsistent mit der Installation unter %LocalAppData% oben. Das
+; persistente Datenverzeichnis (%PROGRAMDATA%\KanzleiAI, siehe
+; app/setup/paths.py) bleibt unveraendert - dort war ohnehin nie eine
+; Admin-Erhoehung fuer den Setup-Assistenten noetig (laeuft unter dem Konto
+; des Anwalts/der Kanzleimitarbeiter).
+PrivilegesRequired=lowest
 ; Anwendungssymbol fuer den Installer selbst (Setup.exe-Datei-Icon,
 ; Titelleiste, Add/Remove-Programme-Eintrag) - Prompt 47. Aktuell ein
 ; generierter Platzhalter (siehe windows/generate_placeholder_icon.py),

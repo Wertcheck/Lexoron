@@ -272,6 +272,39 @@ a {
   height: 17px;
 }
 
+/* --- EUR-Softlimit-/Update-Hinweise (Schritt 3) --- */
+
+.budget-badge,
+.update-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.budget-badge {
+  border: 1px solid var(--amber);
+  background: var(--amber-tint);
+  color: var(--amber);
+}
+
+.update-badge {
+  border: 1px solid var(--seal-green);
+  background: var(--paper-000);
+  color: var(--seal-green-dark);
+  cursor: pointer;
+}
+
+.update-badge:hover {
+  background: var(--seal-green);
+  color: var(--paper-000);
+}
+
 .topbar {
   padding: 26px 32px 18px;
   border-bottom: 1px solid var(--paper-line);

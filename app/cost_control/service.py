@@ -38,6 +38,18 @@ class BudgetCheckResult:
     reason: str | None = None
 
 
+@dataclass(frozen=True)
+class SoftLimitStatus:
+    """Rein informativer EUR-Softlimit-Status (Schritt 3) - NIE blockierend,
+    siehe `monthly_soft_limit_eur` in app/config/settings.py. Getrennt von
+    `BudgetCheckResult` (Prompt 33, USD, kann tatsaechlich sperren)."""
+
+    current_spend_eur: float
+    limit_eur: float | None
+    percent_used: float | None
+    is_reached: bool  # True ab 100% - loest den unaufdringlichen UI-Hinweis aus
+
+
 class CostControlService:
     def get_current_month_spend_usd(self, db: Session) -> float:
         now = datetime.now(timezone.utc)
@@ -87,4 +99,31 @@ class CostControlService:
             current_spend_usd=current_spend,
             budget_usd=budget,
             is_warning=is_warning,
+        )
+
+    def get_soft_limit_status(self, db: Session) -> SoftLimitStatus:
+        """Liefert den lokalen EUR-Softlimit-Status fuer den unaufdringlichen
+        Dashboard-Hinweis (Schritt 3) - liest denselben, bereits als USD-
+        Schaetzung vorliegenden Monatsverbrauch wie `check_before_call` und
+        rechnet ihn ueber `settings.usd_to_eur_rate` naeherungsweise um.
+        Blockiert NIE einen Aufruf - reine Anzeige."""
+        settings = get_settings()
+        current_spend_usd = self.get_current_month_spend_usd(db)
+        current_spend_eur = current_spend_usd * settings.usd_to_eur_rate
+        limit = settings.monthly_soft_limit_eur
+
+        if limit is None:
+            return SoftLimitStatus(
+                current_spend_eur=current_spend_eur,
+                limit_eur=None,
+                percent_used=None,
+                is_reached=False,
+            )
+
+        percent_used = round((current_spend_eur / limit) * 100, 1)
+        return SoftLimitStatus(
+            current_spend_eur=current_spend_eur,
+            limit_eur=limit,
+            percent_used=percent_used,
+            is_reached=current_spend_eur >= limit,
         )

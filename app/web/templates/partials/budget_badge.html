@@ -1,0 +1,8 @@
+{# EUR-Softlimit-Hinweis (Schritt 3) - per HTMX in base.html geladen
+   (hx-get, hx-trigger="load"). Bewusst leer, solange das Limit nicht
+   erreicht ist - kein Dauer-Badge, siehe app/web/monitoring_router.py. #}
+{% if status.is_reached %}
+<span class="budget-badge" title="Details unter Systemstatus (nur Admin)">
+  KI-Nutzungsbudget dieses Monats erreicht ({{ status.percent_used }}&nbsp;%)
+</span>
+{% endif %}

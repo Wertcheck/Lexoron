@@ -36,6 +36,35 @@ def _require_admin(current_user: User = Depends(require_login)) -> User:
     return current_user
 
 
+@router.get("/budget-badge", response_class=HTMLResponse)
+def budget_badge(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_login),
+) -> HTMLResponse:
+    """Unaufdringlicher Hinweis zum lokalen EUR-Softlimit (Schritt 3) - für
+    ALLE angemeldeten Nutzer sichtbar (nicht nur Admin), da ein erreichtes
+    Softlimit die tägliche Arbeit aller betrifft. Zeigt bewusst NUR den
+    Prozentsatz, keine absoluten Beträge/Einzelaufrufe - Details bleiben
+    der admin-only Systemstatus-Seite vorbehalten. Bleibt leer (kein
+    Markup), solange das Limit nicht erreicht ist - kein Dauer-Badge."""
+    status = CostControlService().get_soft_limit_status(db)
+    context = {"request": request, "status": status}
+    return templates.TemplateResponse(request, "partials/budget_badge.html", context)
+
+
+@router.get("/update-badge", response_class=HTMLResponse)
+def update_badge(request: Request, current_user: User = Depends(require_login)) -> HTMLResponse:
+    """Unaufdringlicher Hinweis auf eine verfügbare Programmversion
+    (Schritt 3) - liest ausschließlich das beim Start bereits ermittelte
+    Ergebnis aus `app.state.update_check` (kein erneuter Netzwerkaufruf pro
+    Seitenaufruf). Bewusst kein Auto-Download/-Installation - nur ein Link
+    zur manuellen Installation durch den Admin."""
+    update_check = getattr(request.app.state, "update_check", None)
+    context = {"request": request, "update_check": update_check}
+    return templates.TemplateResponse(request, "partials/update_badge.html", context)
+
+
 @router.get("", response_class=HTMLResponse)
 def monitoring_page(
     request: Request,

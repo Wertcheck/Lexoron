@@ -31,6 +31,11 @@ from app.models.processing_error import (
     ProcessingError,
 )
 from app.models.party import Party
+from app.models.pilot_feedback import (
+    VALID_FEEDBACK_CATEGORIES,
+    VALID_REVIEW_STATUSES,
+    PilotFeedback,
+)
 from app.models.policy import Policy
 from app.models.review_finding import ReviewFinding
 from app.models.role import Role
@@ -72,4 +77,7 @@ __all__ = [
     "ApiCallLog",
     "User",
     "Role",
+    "PilotFeedback",
+    "VALID_FEEDBACK_CATEGORIES",
+    "VALID_REVIEW_STATUSES",
 ]

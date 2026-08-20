@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Pilot-Feedback & Support{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">Pilot-Feedback &amp; Support</h1>
+    <div class="topbar__meta">
+      Hinweise, Fehler oder Fragen zur Software - direkt an die Entwicklung.
+    </div>
+  </div>
+
+  <div class="draft-page">
+    {% if submitted %}
+      <p class="form-hint" style="color: var(--seal-green-dark);">
+        Danke, dein Feedback wurde gespeichert.
+      </p>
+    {% endif %}
+    {% if error %}
+      <p class="form-hint" style="color: var(--amber);">{{ error }}</p>
+    {% endif %}
+
+    <form method="post" action="/dashboard/feedback">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+      <label class="form-label">
+        Art des Feedbacks
+        <select name="category" required>
+          <option value="fehler">Fehler / funktioniert nicht wie erwartet</option>
+          <option value="verbesserungsvorschlag">Verbesserungsvorschlag</option>
+          <option value="frage">Frage</option>
+          <option value="lob">Lob</option>
+          <option value="sonstiges">Sonstiges</option>
+        </select>
+      </label>
+      <label class="form-label">
+        Nachricht
+        <textarea name="message" rows="6" required
+                  placeholder="Bitte NICHT: Mandantendaten, Aktenzeichen oder sonstige vertrauliche Inhalte einfügen."></textarea>
+      </label>
+      <p class="form-hint">
+        Zur Fehlersuche wird automatisch ein anonymisierter technischer Systemstatus
+        angehängt (z. B. ob OCR aktiv ist) - niemals Mandanteninhalte.
+      </p>
+      <label class="form-label">
+        Rückmeldung gewünscht an (optional)
+        <input type="text" name="contact_email" placeholder="name@kanzlei.de" />
+      </label>
+      <button type="submit" class="btn btn--primary">Feedback senden</button>
+    </form>
+  </div>
+
+  <div class="draft-page">
+    <h2 class="topbar__title" style="font-size: 18px;">Bisheriges Feedback</h2>
+    {% if entries %}
+      <table class="draft-table">
+        <thead>
+          <tr>
+            <th>Datum</th>
+            <th>Kategorie</th>
+            <th>Nachricht</th>
+            <th>Status</th>
+            {% if is_admin %}<th></th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in entries %}
+            <tr>
+              <td class="mono">{{ entry.created_at.strftime("%d.%m.%Y %H:%M") }}</td>
+              <td>{{ entry.category }}</td>
+              <td style="max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ entry.message }}">
+                {{ entry.message }}
+              </td>
+              <td>
+                <span class="tag {% if entry.review_status == 'zur_pruefung' %}tag--unmatched{% elif entry.review_status == 'freigegeben' %}tag--outbound{% endif %}">
+                  {{ entry.review_status }}
+                </span>
+                {% if entry.requires_admin_review %}
+                  <span class="form-hint">(betrifft ggf. KI-Verhalten/System)</span>
+                {% endif %}
+              </td>
+              {% if is_admin %}
+                <td>
+                  {% if entry.review_status == "zur_pruefung" %}
+                    <form method="post" action="/dashboard/feedback/{{ entry.id }}/review" style="display:inline;">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                      <input type="hidden" name="action" value="freigegeben" />
+                      <button type="submit" class="btn btn--primary">Freigeben</button>
+                    </form>
+                    <form method="post" action="/dashboard/feedback/{{ entry.id }}/review" style="display:inline;">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                      <input type="hidden" name="action" value="abgelehnt" />
+                      <button type="submit" class="btn">Ablehnen</button>
+                    </form>
+                  {% endif %}
+                </td>
+              {% endif %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="empty-state">Noch kein Feedback vorhanden.</div>
+    {% endif %}
+  </div>
+{% endblock %}

@@ -97,6 +97,13 @@
               ("Export-Protokolle", "/dashboard/backup", icons.archive, true),
             ],
           },
+          {
+            "label": "Pilot-Feedback & Support",
+            "icon": icons.bulb,
+            "links": [
+              ("Pilot-Feedback & Support", "/dashboard/feedback", icons.bulb, false),
+            ],
+          },
         ] %}
         {% for group in nav_groups %}
           {% set ns = namespace(has_active=false) %}
@@ -149,6 +156,11 @@
            brauchen"-Konzept, das es im System gibt), Logout -> derselbe
            Abmelden-Endpunkt wie der Sidebar-Button. #}
         <div class="header-icons">
+          {# Schritt 3: EUR-Softlimit-/Update-Hinweise - per HTMX nachgeladen
+             (leer, solange nichts zu melden ist), damit nicht jeder Router
+             diese Werte einzeln in seinen Kontext aufnehmen muss. #}
+          <span hx-get="/dashboard/monitoring/budget-badge" hx-trigger="load" hx-swap="innerHTML"></span>
+          <span hx-get="/dashboard/monitoring/update-badge" hx-trigger="load" hx-swap="innerHTML"></span>
           <a href="/dashboard/inbox" class="header-icons__btn" title="Posteingang" aria-label="Posteingang">
             {{ icons.envelope(class_="icon") }}
           </a>

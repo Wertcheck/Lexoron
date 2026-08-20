@@ -82,4 +82,52 @@ def test_review_uses_review_system_prompt_not_writing_prompt(mock_anthropic_cls)
     )
 
     call_kwargs = mock_client.messages.create.call_args.kwargs
-    assert call_kwargs["system"] == REVIEW_SYSTEM_PROMPT
+    # Prompt-Caching (Schritt 3): system ist jetzt ein gecachter Content-Block
+    # statt eines reinen Strings, siehe app/review/anthropic_review_provider.py.
+    assert call_kwargs["system"] == [
+        {
+            "type": "text",
+            "text": REVIEW_SYSTEM_PROMPT,
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+
+
+def test_stable_sources_stay_identical_across_revisions_under_review() -> None:
+    """Wie beim Schreib-Prompt: dieselben Quellen/derselbe zugrundeliegende
+    Sachverhalt erzeugen bei zwei unterschiedlichen Entwurfsversionen einen
+    byte-identischen gecachten Block - der zu prüfende Entwurfstext selbst
+    (der sich pro Version ändert) bleibt bewusst ungecacht."""
+    from app.review.provider import build_review_prompt_cache_blocks
+
+    version_1 = ClaudeRequestPayload(
+        schreibauftrag="review_draft",
+        anonymisierter_sachverhalt="Entwurf Version 1.",
+        anonymisierte_quellenverweise=["§ 355 AO."],
+    )
+    version_2 = ClaudeRequestPayload(
+        schreibauftrag="review_draft",
+        anonymisierter_sachverhalt="Entwurf Version 2 (gekürzt).",
+        anonymisierte_quellenverweise=["§ 355 AO."],
+    )
+
+    blocks_1 = build_review_prompt_cache_blocks(version_1)
+    blocks_2 = build_review_prompt_cache_blocks(version_2)
+
+    assert blocks_1[0]["text"] == blocks_2[0]["text"]
+    assert blocks_1[0]["cache_control"] == {"type": "ephemeral"}
+    assert blocks_1[1]["text"] != blocks_2[1]["text"]
+    assert "cache_control" not in blocks_1[1]
+
+
+def test_no_stable_context_falls_back_to_single_uncached_block() -> None:
+    from app.review.provider import build_review_prompt_cache_blocks
+
+    payload = ClaudeRequestPayload(
+        schreibauftrag="review_draft", anonymisierter_sachverhalt="Nur ein Entwurf."
+    )
+
+    blocks = build_review_prompt_cache_blocks(payload)
+
+    assert len(blocks) == 1
+    assert "cache_control" not in blocks[0]

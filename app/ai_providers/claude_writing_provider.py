@@ -115,3 +115,51 @@ def build_writing_prompt(payload: ClaudeRequestPayload) -> str:
             f"diese Version):\n{payload.anonymisierte_anwaltliche_anmerkungen}"
         )
     return "\n\n".join(parts)
+
+
+def build_writing_prompt_cache_blocks(payload: ClaudeRequestPayload) -> list[dict]:
+    """Wie `build_writing_prompt`, aber als zwei Content-Blöcke für Anthropic
+    Prompt-Caching (Schritt 3) statt eines einzelnen Strings.
+
+    Trennung nach Wiederkehr-Wahrscheinlichkeit, nicht nach Feldreihenfolge
+    des ursprünglichen Prompts: Sachverhalt/Argumentationspunkte/
+    Quellenverweise/Schreibvorlage bilden den "Aktenkontext" - bei mehreren
+    Entwurfsversionen DESSELBEN Drafts (neue anwaltliche Anmerkung, gleicher
+    Sachverhalt) bleibt dieser Block byte-identisch und kann von Anthropic
+    aus dem Cache bedient werden. Schreibauftrag/gewünschter Stil/
+    Anwaltliche Anmerkungen ändern sich dagegen pro Version - bewusst NICHT
+    gecacht, landen als zweiter, variabler Block. Nur der erste Block trägt
+    `cache_control` (Anthropic cached Prefixe; variable Inhalte müssen NACH
+    dem gecachten Block stehen, siehe Anthropic-Dokumentation zu
+    Prompt-Caching-Breakpoints)."""
+    stable_parts = [f"Sachverhalt:\n{payload.anonymisierter_sachverhalt}"]
+    if payload.anonymisierte_argumentationspunkte:
+        punkte = "\n".join(
+            f"- {punkt}" for punkt in payload.anonymisierte_argumentationspunkte
+        )
+        stable_parts.append(f"Argumentationspunkte:\n{punkte}")
+    if payload.anonymisierte_quellenverweise:
+        quellen = "\n".join(
+            f"- {quelle}" for quelle in payload.anonymisierte_quellenverweise
+        )
+        stable_parts.append(f"Quellenverweise:\n{quellen}")
+    if payload.schreibvorlage:
+        stable_parts.append(f"Vorlage/Beispielstil:\n{payload.schreibvorlage}")
+
+    variable_parts = [f"Schreibauftrag: {payload.schreibauftrag}"]
+    if payload.gewuenschter_stil:
+        variable_parts.append(f"Gewünschter Stil: {payload.gewuenschter_stil}")
+    if payload.anonymisierte_anwaltliche_anmerkungen:
+        variable_parts.append(
+            "Anwaltliche Anmerkungen (verbindlicher Arbeitsauftrag für "
+            f"diese Version):\n{payload.anonymisierte_anwaltliche_anmerkungen}"
+        )
+
+    return [
+        {
+            "type": "text",
+            "text": "\n\n".join(stable_parts),
+            "cache_control": {"type": "ephemeral"},
+        },
+        {"type": "text", "text": "\n\n".join(variable_parts)},
+    ]

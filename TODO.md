@@ -639,6 +639,15 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       (Gruppenstruktur, automatisches Aufklappen der aktiven Gruppe, alle drei echten
       Konto-Seiten, 30 SVG-Icons als valides Markup). Siehe ARCHITECTURE.md §53.
 
+## Pilot-Nachbesserung nach v0.1.0 – Schritt 3 (20.08.)
+- [x] Backend-Sicherheit (API-Key bleibt lokal, kein zentraler Proxy - Kurswechsel-Anfrage
+      geklärt und abgelehnt, siehe ARCHITECTURE.md §54), Prompt-Caching, lokales
+      EUR-Kostentracking (Softlimit 30 €/Monat, rein warnend), Auto-Updater (stumme
+      Hintergrundprüfung, kein Auto-Download), Installation unter %LocalAppData% ohne
+      Admin-Rechte, Pilot-Feedback & Support (lokale KI-Vorkategorisierung, keine
+      Claude-Nutzung, Admin-Freigabe-Schleife ohne automatische Umsetzung). Siehe
+      ARCHITECTURE.md §54 für alle Details/offenen Punkte.
+
 ## Wiederkehrende Grundregeln (gelten für jede Phase)
 - Keine echten Mandantendaten in Tests/Entwicklung.
 - Keine Secrets in Code/Logs/Git.

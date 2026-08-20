@@ -115,8 +115,13 @@ class TestAnthropicClaudeWritingProvider:
 
         call_kwargs = mock_client.messages.create.call_args.kwargs
         assert call_kwargs["model"] == "claude-sonnet-5"
-        sent_prompt = call_kwargs["messages"][0]["content"]
+        # Prompt-Caching (Schritt 3): content ist jetzt eine Liste von
+        # Blöcken statt eines einzelnen Strings - der erste (stabile) Block
+        # trägt cache_control, siehe build_writing_prompt_cache_blocks.
+        content_blocks = call_kwargs["messages"][0]["content"]
+        sent_prompt = "\n".join(block["text"] for block in content_blocks)
         assert "[MANDANT_01]" in sent_prompt
+        assert content_blocks[0]["cache_control"] == {"type": "ephemeral"}
         # Original-Mandantendaten koennen hier gar nicht auftauchen, da nur
         # die Payload (bereits pseudonymisiert) in den Prompt einfliesst.
 
@@ -167,3 +172,65 @@ class TestAnthropicClaudeWritingProvider:
 
         call_kwargs = mock_client.messages.create.call_args.kwargs
         assert secret_key not in str(call_kwargs)
+
+
+class TestPromptCaching:
+    @patch("app.ai_providers.anthropic_writing_provider.anthropic.Anthropic")
+    def test_system_prompt_is_cached(self, mock_anthropic_cls) -> None:
+        from app.ai_providers.anthropic_writing_provider import (
+            AnthropicClaudeWritingProvider,
+        )
+        from app.ai_providers.claude_writing_provider import WRITING_SYSTEM_PROMPT
+
+        mock_client = MagicMock()
+        mock_anthropic_cls.return_value = mock_client
+        mock_text_block = MagicMock()
+        mock_text_block.type = "text"
+        mock_text_block.text = "Antwort."
+        mock_response = MagicMock()
+        mock_response.content = [mock_text_block]
+        mock_response.usage = None
+        mock_client.messages.create.return_value = mock_response
+
+        provider = AnthropicClaudeWritingProvider(api_key="test-key", model="claude-sonnet-5")
+        provider.write(
+            ClaudeRequestPayload(schreibauftrag="formulate_draft", anonymisierter_sachverhalt="Text")
+        )
+
+        call_kwargs = mock_client.messages.create.call_args.kwargs
+        assert call_kwargs["system"] == [
+            {
+                "type": "text",
+                "text": WRITING_SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
+
+    def test_stable_case_context_stays_identical_across_revisions(self) -> None:
+        """Beweis für die eigentliche Kosteneinsparung: derselbe
+        Sachverhalt/dieselben Quellen erzeugen bei zwei unterschiedlichen
+        Schreibaufträgen (z. B. zwei Entwurfsversionen) einen BYTE-
+        IDENTISCHEN gecachten Block - nur so kann Anthropic den Cache
+        tatsächlich treffen."""
+        from app.ai_providers.claude_writing_provider import (
+            build_writing_prompt_cache_blocks,
+        )
+
+        base_kwargs = dict(
+            anonymisierter_sachverhalt="Sachverhalt mit [MANDANT_01].",
+            anonymisierte_quellenverweise=["§ 355 AO."],
+        )
+        version_1 = ClaudeRequestPayload(schreibauftrag="formulate_draft", **base_kwargs)
+        version_2 = ClaudeRequestPayload(
+            schreibauftrag="revise_draft",
+            anonymisierte_anwaltliche_anmerkungen="Bitte kürzer fassen.",
+            **base_kwargs,
+        )
+
+        blocks_1 = build_writing_prompt_cache_blocks(version_1)
+        blocks_2 = build_writing_prompt_cache_blocks(version_2)
+
+        assert blocks_1[0]["text"] == blocks_2[0]["text"]
+        assert blocks_1[0]["cache_control"] == {"type": "ephemeral"}
+        assert blocks_1[1]["text"] != blocks_2[1]["text"]
+        assert "cache_control" not in blocks_1[1]

@@ -19,7 +19,7 @@ import json
 import anthropic
 
 from app.privacy.gateway_schema import ClaudeRequestPayload
-from app.review.provider import REVIEW_SYSTEM_PROMPT, build_review_prompt
+from app.review.provider import REVIEW_SYSTEM_PROMPT, build_review_prompt_cache_blocks
 from app.review.schema import ReviewResult
 
 
@@ -34,13 +34,22 @@ class AnthropicClaudeReviewProvider:
         self.max_tokens = max_tokens
 
     def review(self, payload: ClaudeRequestPayload) -> ReviewResult:
-        prompt_text = build_review_prompt(payload)
-
+        # Prompt-Caching (Schritt 3): siehe AnthropicClaudeWritingProvider.write
+        # für die Begründung - gecachtes Systemprompt + gecachter,
+        # wiederkehrender Aktenkontext-Block (Quellen/Argumentationspunkte),
+        # der zu prüfende Entwurfstext selbst bleibt ungecacht (ändert sich
+        # bei jeder Version).
         response = self._client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
-            system=REVIEW_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": prompt_text}],
+            system=[
+                {
+                    "type": "text",
+                    "text": REVIEW_SYSTEM_PROMPT,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            messages=[{"role": "user", "content": build_review_prompt_cache_blocks(payload)}],
         )
 
         text = "".join(

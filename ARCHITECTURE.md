@@ -2913,3 +2913,130 @@ Einzelseite als sichtbares, valides Markup bestätigt.
 4. Kein Update-Check-Mechanismus vorhanden (Teil von "System & Lizenz", Platzhalter) - der
    Windows-Installer (Prompt 36) hat ebenfalls keinen automatischen Update-Mechanismus,
    siehe ARCHITECTURE.md §45, offener Punkt 3.
+
+## 54. Backend-Sicherheit, Performance, Auto-Updater, Pilot-Feedback (Schritt 3, 20.08.)
+
+**Wichtige Vorab-Klärung:** Der ursprüngliche Auftrag verlangte einen "zentralen
+Backend-Proxy", der den `ANTHROPIC_API_KEY` für alle Kanzleien hält und zentrale
+Autorisierung/Abrechnung übernimmt - das hätte einen fundamentalen Architektur-Kurswechsel
+bedeutet (echte Multi-Tenant-SaaS-Infrastruktur, die es im Projekt nicht gibt) und stand im
+direkten Widerspruch zur Entscheidung vom 16.08. (TODO.md, wörtlich "kein SaaS-/
+Cloud-Bezug", getrennte Installation je Kanzlei) sowie zum Privacy-by-Design-Prinzip (§27:
+Claude-API-Aufrufe erfolgen direkt, kein Vendor-Server dazwischen). Rückgesprochen und vom
+Anwalt bestätigt: **kein zentraler Proxy** - alle vier Punkte unten sind bewusst auf Basis
+der bestehenden lokalen Single-Tenant-Architektur umgesetzt.
+
+### 1. API-Sicherheit (lokal, kein Proxy)
+
+Bestandsaufnahme ergab: es gab bereits **keinen einzigen** UI-Endpunkt, der den API-Key
+editierbar/im Klartext sichtbar macht - `SettingsOut` (Prompt 21) ist eine Allowlist ohne
+Secret-Felder, `account_privacy.html` (Prompt 49) zeigt nur `claude_api_configured` als
+Ja/Nein-Wert. Die Vorgabe "Eingabefeld ausblenden" ist damit strukturell bereits erfüllt.
+Neu ergänzt: `tests/test_no_editable_api_key_in_ui.py` verankert das dauerhaft - scannt
+JEDES Template nach einem Formularfeld mit `name="anthropic_api_key"` (oder verwandt) und
+schlägt fehl, falls ein künftiger Editier-Endpunkt eingeführt würde.
+
+### 2. Prompt-Caching + lokales EUR-Kostentracking
+
+- **Prompt-Caching** (`app/ai_providers/anthropic_writing_provider.py`,
+  `app/review/anthropic_review_provider.py`): das Systemprompt (projektweit für jeden
+  Aufruf identisch) ist jetzt als `cache_control: {"type": "ephemeral"}`-Block markiert.
+  Zusätzlich trennen `build_writing_prompt_cache_blocks`/`build_review_prompt_cache_blocks`
+  (app/ai_providers/claude_writing_provider.py, app/review/provider.py) den wiederkehrenden
+  Aktenkontext vom variablen Teil: beim Schreib-Prompt ist Sachverhalt/Quellen/Vorlage der
+  gecachte, stabile Block (bleibt über mehrere Entwurfsversionen desselben Drafts
+  byte-identisch), Schreibauftrag/Anmerkungen bleiben variabel und ungecacht. Beim
+  Review-Prompt ist es umgekehrt: der zu prüfende Entwurfstext selbst ändert sich pro
+  Version (NICHT gecacht), Quellen/Argumentationspunkte sind der stabile, gecachte Teil.
+  Die ursprünglichen String-Builder (`build_writing_prompt`/`build_review_prompt`) bleiben
+  unverändert erhalten (Rückwärtskompatibilität zu bestehenden Tests/Aufrufern).
+- **Lokales EUR-Softlimit** (`app/config/settings.py`: `monthly_soft_limit_eur` Default
+  30.0, `usd_to_eur_rate` Default 0.92; `app/cost_control/service.py:
+  get_soft_limit_status`): bewusst ZUSÄTZLICH zum bestehenden `monthly_budget_usd`
+  (Prompt 33, weiterhin allein zuständig für die harte Aufrufsperre) - dieses neue Limit
+  ist rein warnend, blockiert NIE einen Aufruf. Sichtbar als unaufdringlicher Badge
+  (`GET /dashboard/monitoring/budget-badge`, per HTMX in `base.html` geladen) für ALLE
+  angemeldeten Rollen (nicht nur Admin, da ein erreichtes Softlimit die tägliche Arbeit
+  aller betrifft) - zeigt bewusst nur den Prozentsatz, keine absoluten Beträge (Details
+  bleiben der admin-only Systemstatus-Seite vorbehalten). Kein zentraler Abgleich zwischen
+  Kanzleien - jede Installation zählt ausschließlich ihre eigenen `ApiCallLog`-Einträge.
+
+### 3. Auto-Updater + Installation unter %LocalAppData%
+
+- **Update-Prüfung** (`app/updater/checker.py`): stumme, nicht-blockierende
+  Hintergrundprüfung beim Start (`app/main.py: lifespan`, per `asyncio.create_task`) gegen
+  eine konfigurierbare, statische Version-JSON (`settings.update_manifest_url`, Default
+  `None` = deaktiviert - es existiert aktuell keine von uns betriebene
+  Update-Infrastruktur). Schlägt NIEMALS hart fehl (Netzwerkfehler/Timeout/ungültiges
+  JSON → stilles `checked=False`). Bewusst KEIN automatischer Download/Installation
+  (CLAUDE.md: "keine automatische externe Kommunikation ohne explizite Freigabe") - nur ein
+  unaufdringlicher Hinweis-Badge (`GET /dashboard/monitoring/update-badge`) mit Link zur
+  manuellen Installation durch den Admin.
+- **Installer** (`windows/installer.iss`): `DefaultDirName` von `{autopf}\KanzleiAI`
+  ("Program Files", Admin-pflichtig) auf `{localappdata}\KanzleiAI` geändert,
+  `PrivilegesRequired` von `admin` auf `lowest` - Updates/Neuinstallation benötigen damit
+  keine Windows-Administratorrechte mehr. **Migrationshinweis:** eine bereits unter
+  Program Files installierte Pilot-Instanz muss vor Installation dieser Version manuell
+  deinstalliert werden, sonst entstehen zwei parallele Installationen (gleiche `AppId`,
+  unterschiedlicher Pfad). Das persistente Datenverzeichnis (`%PROGRAMDATA%\KanzleiAI`,
+  app/setup/paths.py) bleibt unverändert - dort war nie eine Admin-Erhöhung nötig.
+
+### 4. Pilot-Feedback & Support
+
+Neuer Bereich `app/pilot_feedback/` + `PilotFeedback`-Modell (Migration `schritt3_001`) +
+`app/web/feedback_router.py`, neuer Sidebar-Eintrag "Pilot-Feedback & Support". Getrennt
+vom bestehenden `DraftFeedback` (Prompt 13, anwaltliches Feedback zu einem konkreten
+Entwurf) - dieser Bereich erfasst allgemeines Nutzer-Feedback zur Software selbst.
+
+- **Formular:** alle drei Rollen dürfen Feedback abgeben (kein Kostenrisiko, kein
+  Claude-Aufruf). Ein anonymisierter Systemkontext-Schnappschuss (NUR bereits vorhandene
+  Ja/Nein-/Zählwerte wie `app_env`, Anzahl offener `ProcessingError`-Einträge - identisches
+  Muster zu `app/web/monitoring_router.py`) wird automatisch angehängt - NIEMALS
+  vollständige Fehlermeldungen/Tracebacks/Mandantendaten (per Test abgesichert:
+  `tests/test_pilot_feedback_service.py::
+  test_submit_never_stores_raw_processing_error_messages`).
+- **KI-Vorkategorisierung ist bewusst LOKAL** (`app/pilot_feedback/classifier.py`, reine
+  Keyword-Heuristik analog zu `PlaceholderDocumentClassifier`, Prompt 08), **KEIN
+  Claude-API-Aufruf** - konsistent mit §27 (Claude ausschließlich für sprachliche
+  Textproduktion bereits lokal bestimmten Inhalts, niemals für Analyse/Klassifikation von
+  noch ungeprüftem Nutzertext). Konfidenz hart gedeckelt (max. 0.4), analog zum
+  etablierten Muster.
+- **Admin-Freigabe-Schleife:** Einträge, deren Text auf eine System-/Prompt-Änderung
+  hindeutet (`suggests_system_change`, z. B. "Prompt anpassen", "die KI soll ..."), werden
+  automatisch `requires_admin_review=True` markiert und erscheinen für Admins mit
+  Freigeben-/Ablehnen-Aktion. **Wichtig:** `PilotFeedbackService.review` setzt
+  AUSSCHLIESSLICH Statusfelder des Feedback-Eintrags selbst - es gibt keinen Codepfad, der
+  eine `Policy`/ein Systemprompt/eine `Settings`-Zeile automatisch verändert. Die
+  tatsächliche Umsetzung eines freigegebenen Vorschlags bleibt manuelle Entwicklungsarbeit
+  (CLAUDE.md: "keine autonome KI-Entscheidung", "Architektur wird nicht eigenmächtig
+  verändert").
+
+### Getestet
+
+Neue/geänderte Tests: `tests/test_ai_providers_claude_writing_provider.py` (Cache-Block-
+Struktur, Cache-Control auf dem Systemprompt, byte-identischer stabiler Block über zwei
+Entwurfsversionen), `tests/test_review_anthropic_provider.py` (analog für den
+Review-Prompt, inkl. Fallback ohne stabilen Kontext), `tests/test_cost_control.py`
+(unverändert grün, EUR-Softlimit ist ein separater Pfad), `tests/test_updater_checker.py`
+(8 Fälle: deaktiviert/gleiche Version/neuere Version/ältere Version/Netzwerkfehler/
+ungültiges JSON/fehlendes Versionsfeld/HTTP-Fehler - nie eine Ausnahme),
+`tests/test_web_budget_and_update_badge.py` (Sichtbarkeit für Nicht-Admins, keine
+absoluten Beträge, Login-Pflicht), `tests/test_installer_config.py` (Textprüfung der
+sicherheitsrelevanten Installer-Direktiven), `tests/test_no_editable_api_key_in_ui.py`,
+`tests/test_pilot_feedback_classifier.py` (9 Fälle), `tests/test_pilot_feedback_service.py`
+(7 Fälle, inkl. der Anonymisierungs-Absicherung), `tests/test_web_feedback.py` (6 Fälle:
+Rechtematrix, Validierung, Freigabe-Workflow). Gesamte Suite: unverändert 4
+Umgebungslimitierungen (Tesseract/Symlink-Rechte in der Sandbox, siehe §15/§27) + 1 Skip,
+alle übrigen 869 Tests grün.
+
+### Offene Punkte
+
+1. `usd_to_eur_rate` ist ein statischer, manuell zu pflegender Näherungswert - kein
+   Live-Wechselkurs-Abruf (bewusst, siehe Local-First-Prinzip).
+2. `update_manifest_url` ist mangels eigener Update-Infrastruktur weiterhin deaktiviert -
+   sobald ein Hosting-Ort für die Version-JSON feststeht, muss dieser Wert pro Installation
+   gesetzt werden.
+3. Eine bereits unter Program Files installierte Pilot-Instanz benötigt eine manuelle
+   Deinstallation vor dem Umstieg auf die neue `%LocalAppData%`-Installation (siehe oben).
+4. Die eigentliche Umsetzung freigegebener Pilot-Feedback-Vorschläge (Prompt-/System-
+   Änderungen) bleibt bewusst manuelle Entwicklungsarbeit, kein automatisierter Pfad.
