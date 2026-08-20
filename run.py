@@ -13,7 +13,14 @@ vier Subkommandos:
                                    Datenbankmigrationen aus ("bei jedem
                                    Update", siehe HANDOFF-Doku) und stößt
                                    bei fehlender Konfiguration automatisch
-                                   den Setup-Assistenten an.
+                                   den Setup-Assistenten an. Prüft VORHER
+                                   per Single-Instance-Mutex (Schritt 3,
+                                   `_acquire_single_instance_lock`), ob
+                                   bereits eine Instanz für dieses
+                                   Benutzerkonto läuft, und bricht mit einer
+                                   klaren Fehlermeldung ab statt zwei
+                                   Prozesse gleichzeitig auf dieselbe
+                                   SQLite-Datei zugreifen zu lassen.
         --no-window                - nur der Server, kein Fenster (bisheriges
                                    Verhalten vor Prompt 46, weiterhin nützlich
                                    für Entwickler/Debugging/Kopfstationen).
@@ -226,29 +233,126 @@ def _is_webview2_runtime_available() -> bool:
     return False
 
 
+#: Bewusst OHNE "Global\"-Präfix: ein "Global\"-Mutex würde ALLE Windows-
+#: Benutzerkonten auf derselben Maschine gegenseitig blockieren - passt
+#: nicht zum Installationsmodell (%LocalAppData%, eine Installation pro
+#: Benutzerkonto, siehe windows/installer.iss). Ohne Präfix ist der Mutex
+#: sitzungslokal (effektiv: pro angemeldetem Benutzer) - genau eine
+#: laufende Instanz PRO NUTZER, nicht pro Maschine.
+_SINGLE_INSTANCE_MUTEX_NAME = "KanzleiAI_SingleInstance_Mutex"
+_ERROR_ALREADY_EXISTS = 183
+
+
+def _win32_create_mutex(name: str) -> tuple[int, int]:
+    """Echte Windows-API-Implementierung (`CreateMutexW` + `GetLastError`) -
+    Standardimplementierung für `_acquire_single_instance_lock`.
+    `use_last_error=True` liefert einen thread-lokalen, von anderen
+    ctypes-Aufrufen unabhängigen Fehlercode (empfohlenes ctypes-Idiom für
+    GetLastError-basierte Win32-APIs, statt des global geteilten
+    `ctypes.windll`-Zustands)."""
+    import ctypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    handle = kernel32.CreateMutexW(None, False, name)
+    return handle, ctypes.get_last_error()
+
+
+def _win32_close_handle(handle: int) -> None:
+    import ctypes
+
+    ctypes.WinDLL("kernel32", use_last_error=True).CloseHandle(handle)
+
+
+def _acquire_single_instance_lock(
+    *,
+    is_windows: bool | None = None,
+    create_mutex: Callable[[str], tuple[int, int]] = _win32_create_mutex,
+    close_handle: Callable[[int], None] = _win32_close_handle,
+) -> int | None:
+    """Verhindert, dass die Anwendung mehrfach parallel läuft (z. B. durch
+    doppeltes Anklicken der Startmenü-/Desktop-Verknüpfung, während bereits
+    eine Instanz läuft) - zwei parallele uvicorn-Server auf demselben Port
+    UND derselben SQLite-Datei wären ein Datenintegritätsrisiko (siehe
+    app/db/session.py: EINE Engine pro Prozess, keine Vorkehrung für
+    mehrere gleichzeitig schreibende Prozesse).
+
+    Nutzt einen benannten Windows-Mutex (`CreateMutexW` +
+    `GetLastError() == ERROR_ALREADY_EXISTS`) statt z. B. eines Lock-Files -
+    ein Mutex wird vom Betriebssystem GARANTIERT freigegeben, sobald der
+    besitzende Prozess endet (auch bei einem harten Absturz). Ein Lock-File
+    könnte nach einem Absturz verwaist zurückbleiben und jeden künftigen
+    Start fälschlich blockieren - genau die Art von Fehler, die dieses
+    Muster vermeiden soll.
+
+    Gibt das offene Mutex-Handle zurück (muss bis zum Prozessende offen
+    bleiben, siehe `_release_single_instance_lock`), oder `None`, wenn
+    bereits eine andere Instanz läuft. `is_windows`/`create_mutex` sind
+    bewusst injizierbar (identisches Muster zu `resolve_data_dir`/
+    `_wait_for_server_ready`) - macht beide Zweige testbar, ohne einen
+    echten Windows-Mutex anzulegen. Auf Nicht-Windows-Plattformen
+    (Entwicklung/Tests) immer "kein Konflikt" (`-1` als Platzhalter-Handle),
+    da dort ohnehin nie die gepackte .exe läuft."""
+    if is_windows is None:
+        is_windows = os.name == "nt"
+    if not is_windows:
+        return -1
+
+    handle, last_error = create_mutex(_SINGLE_INSTANCE_MUTEX_NAME)
+    if not handle:
+        raise OSError(f"Mutex konnte nicht erstellt werden (Fehlercode {last_error})")
+    if last_error == _ERROR_ALREADY_EXISTS:
+        close_handle(handle)
+        return None
+    return handle
+
+
+def _release_single_instance_lock(
+    handle: int, *, close_handle: Callable[[int], None] = _win32_close_handle
+) -> None:
+    if handle == -1:
+        return  # Platzhalter (Nicht-Windows) - nichts freizugeben
+    close_handle(handle)
+
+
 def cmd_serve(*, open_window: bool = True) -> int:
     from app.config import get_settings
 
-    settings = get_settings()
-
-    # Ausstehende Migrationen automatisch anwenden - laut Handoff-Doku
-    # "muss beim ersten Start (und bei jedem Update) laufen". Alembic-
-    # Upgrades sind idempotent (kein Effekt, wenn bereits auf "head").
-    migrate_exit_code = cmd_migrate()
-    if migrate_exit_code != 0:
-        return migrate_exit_code
-
-    if not open_window:
-        import uvicorn
-
-        from app.main import app
-
-        uvicorn.run(
-            app, host=settings.host, port=settings.port, log_level=settings.log_level.lower()
+    lock_handle = _acquire_single_instance_lock()
+    if lock_handle is None:
+        print(
+            "FEHLER: Kanzlei-AI läuft bereits - eine zweite gleichzeitige Instanz "
+            "würde sich denselben Port und dieselbe Datenbankdatei teilen. Bitte das "
+            "bereits geöffnete Fenster verwenden.",
+            file=sys.stderr,
         )
-        return 0
+        return 1
 
-    return _serve_with_window(settings)
+    try:
+        settings = get_settings()
+
+        # Ausstehende Migrationen automatisch anwenden - laut Handoff-Doku
+        # "muss beim ersten Start (und bei jedem Update) laufen". Alembic-
+        # Upgrades sind idempotent (kein Effekt, wenn bereits auf "head").
+        migrate_exit_code = cmd_migrate()
+        if migrate_exit_code != 0:
+            return migrate_exit_code
+
+        if not open_window:
+            import uvicorn
+
+            from app.main import app
+
+            uvicorn.run(
+                app,
+                host=settings.host,
+                port=settings.port,
+                log_level=settings.log_level.lower(),
+            )
+            return 0
+
+        return _serve_with_window(settings)
+    finally:
+        _release_single_instance_lock(lock_handle)
 
 
 def _serve_with_window(settings) -> int:  # noqa: ANN001 - Settings-Typ nur lazy importierbar

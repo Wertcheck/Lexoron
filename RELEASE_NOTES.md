@@ -148,10 +148,10 @@
 
 ```bash
 # 1. Run installer
-KanzleiAI-Setup-0.1.0.exe
+KanzleiAI_Setup.exe
 
 # 2. First start
-cd "C:\Program Files\KanzleiAI"
+cd "%LocalAppData%\KanzleiAI"
 kanzlei_ai.exe serve
 
 # 3. Setup Wizard runs (if .env doesn't exist)

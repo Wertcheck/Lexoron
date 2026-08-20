@@ -656,6 +656,12 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       "Standard-Prompts" (echte System-Prompts read-only direkt aus dem Code, editierbare
       Kanzlei-Prompts mit Platzhalter-Variablen, nicht an die Drafting-Pipeline angebunden).
       Siehe ARCHITECTURE.md §55 für alle Details/offenen Punkte.
+- [x] Packaging-Feinschliff (gleicher Tag): fester Installer-Dateiname
+      `KanzleiAI_Setup.exe`, Single-Instance-Mutex-Guard gegen mehrfach parallel gestartete
+      Instanzen (echt gegen die Windows-API verifiziert). App-Icon-Einbindung und sauberes
+      Prozessende auf Anfrage geprüft - beides bereits korrekt, ein kleiner, unkritischer
+      Randfall (Ctrl+C im Konsolenfenster bei offenem nativem Fenster) dokumentiert statt
+      behoben. Siehe ARCHITECTURE.md §56.
 
 ## Wiederkehrende Grundregeln (gelten für jede Phase)
 - Keine echten Mandantendaten in Tests/Entwicklung.

@@ -3171,3 +3171,81 @@ Symlink-Rechte).
 2. Restore unterstützt weiterhin nur SQLite (konsistent mit der übrigen Backup-Architektur).
 3. Die Prompt-Bibliothek ist eine reine Referenz - keine Anbindung an die tatsächliche
    Entwurfserstellung.
+
+## 56. Packaging-Feinschliff: Installer-Dateiname, Single-Instance-Guard (20.08.)
+
+Kleinere, gezielte Ergänzung zum bestehenden Windows-Installer (§54/§55) auf ausdrücklichen
+Wunsch: fester Installer-Dateiname und ein Schutz gegen mehrfach parallel gestartete
+Instanzen.
+
+- **`windows/installer.iss`**: `OutputBaseFilename` von `KanzleiAI-Setup-{#MyAppVersion}` auf
+  den fest angeforderten Namen `KanzleiAI_Setup` geändert (erzeugt `KanzleiAI_Setup.exe`,
+  bewusst ohne Versionsnummer im Dateinamen - Kehrseite: ein neuer Build überschreibt den
+  vorherigen in `dist\installer\`, es liegen nie mehrere Versionsstände parallel; bei Bedarf
+  leicht rückgängig zu machen). `windows/verify_icon_embedding.ps1` sowie die aktuell
+  gültigen operativen Anleitungen (README.md, PILOT_CHECKLIST.md, PILOT_PLAYBOOK.md,
+  RELEASE_NOTES.md-Quick-Start) entsprechend nachgezogen - dort standen noch der alte
+  Dateiname UND der noch ältere `C:\Program Files\KanzleiAI`-Installationspfad (vor der
+  %LocalAppData%-Umstellung, §54). Historische, mit Zeitstempel versehene Beschreibungen
+  tatsächlich durchgeführter Verifikationsläufe (ARCHITECTURE.md §45/§48) bleiben bewusst
+  unverändert - sie beschreiben, was zu jenem Zeitpunkt tatsächlich getestet wurde, nicht den
+  aktuellen Soll-Zustand.
+- **Apps & Features/Uninstaller/Verknüpfungen**: bereits in §54 umgesetzt (Installation unter
+  `%LocalAppData%\KanzleiAI`, `PrivilegesRequired=lowest`, `UninstallDisplayIcon`, Startmenü-
+  und - seit dieser Anfrage standardmäßig angehakte - Desktop-Verknüpfung). Die
+  Registrierung unter "Apps & Features" inkl. Deinstaller entsteht automatisch aus
+  `AppId`/`AppName`/`AppVersion`/`AppPublisher` (Inno-Setup-Standardverhalten), kein
+  zusätzliches Skript nötig.
+- **Single-Instance-Guard** (`run.py`: `_acquire_single_instance_lock`/
+  `_release_single_instance_lock`, in `cmd_serve` verdrahtet): benannter Windows-Mutex
+  (`CreateMutexW` + `GetLastError() == ERROR_ALREADY_EXISTS`) statt eines Lock-Files - ein
+  Mutex wird vom Betriebssystem garantiert freigegeben, sobald der besitzende Prozess endet
+  (auch bei einem Absturz), ein Lock-File könnte verwaist liegen bleiben und künftige Starts
+  fälschlich blockieren. Bewusst OHNE `"Global\"`-Präfix (sitzungslokal/pro Windows-
+  Benutzerkonto statt maschinenweit) - passend zum Installationsmodell (eine Installation pro
+  Benutzerkonto unter `%LocalAppData%`). Ein zweiter Start bricht mit einer klaren
+  Fehlermeldung ab, statt zwei Prozesse gleichzeitig auf dieselbe SQLite-Datei zugreifen zu
+  lassen. `is_windows`/`create_mutex`/`close_handle` sind injizierbar (identisches Muster zu
+  `resolve_data_dir`/`_wait_for_server_ready`) - zusätzlich zu den Unit-Tests mit einem echten
+  Win32-Aufruf gegen die tatsächliche Betriebssystem-API verifiziert (Erwerb, Konflikt bei
+  zweitem Erwerb, Freigabe, erneuter Erwerb - alle vier Schritte bestätigt funktionsfähig).
+
+### Audit: App-Icon-Einbindung + sauberes Prozessende
+
+Auf ausdrückliche Nachfrage geprüft (keine Code-Änderung nötig, beides war bereits korrekt
+umgesetzt):
+
+- **App-Icon** (`windows/app_icon.ico`, gültiges Multi-Resolution-ICO mit 7 Auflösungsstufen):
+  in die `.exe` selbst eingebettet (`windows/kanzlei_ai.spec`, `EXE(icon=...)`, Prompt 47) UND
+  im Installer referenziert (`SetupIconFile`, `UninstallDisplayIcon`, `IconFilename` für
+  Startmenü-/Desktop-Verknüpfungen) - kein generisches Platzhalter-Icon an irgendeiner
+  sichtbaren Stelle.
+- **Sauberes Prozessende**: `--no-window`-Modus nutzt Uvicorns eingebaute SIGINT/SIGTERM-
+  Behandlung (kein eigener Code nötig). Fenstermodus (`_serve_with_window`) startet den
+  Server in einem Hintergrund-Thread und ruft nach Fensterschluss (oder bei jedem Fehlerpfad
+  davor) `server.should_exit = True` + `server_thread.join(timeout=10)` auf - sauberer
+  Shutdown mit Timeout statt eines unbegrenzten Wartens. **Ein kleiner, ehrlich benannter
+  Randfall bleibt unverändert bestehen** (nicht behoben, da nur geprüft, nicht behebend
+  beauftragt): ein Ctrl+C in der (laut Prompt 46 bewusst weiterhin sichtbaren) Konsole
+  während das native Fenster offen ist, unterbricht `webview.start()` per
+  `KeyboardInterrupt`, BEVOR `_shutdown_server()` erreicht wird - der Server-Thread
+  (`daemon=True`) wird dann beim Prozessende hart beendet statt über Uvicorns eigenen
+  Graceful-Shutdown-Pfad. Der Prozess hängt dabei nie (kein Deadlock), die Beendigung ist nur
+  nicht maximal "sauber". Der Single-Instance-Mutex selbst wird davon nicht negativ berührt -
+  er liegt in einem `try/finally` um den gesamten `cmd_serve`-Rumpf und wird auch bei diesem
+  Pfad zuverlässig freigegeben (durch den echten Win32-Testlauf oben mitverifiziert).
+
+### Getestet
+
+`tests/test_installer_config.py` (3 neue: App-Identität für Apps & Features,
+Uninstall-Icon, fester Dateiname - zusätzlich zu den 4 bereits aus §54 bestehenden),
+`tests/test_run_entrypoint.py` (8 neue: Platzhalter-Handle auf Nicht-Windows, No-Op-Freigabe
+des Platzhalters, erfolgreicher Erwerb, Konflikt-Erkennung inkl. Schließen des
+überzähligen Handles, Fehlerfall bei der Mutex-Erzeugung selbst, echte Freigabe,
+`cmd_serve`-Abbruch mit klarer Fehlermeldung bei bereits laufender Instanz,
+Mutex-Freigabe auch bei fehlgeschlagener Migration). Zusätzlich ein einmaliger, echter
+Smoke-Test gegen die tatsächliche Windows-Mutex-API (kein Mock) direkt in dieser Sitzung
+durchgeführt (siehe oben) - nicht Teil der automatisierten Suite (würde bei parallelen
+Testläufen denselben systemweiten Mutex-Namen teilen), aber ein starker Beleg, dass die
+injizierte Logik der echten API-Semantik entspricht. Gesamte Suite: 951 bestanden, 1 Skip,
+unverändert 4 Umgebungslimitierungen der Sandbox.

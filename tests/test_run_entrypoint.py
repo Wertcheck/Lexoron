@@ -296,3 +296,81 @@ def test_is_webview2_runtime_available_false_when_no_key_found(monkeypatch) -> N
     monkeypatch.setattr(winreg, "OpenKey", _raise_not_found)
 
     assert run._is_webview2_runtime_available() is False
+
+
+# --- Single-Instance-Mutex-Guard (Schritt 3) ---
+
+
+def test_single_instance_lock_returns_placeholder_on_non_windows() -> None:
+    handle = run._acquire_single_instance_lock(is_windows=False)
+    assert handle == -1
+
+
+def test_release_placeholder_handle_is_a_noop_never_calls_close() -> None:
+    def _fail_if_called(handle: int) -> None:
+        raise AssertionError("close_handle haette bei einem Platzhalter nicht aufgerufen werden duerfen")
+
+    run._release_single_instance_lock(-1, close_handle=_fail_if_called)
+
+
+def test_single_instance_lock_acquired_when_no_other_instance_running() -> None:
+    def fake_create_mutex(name: str) -> tuple[int, int]:
+        assert name == run._SINGLE_INSTANCE_MUTEX_NAME
+        return 12345, 0  # ERROR_SUCCESS - frisch erzeugt, kein Konflikt
+
+    handle = run._acquire_single_instance_lock(is_windows=True, create_mutex=fake_create_mutex)
+
+    assert handle == 12345
+
+
+def test_single_instance_lock_returns_none_when_already_running() -> None:
+    def fake_create_mutex(name: str) -> tuple[int, int]:
+        return 12345, run._ERROR_ALREADY_EXISTS
+
+    closed: list[int] = []
+    handle = run._acquire_single_instance_lock(
+        is_windows=True, create_mutex=fake_create_mutex, close_handle=closed.append
+    )
+
+    assert handle is None
+    assert closed == [12345]  # das ueberzaehlige Mutex-Handle wird sofort wieder geschlossen
+
+
+def test_single_instance_lock_raises_on_unexpected_create_failure() -> None:
+    def fake_create_mutex(name: str) -> tuple[int, int]:
+        return 0, 5  # ERROR_ACCESS_DENIED o. Ae. - kein Handle erhalten
+
+    with pytest.raises(OSError):
+        run._acquire_single_instance_lock(is_windows=True, create_mutex=fake_create_mutex)
+
+
+def test_release_single_instance_lock_closes_real_handle() -> None:
+    closed: list[int] = []
+    run._release_single_instance_lock(999, close_handle=closed.append)
+    assert closed == [999]
+
+
+def test_cmd_serve_aborts_with_clear_message_when_already_running(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(run, "_acquire_single_instance_lock", lambda: None)
+
+    def _fail_if_called() -> int:
+        raise AssertionError("cmd_migrate haette bei bereits laufender Instanz nicht aufgerufen werden duerfen")
+
+    monkeypatch.setattr(run, "cmd_migrate", _fail_if_called)
+
+    exit_code = run.cmd_serve(open_window=False)
+
+    assert exit_code == 1
+    assert "läuft bereits" in capsys.readouterr().err
+
+
+def test_cmd_serve_releases_lock_even_when_migration_fails(monkeypatch) -> None:
+    monkeypatch.setattr(run, "_acquire_single_instance_lock", lambda: 42)
+    released: list[int] = []
+    monkeypatch.setattr(run, "_release_single_instance_lock", released.append)
+    monkeypatch.setattr(run, "cmd_migrate", lambda: 1)
+
+    exit_code = run.cmd_serve(open_window=False)
+
+    assert exit_code == 1
+    assert released == [42]

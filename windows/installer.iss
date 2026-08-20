@@ -44,7 +44,13 @@ DefaultDirName={localappdata}\KanzleiAI
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\dist\installer
-OutputBaseFilename=KanzleiAI-Setup-{#MyAppVersion}
+; Fester Dateiname "KanzleiAI_Setup.exe" (bewusst OHNE Versionsnummer im
+; Namen, auf ausdrücklichen Wunsch) - Kehrseite: ein neuer Build
+; überschreibt in dist\installer\ den vorherigen, es liegen also nie
+; mehrere Versionsstände parallel. Falls künftig mehrere Versionen
+; nebeneinander aufbewahrt werden sollen (z. B. für ein Rollback), einfach
+; wieder "KanzleiAI_Setup-{#MyAppVersion}" verwenden.
+OutputBaseFilename=KanzleiAI_Setup
 Compression=lzma
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -65,6 +71,11 @@ SetupIconFile=app_icon.ico
 ; Kein WizardImageFile/Branding an dieser Stelle - kanzleispezifisches
 ; Branding ist Teil der zurückgestellten "Multi-Kanzlei-Profile"-Frage
 ; (Prompt 38), siehe PROMPT38_ANALYSIS.md - hier bewusst NICHT vorweggenommen.
+; Icon fuer den Eintrag unter "Apps & Features"/"Programme und Funktionen" -
+; ohne diese Zeile wuerde Windows dort ein generisches Deinstaller-Icon
+; zeigen statt des tatsaechlichen App-Icons.
+UninstallDisplayIcon={app}\{#MyAppExeName}
+UninstallDisplayName={#MyAppName}
 
 [Languages]
 Name: "german"; MessagesFile: "compiler:Languages\German.isl"
@@ -74,9 +85,13 @@ Source: "..\dist\kanzlei_ai\*"; DestDir: "{app}"; Flags: ignoreversion recursesu
 
 [Tasks]
 ; Startmenü-Verknüpfung ist immer da (siehe [Icons] unten, kein Task
-; nötig) - Desktop-Verknüpfung bewusst OPT-IN (unchecked), nicht jeder
-; Anwalt/jede Kanzleimitarbeiterin möchte einen weiteren Desktop-Eintrag.
-Name: "desktopicon"; Description: "Desktop-Verknüpfung anlegen"; GroupDescription: "Zusätzliche Symbole:"; Flags: unchecked
+; nötig). Desktop-Verknüpfung bleibt abwählbar (Task statt fester
+; [Icons]-Zeile), ist aber seit dieser Anfrage ("Desktop- und
+; Startmenü-Verknüpfungen anlegen") standardmäßig ANGEHAKT - vorher
+; bewusst unchecked (nicht jeder wollte einen weiteren Desktop-Eintrag),
+; jetzt Standardverhalten mit weiterhin vorhandener Abwahlmöglichkeit im
+; Installationsassistenten.
+Name: "desktopicon"; Description: "Desktop-Verknüpfung anlegen"; GroupDescription: "Zusätzliche Symbole:"
 
 [Icons]
 ; IconFilename explizit gesetzt (Prompt 47) statt sich auf Inno Setups

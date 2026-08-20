@@ -17,9 +17,9 @@ dass alles Notwendige vorbereitet ist.
 
 ## B. Installation & Setup (Tag -1 bis -0.5)
 
-- [ ] KanzleiAI-Setup-0.1.0.exe herunterladen (von Prompt 36)
+- [ ] KanzleiAI_Setup.exe herunterladen (von Prompt 36; %LocalAppData%-Installation Schritt 3)
 - [ ] Installer ausführen:
-  - [ ] Installationsordner: `C:\Program Files\KanzleiAI`
+  - [ ] Installationsordner: `%LocalAppData%\KanzleiAI` (keine Admin-Rechte nötig)
   - [ ] Datenverzeichnis automatisch: `C:\ProgramData\KanzleiAI`
 - [ ] Installer **nicht** die App starten lassen (wir machen First-Run manuell)
 - [ ] Admin-Desktop-Shortcut prüfen (für einfachen Start)
@@ -29,7 +29,7 @@ dass alles Notwendige vorbereitet ist.
 ## C. First-Run Setup-Assistent (Tag 0, Morning)
 
 - [ ] Terminal/Konsole öffnen: `cmd` oder PowerShell
-- [ ] Zu Installationsordner wechseln: `cd "C:\Program Files\KanzleiAI"`
+- [ ] Zu Installationsordner wechseln: `cd "%LocalAppData%\KanzleiAI"`
 - [ ] Setup-Assistent starten: `kanzlei_ai.exe serve`
 - [ ] Assistent-Fragen beantworten:
   - [ ] Admin-E-Mail eingeben: `anwalt@kanzlei.local` (Beispiel)
@@ -126,7 +126,7 @@ dass alles Notwendige vorbereitet ist.
 ## H. Backups & Notfall-Plan (Tag 0, Night)
 
 - [ ] Backup des gesamten Installationsordners machen:
-  - [ ] `C:\Program Files\KanzleiAI` → externe Festplatte kopieren
+  - [ ] `%LocalAppData%\KanzleiAI` → externe Festplatte kopieren
 - [ ] Backup des Datenverzeichnisses machen:
   - [ ] `C:\ProgramData\KanzleiAI` → externe Festplatte kopieren
 - [ ] Notfall-Kontakt festlegen (falls Fragen während Pilot):

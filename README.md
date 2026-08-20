@@ -49,11 +49,11 @@ See **RELEASE_NOTES.md** for full feature list and known limitations.
 ### Installation & Setup
 ```bash
 # 1. Download and run installer
-KanzleiAI-Setup-0.1.0.exe
+KanzleiAI_Setup.exe
 
 # 2. First run (automatic setup wizard + native app window)
-#    Start via the Start Menu shortcut, or:
-cd "C:\Program Files\KanzleiAI"
+#    Start via the Start Menu or Desktop shortcut, or:
+cd "%LocalAppData%\KanzleiAI"
 kanzlei_ai.exe serve
 
 # 3. Setup wizard prompts (in the console window) for:

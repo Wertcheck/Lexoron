@@ -37,8 +37,8 @@ des bis Prompt 43 fertiggestellten Systems.
 ### 1.2 Installation aus Installer
 
 ```bash
-# 1. KanzleiAI-Setup-0.1.0.exe ausführen (von Prompt 36)
-# 2. Standard-Installationspfad: C:\Program Files\KanzleiAI
+# 1. KanzleiAI_Setup.exe ausführen (von Prompt 36; %LocalAppData% seit Schritt 3)
+# 2. Standard-Installationspfad: %LocalAppData%\KanzleiAI (keine Admin-Rechte nötig)
 # 3. Datenverzeichnis: C:\ProgramData\KanzleiAI (automatisch angelegt)
 #
 # Der Installer startet die App nicht automatisch.
@@ -250,7 +250,7 @@ des bis Prompt 43 fertiggestellten Systems.
 ```bash
 # Manuell vor Pilot-Start empfohlen:
 # Vollständige Sicherung des Installationsordners
-# C:\Program Files\KanzleiAI\  →  externe Festplatte / Cloud
+# %LocalAppData%\KanzleiAI\  →  externe Festplatte / Cloud
 #
 # Datenverzeichnis ist größer und wichtiger:
 # C:\ProgramData\KanzleiAI\  →  besonders Database + Dokumente
