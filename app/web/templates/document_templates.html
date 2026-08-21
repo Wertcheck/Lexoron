@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Kanzlei-Mustertexte{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">Kanzlei-Mustertexte</h1>
+    <div class="topbar__meta">Dokumentvorlagen für den Dokumentengenerator</div>
+  </div>
+
+  <div class="banner banner--info">
+    Diese Vorlagen werden ausschließlich lokal mit echten Aktendaten befüllt (Regex-basierte
+    Ersetzung fester Platzhalter) - keine KI, keine Cloud-Anfrage. Siehe
+    <a href="/dashboard/tools/dokumentgenerator">Dokumentengenerator</a> zum tatsächlichen
+    Erzeugen eines Schriftsatzes aus einer Vorlage.
+  </div>
+
+  <div class="draft-page">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+    {% if error %}
+      <p class="form-hint" style="color: var(--amber);">{{ error }}</p>
+    {% endif %}
+
+    <div class="instructions-panel">
+      <h2 class="panel-title">Unterstützte Platzhalter</h2>
+      <p class="form-hint">
+        In eckigen Klammern im Vorlagentext verwenden - ein nicht auflösbarer Platzhalter bleibt
+        beim Generieren sichtbar im Text stehen statt unbemerkt zu verschwinden.
+      </p>
+      <ul class="instruction-list">
+        {% for name, description in supported_placeholders.items() %}
+          <li class="instruction-item" style="border-top: none; padding-top: 0;">
+            <code class="mono">[{{ name }}]</code> - {{ description }}
+          </li>
+        {% endfor %}
+        <li class="instruction-item">
+          <code class="mono">[Paragraf:BGB:§ 433]</code> - Wortlaut eines Paragraphen aus der
+          <a href="/dashboard/laws">Gesetzesbibliothek</a> (Gesetzescode:Paragraphennummer)
+        </li>
+      </ul>
+    </div>
+
+    {% if is_curator %}
+      <div class="instructions-panel">
+        <h2 class="panel-title">Neue Vorlage anlegen</h2>
+        <form method="post" action="/dashboard/library/mustertexte" class="dashboard-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <label class="form-label">
+            Name
+            <input type="text" name="name" required placeholder="z. B. Mahnung Standard" />
+          </label>
+          <label class="form-label">
+            Kategorie (optional)
+            <input type="text" name="category" placeholder="z. B. Mahnung, Klageschrift, Vertrag" />
+          </label>
+          <label class="form-label">
+            Beschreibung (optional)
+            <input type="text" name="description" />
+          </label>
+          <label class="form-label">
+            Vorlagentext
+            <textarea name="content" rows="8" required
+                      placeholder="Sehr geehrte/r [Mandantenname],&#10;&#10;in der Sache [Aktenzeichen] ..."></textarea>
+          </label>
+          <button type="submit" class="btn btn--primary">Anlegen</button>
+        </form>
+      </div>
+    {% endif %}
+
+    <div class="instructions-panel">
+      <h2 class="panel-title">Vorlagen</h2>
+      {% if templates_with_placeholders %}
+        <div class="table-container">
+          <table class="draft-table">
+            <thead>
+              <tr><th>Name</th><th>Kategorie</th><th>Platzhalter</th><th>Version</th><th></th></tr>
+            </thead>
+            <tbody>
+              {% for template, placeholders in templates_with_placeholders %}
+                <tr>
+                  <td>
+                    <strong>{{ template.name }}</strong>
+                    {% if template.description %}<div class="form-hint">{{ template.description }}</div>{% endif %}
+                  </td>
+                  <td>{{ template.category or "–" }}</td>
+                  <td>
+                    {% for placeholder in placeholders %}
+                      <span class="doc-chip mono" style="font-size: 11px;">{{ placeholder }}</span>
+                    {% else %}
+                      <span class="form-hint">keine</span>
+                    {% endfor %}
+                  </td>
+                  <td class="mono">v{{ template.version }}</td>
+                  <td>
+                    <a href="/dashboard/tools/dokumentgenerator?template_id={{ template.id }}" class="btn" style="padding: 4px 10px; font-size: 11.5px;">Verwenden</a>
+                    {% if is_curator %}
+                      <a href="/dashboard/library/mustertexte/{{ template.id }}/edit" class="btn" style="padding: 4px 10px; font-size: 11.5px;">Bearbeiten</a>
+                      <form method="post" action="/dashboard/library/mustertexte/{{ template.id }}/delete" style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <button type="submit" class="btn btn--danger" style="padding: 4px 10px; font-size: 11.5px;">Löschen</button>
+                      </form>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="empty-state">Noch keine Vorlagen angelegt.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

@@ -83,9 +83,8 @@ def test_monitoring_page_shows_selbstdiagnose_section(
     response = client.get("/dashboard/monitoring")
     assert response.status_code == 200
     assert "Selbstdiagnose" in response.text
-    assert "Lokales LLM (Ollama)" in response.text
-    assert "KI-Modus" in response.text
-    assert "LOCAL_ONLY" in response.text  # Standard-AI_MODE, siehe ARCHITECTURE.md §60
+    assert "Claude-API-Schlüssel hinterlegt" in response.text
+    assert "Claude-API-Erreichbarkeit" in response.text
 
 
 def test_logs_preview_requires_admin(client: TestClient, db_session: Session, roles) -> None:
@@ -151,78 +150,3 @@ def test_check_api_endpoint_reports_not_configured_without_key(
     assert "nicht geprüft" in response.text
 
 
-def test_check_ollama_endpoint_requires_admin_and_csrf(
-    client: TestClient, db_session: Session, roles
-) -> None:
-    create_test_user(db_session, roles["mitarbeiter"], "mitarbeiter@kanzlei.test")
-    login(client, "mitarbeiter@kanzlei.test")
-    response = client.post("/dashboard/monitoring/check-ollama", data={"csrf_token": "invalid"})
-    assert response.status_code == 403
-
-
-def test_check_ollama_endpoint_reports_unreachable_when_not_running(
-    client: TestClient, db_session: Session, roles, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Wie test_check_api_endpoint_reports_not_configured_without_key: der
-    echte `httpx.get`-Aufruf wird gemockt statt gegen ein tatsächlich
-    laufendes (oder nicht laufendes) lokales Ollama zu testen - sonst wäre
-    dieser Test vom Zustand der Testmaschine abhängig."""
-    import httpx as httpx_module
-
-    monkeypatch.setattr(
-        httpx_module,
-        "get",
-        lambda *a, **k: (_ for _ in ()).throw(httpx_module.ConnectError("refused")),
-    )
-
-    _login_admin(client, db_session, roles)
-    page = client.get("/dashboard/monitoring")
-    import re
-
-    csrf = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
-
-    response = client.post("/dashboard/monitoring/check-ollama", data={"csrf_token": csrf})
-    assert response.status_code == 200
-    assert "nicht erreichbar" in response.text
-
-
-def test_ollama_badge_visible_to_any_logged_in_user(
-    client: TestClient, db_session: Session, roles
-) -> None:
-    """Anders als der Rest der Systemstatus-Seite (admin-only) - der Auftrag
-    verlangt "prominent" sichtbar, also fuer jede angemeldete Person, siehe
-    partials/ollama_badge.html."""
-    create_test_user(db_session, roles["mitarbeiter"], "mitarbeiter@kanzlei.test")
-    login(client, "mitarbeiter@kanzlei.test")
-
-    response = client.get("/dashboard/monitoring/ollama-badge")
-
-    assert response.status_code == 200
-    assert "Ollama" in response.text or "HYBRID" in response.text
-
-
-def test_ollama_badge_shows_local_only_by_default(
-    client: TestClient, db_session: Session, roles
-) -> None:
-    _login_admin(client, db_session, roles)
-    response = client.get("/dashboard/monitoring/ollama-badge")
-    assert response.status_code == 200
-    assert "Ollama" in response.text
-    assert "llama3.1" in response.text  # Standard-OLLAMA_MODEL_NAME
-
-
-def test_ollama_badge_does_not_trigger_a_network_call(
-    client: TestClient, db_session: Session, roles, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Kernanspruch aus dem Docstring: die Badge liest nur das beim Start
-    ermittelte app.state.ollama_check - kein eigener httpx-Aufruf hier."""
-    import httpx as httpx_module
-
-    def _fail(*a, **k):
-        raise AssertionError("Badge-Endpunkt darf keinen eigenen Netzwerkaufruf ausloesen")
-
-    monkeypatch.setattr(httpx_module, "get", _fail)
-
-    _login_admin(client, db_session, roles)
-    response = client.get("/dashboard/monitoring/ollama-badge")
-    assert response.status_code == 200

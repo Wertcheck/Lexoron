@@ -162,7 +162,15 @@ def test_review_creates_audit_event(db_session: Session) -> None:
 
 
 def test_blocked_draft_creates_no_findings_and_no_status_change(db_session: Session) -> None:
-    draft = _draft(db_session, "Bitte informieren Sie auch Herrn Peter Müller.")
+    """`review_draft` als Zweck ist intern fest verdrahtet
+    (app/review/engine.py: `_REVIEW_PURPOSE`) und immer erlaubt - kann hier
+    also nicht als Block-Ausloeser dienen. Stattdessen eine typische
+    deutsche Verwaltungsformulierung mit zwei aufeinanderfolgenden
+    grossgeschriebenen Woertern, die (unabhaengig von Presidios
+    Namenserkennung, siehe tests/test_end_to_end.py fuer denselben,
+    bereits dokumentierten Fund) weiterhin die
+    Grossschreibungs-Heuristik in security_check.py ausloest."""
+    draft = _draft(db_session, "Bitte pruefen Sie die Festgesetzte Einkommensteuer.")
     engine = _engine()
 
     outcome = engine.review_draft(draft.id, db_session)
@@ -175,14 +183,14 @@ def test_blocked_draft_creates_no_findings_and_no_status_change(db_session: Sess
 
 
 def test_blocked_review_is_logged_without_pii(db_session: Session) -> None:
-    draft = _draft(db_session, "Bitte informieren Sie auch Herrn Peter Müller.")
+    draft = _draft(db_session, "Bitte pruefen Sie die Festgesetzte Einkommensteuer.")
     engine = _engine()
 
     engine.review_draft(draft.id, db_session)
 
     logs = db_session.query(ApiCallLog).filter_by(result_status="blocked", purpose="review_draft").all()
     assert len(logs) == 1
-    assert "Peter" not in (logs[0].error_status or "")
+    assert "Festgesetzte" not in (logs[0].error_status or "")
 
 
 def test_provider_exception_is_handled_without_crashing(db_session: Session) -> None:

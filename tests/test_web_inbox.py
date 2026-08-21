@@ -373,14 +373,12 @@ def test_sidebar_group_containing_active_item_is_open(
     assert "open" in response.text[details_tag_start:details_tag_end]
 
 
-def test_sidebar_footer_has_help_and_ollama_status(client: TestClient, seeded: dict) -> None:
-    """Der Sidebar-Footer zeigt einen dezenten Hilfe-/Systemstatus-Streifen:
-    denselben Ollama-Erreichbarkeits-Badge wie die Kopfzeile (per HTMX
-    nachgeladen, siehe partials/ollama_badge.html) sowie einen Link auf
-    Pilot-Feedback & Support."""
+def test_sidebar_footer_has_help_status(client: TestClient, seeded: dict) -> None:
+    """Der Sidebar-Footer zeigt einen dezenten Hilfe-/Systemstatus-Streifen
+    mit Link auf Pilot-Feedback & Support (§63: kein Ollama-Erreichbarkeits-
+    Badge mehr, da kein lokales LLM mehr existiert)."""
     response = client.get("/dashboard/inbox")
     assert "sidebar__footer-status" in response.text
-    assert 'hx-get="/dashboard/monitoring/ollama-badge"' in response.text
     assert 'href="/dashboard/feedback"' in response.text
     assert "sidebar__footer-help" in response.text
 
@@ -418,15 +416,14 @@ def test_onboarding_banner_shown_when_inbox_empty(client: TestClient) -> None:
     assert 'class="split"' not in response.text
 
 
-def test_onboarding_banner_includes_ollama_install_widget(client: TestClient) -> None:
-    """20.08.: das "Start-Popup" (Onboarding-Banner, Schritt 3 "Lokale KI
-    prüfen") bietet zusätzlich zum bestehenden Erreichbarkeitscheck den
-    geführten Installations-/Update-Assistenten an (siehe partials/
-    ollama_install_widget.html)."""
+def test_onboarding_banner_includes_claude_api_check(client: TestClient) -> None:
+    """§63: Schritt 3 des Onboarding-Banners prüft die Claude-API-
+    Erreichbarkeit (kein lokaler Installations-/Update-Assistent mehr, da
+    kein lokales LLM mehr existiert)."""
     response = client.get("/dashboard/inbox")
     assert response.status_code == 200
-    assert "Ollama automatisch einrichten" in response.text
-    assert 'id="ollama-install-modal"' in response.text
+    assert "Claude-API prüfen" in response.text
+    assert 'id="onboarding-api-result"' in response.text
 
 
 def test_onboarding_banner_hidden_when_messages_exist(

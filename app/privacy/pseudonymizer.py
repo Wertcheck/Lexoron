@@ -10,9 +10,10 @@ irgendwohin - reine, seiteneffektfreie Textverarbeitung.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
-from app.privacy.detectors import detect_all
+from app.privacy.detectors import DetectedSpan, detect_all
 
 _PLACEHOLDER_PREFIX_BY_CATEGORY = {
     "mandant": "MANDANT",
@@ -29,6 +30,11 @@ _PLACEHOLDER_PREFIX_BY_CATEGORY = {
     "iban": "IBAN",
     "steuer_id": "STEUER_ID",
     "kundennummer": "KUNDENNUMMER",
+    # Presidio-NER-Kategorien (app/privacy/presidio_ner.py) - rollenneutral,
+    # da Presidio keine Mandant/Gegner/Anwalt/Gericht-Rolle kennen kann.
+    "person": "PERSON",
+    "ort": "ORT",
+    "organisation": "ORGANISATION",
 }
 
 
@@ -40,6 +46,16 @@ class PseudonymMapping:
 
 
 class Pseudonymizer:
+    def __init__(
+        self, *, ner_detector: Callable[[str], list[DetectedSpan]] | None = None
+    ) -> None:
+        """`ner_detector` ist optional (Default: keine NER, nur Regex +
+        known_entities - schnell, für die meisten Tests ausreichend). Der
+        produktive Weg (`app/privacy/gateway.py::ClaudePrivacyGateway`)
+        setzt hier standardmäßig `presidio_ner.detect_presidio_entities`
+        ein (echte deutsche Namens-/Orts-/Organisationserkennung)."""
+        self.ner_detector = ner_detector
+
     def pseudonymize(
         self, text: str, *, known_entities: dict[str, list[str]] | None = None
     ) -> tuple[str, list[PseudonymMapping]]:
@@ -49,7 +65,7 @@ class Pseudonymizer:
         denselben Platzhalter (z. B. "Max Mustermann" wird überall zu
         [MANDANT_01], nicht bei jedem Vorkommen neu nummeriert).
         """
-        spans = detect_all(text, known_entities)
+        spans = detect_all(text, known_entities, ner_detector=self.ner_detector)
 
         value_to_placeholder: dict[tuple[str, str], str] = {}
         counters: dict[str, int] = {}

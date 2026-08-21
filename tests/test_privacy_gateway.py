@@ -55,7 +55,14 @@ def test_different_entities_in_different_fields_get_different_placeholders() -> 
     assert "[GEGNER_01]" in result.payload.anonymisierte_argumentationspunkte[0]
 
 
-def test_unrecognized_pii_blocks_request_and_produces_no_payload() -> None:
+def test_third_party_name_outside_known_entities_is_pseudonymized_and_allowed() -> None:
+    """Vor Presidio (§63) wurde ein Name, der weder in known_entities noch
+    in einem Regex-Muster vorkam, nur von einer groben Heuristik als
+    "verdaechtig" erkannt und blockierte die gesamte Anfrage (kein
+    Entwurf moeglich). Mit dem Gateway-Default (echte Presidio-NER, siehe
+    ClaudePrivacyGateway.__init__) wird ein solcher Dritter jetzt korrekt
+    erkannt UND pseudonymisiert - die Anfrage wird sicher UND erfolgreich
+    verarbeitet, statt nur verweigert zu werden."""
     gw = ClaudePrivacyGateway()
 
     result = gw.prepare_request(
@@ -63,8 +70,26 @@ def test_unrecognized_pii_blocks_request_and_produces_no_payload() -> None:
         sachverhalt="Bitte informieren Sie auch Herrn Peter Müller.",
     )
 
+    assert result.allowed is True
+    assert "Peter Müller" not in result.payload.anonymisierter_sachverhalt
+    person_mappings = [m for m in result.mappings if m.category == "person"]
+    assert len(person_mappings) == 1
+    assert person_mappings[0].original_value == "Peter Müller"
+
+
+def test_presidio_ner_catches_a_name_not_covered_by_known_entities_or_regex() -> None:
+    """Requirement 1 (Presidio-Anonymisierung): ein Dritter, der weder in
+    known_entities noch in einem Regex-Muster auftaucht, wird trotzdem
+    erkannt und blockiert die Anfrage - der Gateway-Default verdrahtet
+    echte Presidio-NER (siehe ClaudePrivacyGateway.__init__)."""
+    gw = ClaudePrivacyGateway()
+
+    result = gw.prepare_request(
+        purpose="formulate_draft",
+        sachverhalt="Als Zeuge wird außerdem Herr Sebastian Krombach benannt.",
+    )
+
     assert result.allowed is False
-    assert result.payload is None
     assert len(result.reasons) > 0
 
 

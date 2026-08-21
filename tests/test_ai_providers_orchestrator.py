@@ -100,7 +100,14 @@ def test_writing_provider_receives_pseudonymized_payload(db_session: Session) ->
     assert "[MANDANT_01]" in payload.anonymisierter_sachverhalt
 
 
-def test_blocked_request_never_reaches_writing_provider(db_session: Session) -> None:
+def test_third_party_name_is_pseudonymized_before_reaching_writing_provider(
+    db_session: Session,
+) -> None:
+    """Seit Presidio (§63) wird ein Dritter, der weder in known_entities
+    noch in einem Regex-Muster vorkommt, korrekt erkannt und
+    pseudonymisiert (siehe test_privacy_gateway.py fuer die Begruendung des
+    Verhaltenswechsels) - der writing_provider bekommt den Namen trotzdem
+    NIE im Klartext zu sehen."""
     matter = _matter(db_session, title="Testakte")
     document = Document(
         matter=matter,
@@ -117,10 +124,11 @@ def test_blocked_request_never_reaches_writing_provider(db_session: Session) -> 
 
     result = orchestrator.generate_draft_text(matter.id, "formulate_draft", db_session)
 
-    assert result.success is False
-    assert result.text is None
-    assert len(result.blocked_reasons) > 0
-    assert writing_provider.received_payloads == []  # NIE aufgerufen
+    assert result.success is True
+    assert len(writing_provider.received_payloads) == 1
+    payload = writing_provider.received_payloads[0]
+    assert "Peter Müller" not in payload.anonymisierter_sachverhalt
+    assert "[PERSON_01]" in payload.anonymisierter_sachverhalt
 
 
 def test_disallowed_purpose_blocks_before_writing_provider(db_session: Session) -> None:
@@ -179,6 +187,15 @@ def test_successful_call_is_logged(db_session: Session) -> None:
 
 
 def test_blocked_call_is_logged_without_pii(db_session: Session) -> None:
+    """Deterministisch ueber einen nicht erlaubten Zweck blockiert (siehe
+    test_disallowed_purpose_blocks_before_writing_provider) statt sich auf
+    ein zufaellig nicht erkanntes PII-Muster zu verlassen - seit Presidio
+    (§63) wird ein Name wie "Peter Müller" zuverlaessig erkannt UND
+    pseudonymisiert (siehe test_third_party_name_is_pseudonymized_before_
+    reaching_writing_provider oben), waere also kein zuverlaessiger
+    Block-Ausloeser mehr. Die eigentliche Kernaussage bleibt unveraendert
+    pruefbar: selbst wenn das Dokument echte PII enthaelt, landet nie
+    Klartext im Blocked-Log (categorize_block_reasons())."""
     from app.models import ApiCallLog
 
     matter = _matter(db_session, title="Testakte")
@@ -194,7 +211,7 @@ def test_blocked_call_is_logged_without_pii(db_session: Session) -> None:
         RuleBasedLocalAIProvider(), ClaudePrivacyGateway(), FakeClaudeWritingProvider()
     )
 
-    orchestrator.generate_draft_text(matter.id, "formulate_draft", db_session)
+    orchestrator.generate_draft_text(matter.id, "analyze_full_file", db_session)
 
     logs = db_session.query(ApiCallLog).filter_by(result_status="blocked").all()
     assert len(logs) == 1

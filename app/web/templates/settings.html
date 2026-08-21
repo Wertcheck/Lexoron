@@ -100,43 +100,17 @@
     </div>
 
     <div class="settings-section">
-      <h2 class="settings-section__title">KI-Modus &amp; lokales Modell</h2>
+      <h2 class="settings-section__title">KI-Anbindung</h2>
       <p class="settings-section__hint">
-        Standard ist <strong>LOCAL_ONLY</strong> (ausschließlich das lokale Ollama-Modell,
-        keine Anfrage verlässt diese Maschine). <strong>HYBRID</strong> leitet Text - erst
-        NACH lokaler Pseudonymisierung - zusätzlich an Anthropic weiter.
+        Ausschließlich Claude (Anthropic-API). Text wird vor jedem API-Aufruf lokal
+        anonymisiert (Presidio). Der API-Schlüssel wird über <span class="mono">ANTHROPIC_API_KEY</span>
+        in der <span class="mono">.env</span>-Datei konfiguriert.
       </p>
-
-      <div class="ollama-status-row" style="margin-bottom: 16px;">
-        <span class="tag {% if ai_mode == 'LOCAL_ONLY' %}tag--matched{% else %}tag--outbound{% endif %}">{{ ai_mode }}</span>
-        <span id="ollama-reachability-result">Ollama-Erreichbarkeit noch nicht geprüft</span>
-        <form hx-post="/dashboard/monitoring/check-ollama" hx-target="#ollama-reachability-result" hx-swap="innerHTML" style="display:inline;">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-          <button type="submit" class="btn">Jetzt prüfen</button>
-        </form>
-        {% if ai_mode == 'HYBRID' %}
-          <span class="tag {% if anthropic_api_key_configured %}tag--matched{% else %}tag--unmatched{% endif %}">
-            Anthropic-Schlüssel {{ "hinterlegt" if anthropic_api_key_configured else "fehlt" }}
-          </span>
-        {% endif %}
-        {% include "partials/ollama_install_widget.html" %}
+      <div style="margin-bottom: 16px;">
+        <span class="tag {% if anthropic_api_key_configured %}tag--matched{% else %}tag--unmatched{% endif %}">
+          Anthropic-Schlüssel {{ "hinterlegt" if anthropic_api_key_configured else "fehlt" }}
+        </span>
       </div>
-
-      <form method="post" action="/dashboard/settings/ollama" class="dashboard-form" style="max-width: none;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-        <div class="settings-grid">
-          <label class="form-label">
-            Ollama-URL
-            <input type="text" name="ollama_base_url" value="{{ ollama_base_url }}" />
-          </label>
-          <label class="form-label">
-            Modellname
-            <input type="text" name="ollama_model_name" value="{{ ollama_model_name }}" />
-            <span class="form-hint">Muss lokal über "ollama pull &lt;modell&gt;" bereits heruntergeladen sein.</span>
-          </label>
-        </div>
-        <button type="submit" class="btn btn--primary" style="align-self: flex-start; margin-top: 8px;">Speichern</button>
-      </form>
     </div>
   </div>
 

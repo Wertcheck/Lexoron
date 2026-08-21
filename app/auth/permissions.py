@@ -148,18 +148,17 @@ class CSRFError(HTTPException):
 # Pfade, die auch mit `must_change_password=True` erreichbar bleiben
 # müssen (sonst könnte sich der Nutzer nie ein neues Passwort setzen).
 #
-# Die vier HTMX-/Fetch-Hintergrund-Endpunkte (budget-badge/update-badge/
-# ollama-badge/lock-config, siehe base.html) sind bewusst ZUSAETZLICH
-# enthalten: sie werden von JEDER angemeldeten Seite geladen, auch von der
+# Die drei HTMX-/Fetch-Hintergrund-Endpunkte (budget-badge/update-badge/
+# lock-config, siehe base.html) sind bewusst ZUSAETZLICH enthalten: sie
+# werden von JEDER angemeldeten Seite geladen, auch von der
 # Passwort-Aendern-Seite selbst. Ohne diese Ausnahme wuerden `fetch()`/HTMX
 # dem 303-Redirect auf /dashboard/change-password folgen und die komplette
 # HTML-Seite als Antwort erhalten statt JSON/eines leeren Partials - bei
 # HTMX wuerde das die volle Seite (inkl. desselben hx-trigger="load"-Badges)
 # in ein winziges <span> einschleusen, das sich dadurch selbst rekursiv
 # immer wieder nachlaedt (gefunden beim echten Browser-Test dieses
-# Schritts - fehlte urspruenglich fuer ollama-badge, das erst nach diesem
-# Set ergaenzt wurde: sichtbar als dutzendfach verschachtelte Sidebar/Logo
-# auf der erzwungenen Passwort-Aendern-Seite). Siehe
+# Schritts - sichtbar als dutzendfach verschachtelte Sidebar/Logo auf der
+# erzwungenen Passwort-Aendern-Seite). Siehe
 # tests/test_background_badges_password_change_exempt.py.
 _PASSWORD_CHANGE_EXEMPT_PATHS = frozenset(
     {
@@ -167,7 +166,6 @@ _PASSWORD_CHANGE_EXEMPT_PATHS = frozenset(
         "/dashboard/logout",
         "/dashboard/monitoring/budget-badge",
         "/dashboard/monitoring/update-badge",
-        "/dashboard/monitoring/ollama-badge",
         "/dashboard/lock-config",
     }
 )

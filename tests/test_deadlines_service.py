@@ -112,6 +112,30 @@ def test_no_dates_found_creates_no_deadlines_but_logs_completion(
     assert events[0].event_type == "deadline_analysis_completed"
 
 
+def test_analyzing_same_document_twice_does_not_duplicate(db_session: Session) -> None:
+    """Idempotenz (§64): ein zweiter Aufruf fuer dasselbe Dokument erzeugt
+    keine Duplikate, sondern liefert die bereits vorhandenen Fristen
+    unveraendert zurueck."""
+    matter = _matter(db_session)
+    document = Document(
+        file_path="/tmp/x.pdf",
+        matter_id=matter.id,
+        extracted_text="Bitte antworten Sie bis zum 15.03.2027.",
+    )
+    db_session.add(document)
+    db_session.commit()
+    service = DeadlineAnalysisService(PlaceholderDeadlineExtractor())
+
+    first_run = service.analyze_document(document, db_session)
+    second_run = service.analyze_document(document, db_session)
+
+    assert len(first_run) == 1
+    assert [d.id for d in second_run] == [d.id for d in first_run]
+    assert db_session.query(Deadline).filter_by(document_id=document.id).count() == 1
+    events = db_session.query(AuditEvent).filter_by(entity_id=document.id).all()
+    assert any(e.event_type == "deadline_analysis_already_done" for e in events)
+
+
 def test_multiple_deadlines_all_stay_unreviewed(db_session: Session) -> None:
     matter = _matter(db_session)
     document = Document(
@@ -145,3 +169,25 @@ def test_source_text_contains_raw_date_and_context(db_session: Session) -> None:
     created = service.analyze_document(document, db_session)
 
     assert "15.03.2027" in created[0].source_text
+
+
+def test_reasoning_is_persisted_and_states_not_binding(db_session: Session) -> None:
+    """Der vom Extractor berechnete Reasoning-Text (siehe
+    app/deadlines/extractor.py::ExtractedDeadline.reasoning) darf nicht
+    verworfen werden - er ist die maschinenlesbare Begruendung dafuer,
+    warum diese Frist NICHT automatisch als verbindlich gilt."""
+    matter = _matter(db_session)
+    document = Document(
+        file_path="/tmp/x.pdf",
+        matter_id=matter.id,
+        extracted_text="Bitte antworten Sie bis zum 15.03.2027 auf unser Schreiben.",
+    )
+    db_session.add(document)
+    db_session.commit()
+
+    service = DeadlineAnalysisService(PlaceholderDeadlineExtractor())
+    created = service.analyze_document(document, db_session)
+
+    assert created[0].reasoning is not None
+    assert "NICHT als verbindlich bestätigt" in created[0].reasoning
+    assert "regelbasiert, kein LLM" in created[0].reasoning

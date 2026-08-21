@@ -146,19 +146,7 @@ def test_settings_page_renders_for_admin(
     assert response.status_code == 200
     assert "Scan-Ordner" in response.text
     assert "E-Mail-Postfach" in response.text
-    assert "KI-Modus" in response.text
-
-
-def test_settings_page_includes_ollama_install_widget(
-    client: TestClient, db_session: Session, env_path: Path
-) -> None:
-    """20.08.: geführter Ollama-Installations-/Update-Assistent ist auf der
-    Einstellungsseite dauerhaft erreichbar (siehe partials/
-    ollama_install_widget.html, eingebunden über settings.html)."""
-    _login_admin(client, db_session)
-    response = client.get("/dashboard/settings")
-    assert "Ollama automatisch einrichten" in response.text
-    assert 'id="ollama-install-modal"' in response.text
+    assert "Ausschließlich Claude (Anthropic-API)" in response.text
 
 
 # --- Scan-Ordner ---
@@ -323,30 +311,6 @@ def test_update_retention_rejects_negative_value(
     assert "RETENTION_DAYS" not in env_path.read_text(encoding="utf-8")
 
 
-# --- Ollama ---
-
-
-def test_update_ollama_settings_persists_model_name(
-    client: TestClient, db_session: Session, env_path: Path
-) -> None:
-    _login_admin(client, db_session)
-    csrf = _csrf(client)
-
-    response = client.post(
-        "/dashboard/settings/ollama",
-        data={
-            "csrf_token": csrf,
-            "ollama_base_url": "http://localhost:11434",
-            "ollama_model_name": "mistral",
-        },
-        follow_redirects=False,
-    )
-    assert response.status_code == 303
-    content = env_path.read_text(encoding="utf-8")
-    assert "OLLAMA_MODEL_NAME" in content
-    assert "mistral" in content
-
-
 def test_settings_changes_apply_immediately_without_restart(
     client: TestClient, db_session: Session, env_path: Path
 ) -> None:
@@ -356,15 +320,11 @@ def test_settings_changes_apply_immediately_without_restart(
     csrf = _csrf(client)
 
     client.post(
-        "/dashboard/settings/ollama",
-        data={
-            "csrf_token": csrf,
-            "ollama_base_url": "http://localhost:11434",
-            "ollama_model_name": "phi3",
-        },
+        "/dashboard/settings/retention",
+        data={"csrf_token": csrf, "retention_days": "42"},
     )
 
-    assert get_settings().ollama_model_name == "phi3"
+    assert get_settings().retention_days == 42
 
 
 # --- Kanzlei-Profil (Name/Anschrift/Kontakt, 20.08.) ---

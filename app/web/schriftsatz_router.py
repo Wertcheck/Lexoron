@@ -3,10 +3,9 @@ Platzhalter unter `/dashboard/tools/schriftsatz` ab.
 
 Bewusst KEINE neue KI-/Privacy-Architektur: nutzt exakt denselben Weg wie
 jede andere Entwurfserstellung im Dashboard (`get_drafting_service()` ->
-`DraftingService.create_draft`, siehe app/web/drafts_router.py) - der
-hybride lokal/Cloud-Umschalter ist bereits `settings.ai_mode`
-(LOCAL_ONLY/HYBRID, app/ai_providers/factory.py), konfigurierbar unter
-`/dashboard/settings`. Dieser Router ist reine UI-/Upload-Fassade davor.
+`DraftingService.create_draft`, siehe app/web/drafts_router.py), inkl.
+desselben Privacy-Gateways und Claude-Providers (app/ai_providers/factory.py).
+Dieser Router ist reine UI-/Upload-Fassade davor.
 
 Zwei Besonderheiten gegenüber den bestehenden Draft-Aktionen:
 1. `matter_id` ist optional - fehlt sie, wird VOR dem eigentlichen
@@ -184,7 +183,7 @@ def generate_schriftsatz(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(permission=PERM_CLAUDE_CALL)),
 ) -> RedirectResponse:
-    """Kostenpflichtiger Claude-/Ollama-Aufruf (KI-Textproduktion) - NUR
+    """Kostenpflichtiger Claude-Aufruf (KI-Textproduktion) - NUR
     Anwalt/Admin (PERM_CLAUDE_CALL, gleiche Berechtigung wie
     `regenerate_draft`/`review_draft` in app/web/drafts_router.py). Volle
     Redirect-Aktion ohne HTMX, gleiches Muster wie der Rest des Draft-

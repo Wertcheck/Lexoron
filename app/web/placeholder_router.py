@@ -87,11 +87,11 @@ _PLACEHOLDER_PAGES: dict[str, tuple[str, str]] = {
         "Eine durchsuchbare Übersicht konfigurierter Rechtsquellen befindet sich in "
         "der finalen Vorbereitung für das v0.2-Update.",
     ),
-    "/library/mustertexte": (
-        "Kanzlei-Mustertexte",
-        "Eine Verwaltung kanzleieigener Mustertexte befindet sich in der finalen "
-        "Vorbereitung für das v0.2-Update.",
-    ),
+    # "/library/mustertexte" ("Kanzlei-Mustertexte") ist seit dem
+    # Dokumenten-/Schriftsatz-Generator (Block 3, 20.08.) KEIN Platzhalter
+    # mehr - siehe app/web/document_templates_router.py (echte
+    # Vorlagenverwaltung mit Platzhalter-Referenz) und
+    # app/web/document_generator_router.py (Generieren/Vorschau/Export).
     # "/library/prompts" ("Standard-Prompts") ist seit Schritt 3 KEIN
     # Platzhalter mehr - siehe app/web/prompt_library_router.py (echte
     # Prompt-Bibliothek: read-only Referenz der tatsächlichen System-Prompts

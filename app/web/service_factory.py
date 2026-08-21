@@ -20,7 +20,12 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from app.ai_providers.factory import ProviderNotConfiguredError, build_review_provider, build_writing_provider
+from app.ai_providers.factory import (
+    ProviderNotConfiguredError,
+    build_local_llm_provider,
+    build_review_provider,
+    build_writing_provider,
+)
 from app.ai_providers.local_ai_provider import RuleBasedLocalAIProvider
 from app.attorney_instructions.service import AttorneyInstructionService
 from app.config import get_settings
@@ -53,11 +58,15 @@ def get_document_search_service() -> DocumentSearchService:
 
 def get_drafting_service() -> DraftingService:
     """Baut einen funktionsfähigen `DraftingService` mit dem konfigurierten
-    Schreib-Provider (Prompt 34, seit 20.08. `settings.ai_mode` -
-    "LOCAL_ONLY"/Ollama als Standard, "HYBRID"/Anthropic als Opt-in, siehe
-    app/ai_providers/factory.py). Wirft `ProviderNotConfiguredError`, wenn
-    ein HYBRID-Aufruf ohne hinterlegte Zugangsdaten versucht wird - der
-    Router zeigt dann eine freundliche Meldung statt eines Serverfehlers."""
+    Schreib-Provider (Prompt 34, siehe app/ai_providers/factory.py). Wirft
+    `ProviderNotConfiguredError`, wenn kein `ANTHROPIC_API_KEY` hinterlegt
+    ist - der Router zeigt dann eine freundliche Meldung statt eines
+    Serverfehlers.
+
+    §65: `local_llm_provider` wird NUR gebaut, wenn
+    `settings.local_ai_enabled=True` (Standard: aus) - siehe
+    `app/ai_providers/local_llm_provider.py` für die Begründung, warum das
+    dann ein PFLICHT-, nicht ein Best-Effort-Schritt ist."""
     settings = get_settings()
     search_service = get_document_search_service()
     research_service = LegalResearchService(
@@ -66,6 +75,7 @@ def get_drafting_service() -> DraftingService:
     )
 
     writing_provider = build_writing_provider(settings)
+    local_llm_provider = build_local_llm_provider(settings)
 
     return DraftingService(
         RuleBasedLocalAIProvider(search_service),
@@ -74,6 +84,7 @@ def get_drafting_service() -> DraftingService:
         ClaudePrivacyGateway(),
         writing_provider,
         model_name=settings.claude_model_name,
+        local_llm_provider=local_llm_provider,
     )
 
 

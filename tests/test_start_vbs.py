@@ -78,26 +78,3 @@ def test_resolves_data_dir_consistent_with_python_setup_paths() -> None:
     assert "KanzleiAI" in content
 
 
-def test_checks_local_ollama_before_starting_the_server() -> None:
-    """Local-First-Architektur (20.08., ARCHITECTURE.md §60): der
-    Ollama-Check muss VOR beiden objShell.Run-Aufrufen passieren, damit die
-    Ergebniszeile in app.log auch dann steht, wenn der eigentliche
-    Server-Start aus irgendeinem Grund scheitert."""
-    content = _read_vbs()
-    ollama_check_pos = content.index("CheckOllamaAndLog strLogPath")
-    first_run_pos = content.index('objShell.Run "cmd /c')
-    second_run_pos = content.index("objShell.Run strCommand, 1, False")
-    assert ollama_check_pos < first_run_pos
-    assert ollama_check_pos < second_run_pos
-
-
-def test_ollama_check_never_blocks_startup_on_error() -> None:
-    content = _read_vbs()
-    assert "On Error Resume Next" in content
-    assert "localhost:11434" in content
-
-
-def test_ollama_check_writes_to_app_log() -> None:
-    content = _read_vbs()
-    assert 'Sub CheckOllamaAndLog(strLogFilePath)' in content
-    assert "objLogFile.WriteLine" in content

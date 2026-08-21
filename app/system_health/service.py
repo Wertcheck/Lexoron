@@ -4,21 +4,15 @@ Seite (Schritt 3, Teil 2).
 Grundsatz wie beim bestehenden Systemstatus (Prompt 32): NIEMALS
 Mandanteninhalte oder Secrets, nur technische Ja/Nein-/Zahlwerte.
 
-Seit der Local-First-Umstellung (20.08., siehe ARCHITECTURE.md §60) ist
-Ollama tatsächlich Bestandteil der Installation (`AI_MODE=LOCAL_ONLY` ist
-der Standard) - `check_ollama_reachability` unten prüft echt gegen
-`settings.ollama_base_url`, keine Attrappe mehr.
-
-Weder die Claude-API- noch die Ollama-Erreichbarkeitsprüfung sind Teil des
-normalen Seitenaufrufs (kein automatischer Aufruf bei jedem Laden der
+Die Claude-API-Erreichbarkeitsprüfung ist nicht Teil des normalen
+Seitenaufrufs (kein automatischer Aufruf bei jedem Laden der
 Systemstatus-Seite) - Claude kostet laut Anthropic-Dokumentation zwar
-keine Token (`GET /v1/models` ist ein reiner Metadaten-Abruf) und Ollama
-läuft rein lokal, aber ein automatischer Hintergrundaufruf bei jedem
-Seitenaufruf wäre trotzdem eine unnötige, unkontrollierte Verbindung -
-konsistent mit der übrigen Kostenkontroll-Disziplin des Projekts
-(Prompt 33) werden beide nur auf ausdrücklichen Admin-Klick ausgeführt
-(siehe app/web/monitoring_router.py: check_api_reachability/
-check_ollama_reachability)."""
+keine Token (`GET /v1/models` ist ein reiner Metadaten-Abruf), aber ein
+automatischer Hintergrundaufruf bei jedem Seitenaufruf wäre trotzdem eine
+unnötige, unkontrollierte Verbindung - konsistent mit der übrigen
+Kostenkontroll-Disziplin des Projekts (Prompt 33) wird sie nur auf
+ausdrücklichen Admin-Klick ausgeführt (siehe app/web/monitoring_router.py:
+check_api_reachability)."""
 
 from __future__ import annotations
 
@@ -149,28 +143,3 @@ class SystemHealthService:
                 checked=True, reachable=False, error=type(exc).__name__
             )
 
-    def check_ollama_reachability(
-        self, base_url: str, *, timeout_seconds: float = 5.0
-    ) -> ApiReachabilityResult:
-        """Wie `check_claude_api_reachability`, für den lokalen Ollama-
-        Dienst: EIN einziger, nur auf Admin-Klick ausgeführter Abruf von
-        `GET /api/tags` (listet installierte Modelle - reiner
-        Metadaten-Abruf, kein Chat-Aufruf, keine Mandantendaten
-        beteiligt, keine Ollama-Kosten, da rein lokal)."""
-        if not base_url or not base_url.strip():
-            return ApiReachabilityResult(
-                checked=False, reachable=False, error="Keine Ollama-URL konfiguriert"
-            )
-
-        import httpx
-
-        started = time.monotonic()
-        try:
-            response = httpx.get(f"{base_url.rstrip('/')}/api/tags", timeout=timeout_seconds)
-            response.raise_for_status()
-            latency_ms = round((time.monotonic() - started) * 1000, 1)
-            return ApiReachabilityResult(checked=True, reachable=True, latency_ms=latency_ms)
-        except Exception as exc:  # noqa: BLE001 - Diagnose darf nie die Seite crashen
-            return ApiReachabilityResult(
-                checked=True, reachable=False, error=type(exc).__name__
-            )

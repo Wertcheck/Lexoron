@@ -429,54 +429,6 @@ a {
   color: var(--paper-000);
 }
 
-.ollama-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 12px;
-  border-radius: 14px;
-  font-size: 11.5px;
-  font-weight: 600;
-  white-space: nowrap;
-  text-decoration: none;
-  border: 1px solid var(--paper-line);
-  background: var(--paper-000);
-  color: var(--ink-700);
-}
-
-.ollama-badge__dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ink-300);
-  flex-shrink: 0;
-}
-
-.ollama-badge--ok .ollama-badge__dot {
-  background: #2f9e5c;
-}
-
-.ollama-badge--down {
-  border-color: rgba(162, 59, 46, 0.35);
-  background: var(--wax-red-tint);
-  color: var(--wax-red);
-}
-
-.ollama-badge--down .ollama-badge__dot {
-  background: var(--wax-red);
-}
-
-.ollama-badge--hybrid {
-  border-color: rgba(16, 24, 40, 0.25);
-  background: var(--seal-green-tint);
-  color: var(--seal-green-dark);
-}
-
-.ollama-badge--hybrid .ollama-badge__dot {
-  background: var(--seal-green);
-}
-
 .topbar {
   width: 100%;
   max-width: var(--content-max-width);
@@ -1379,19 +1331,6 @@ textarea:focus {
   border-bottom: 1px solid var(--paper-line);
 }
 
-.sidebar__footer-status-ollama .ollama-badge {
-  /* Dezentere Variante desselben Badges aus der Kopfzeile - kleiner,
-     ohne eigenen Rahmen, damit der Footer nicht mit der Kopfzeile
-     konkurriert (dort bleibt die "prominente" Variante). */
-  height: auto;
-  padding: 0;
-  border: none;
-  background: transparent;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--ink-500);
-}
-
 .sidebar__footer-help {
   display: inline-flex;
   align-items: center;
@@ -1827,49 +1766,6 @@ textarea:focus {
   line-height: 1.5;
 }
 
-/* --- Fortschrittsbalken (Ollama-Installations-/Update-Assistent, 20.08.) --- */
-
-.install-progress__bar {
-  width: 100%;
-  height: 8px;
-  border-radius: var(--radius-pill);
-  overflow: hidden;
-  appearance: none;
-  border: none;
-  background: var(--paper-line);
-}
-
-.install-progress__bar::-webkit-progress-bar {
-  background: var(--paper-line);
-  border-radius: var(--radius-pill);
-}
-
-.install-progress__bar::-webkit-progress-value {
-  background: var(--seal-green);
-  border-radius: var(--radius-pill);
-  transition: width 0.2s ease;
-}
-
-.install-progress__bar::-moz-progress-bar {
-  background: var(--seal-green);
-  border-radius: var(--radius-pill);
-}
-
-.install-progress__message {
-  font-size: 12.5px;
-  color: var(--ink-700);
-  margin: 8px 0 0;
-}
-
-.install-progress[data-status="error"] .install-progress__message {
-  color: var(--wax-red);
-}
-
-.install-progress[data-status="done"] .install-progress__message {
-  color: var(--seal-green-dark);
-  font-weight: 500;
-}
-
 /* ==========================================================================
    Echte Einstellungsseite (20.08., app/web/settings_router.py) - ersetzt
    die vorherige rein lesende Konfigurationsanzeige.
@@ -1973,13 +1869,6 @@ textarea:focus {
 
 .settings-grid .form-label--full {
   grid-column: 1 / -1;
-}
-
-.ollama-status-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
 }
 
 /* ==========================================================================

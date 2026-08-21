@@ -3,7 +3,7 @@ Mandanten, Akten, Dokumente (lokal) und Rechtsquellen (siehe
 app/search/global_search_service.py für die Trennlogik "Lokal"/"Extern").
 
 Liefert eine HTML-Partial (kein JSON) - dasselbe HTMX-Muster wie
-partials/ollama_badge.html/api_reachability_result.html: der `<input>` im
+partials/api_reachability_result.html: der `<input>` im
 Command-Bar-Modal (app/web/templates/base.html) triggert per
 `hx-trigger="input changed delay:300ms"` (Live-Suche mit Debounce, siehe
 Aufgabenstellung) direkt gegen diese Route, kein separates JSON-/JS-

@@ -3972,3 +3972,476 @@ Fehlschläge außerhalb der bekannten 4 Umgebungslimitierungen der Sandbox.
    oben) - sollte vor dem nächsten echten Pilot-Rollout einmal real gegengeprüft werden,
    analog zum bisherigen Vorgehen bei anderen nur-manuell-testbaren nativen
    Fenster-Änderungen (siehe §46/§56).
+
+## 63. Presidio-Datenschutzservice umgesetzt, Ollama vollständig entfernt (20.08.)
+
+Ausdrücklicher Auftrag des Anwalts: (1) lokale PII-Anonymisierung mittels Microsoft
+Presidio (Analyzer, deutsches Sprachmodell) vor jedem Claude-API-Aufruf, (2) sichere
+Übergabe ausschließlich des bereits anonymisierten Textes an die offizielle Anthropic-API
+über eine Umgebungsvariable, (3) automatischer lokaler Rücktausch der Platzhalter im
+Ergebnistext, (4) vollständige Entfernung jeglicher Ollama-Altlasten aus dem gesamten
+Projekt-Setup.
+
+**Schließt zwei zuvor offene/aufgeschobene Punkte gleichzeitig ab:** den in §57
+zurückgestellten "Presidio-Umbau" (dort: "zurückgestellt, nicht umgesetzt") UND die in
+§60 bewusst getroffene "Local-First mit Ollama als Standard"-Entscheidung, die hiermit
+**ausdrücklich widerrufen** wird - genau wie §60 es seinerzeit mit §57 gehandhabt hat,
+bleiben §57 und §60 als historische Einträge unverändert stehen (Grundsatz dieses
+Dokuments, siehe §59/§60), gelten aber ab hier nicht mehr als aktuelle
+Architekturentscheidung.
+
+### Teil 1: Presidio-NER ergänzt die bestehende Privacy-Pipeline (ersetzt sie nicht)
+
+Die bestehende, bereits getestete Kette `app/privacy/detectors.py` (Regex) →
+`pseudonymizer.py` (Platzhaltervergabe/Rekonstruktion) → `gateway.py`
+(`ClaudePrivacyGateway`, einziger erlaubter Weg Richtung Claude) → `security_check.py`
+blieb strukturell UNVERÄNDERT. Grund: die Architektur verlangt, dass derselbe Wert überall
+in der zusammengeführten 7-Felder-Anfrage denselben Platzhalter bekommt (siehe
+Moduldocstring in `gateway.py`) - das kann nur EIN gemeinsamer Pseudonymisierungslauf über
+den kombinierten Text leisten. Ein separater `presidio_anonymizer.AnonymizerEngine`-Lauf
+pro Feld hätte diese Garantie gebrochen.
+
+Stattdessen: **neues Modul `app/privacy/presidio_ner.py`** kapselt eine Presidio
+`AnalyzerEngine` (deutsches spaCy-Modell `de_core_news_lg`, lazy `@lru_cache`-Singleton,
+da das Modell-Laden mehrere Sekunden dauert) und liefert `DetectedSpan`-Objekte - exakt
+dieselbe Datenklasse wie die bestehenden Regex-Detektoren - für genau die Entitätstypen,
+die Regex strukturell nicht leisten kann: `PERSON` → Kategorie `person`, `LOCATION` →
+`ort`, `ORGANIZATION` → `organisation` (rollenneutral, da Presidio keine
+Mandant/Gegner/Anwalt/Gericht-Rolle kennen kann - diese kommen weiterhin ausschließlich
+aus `known_entities`, den strukturierten Aktenbeteiligten). `score_threshold=0.5` bewusst
+konservativ gewählt, um auf kurzen Kanzlei-Textfragmenten (Paragraphen-Kürzel,
+Stichpunkte) keine falsch positiven Blockierungen auszulösen.
+
+`detect_all()` (`detectors.py`) bekam einen optionalen `ner_detector`-Parameter, dessen
+Treffer NACH `known_entities` angehängt werden (bei Positions-Überlappung gewinnt der
+zuerst hinzugefügte, spezifischere Treffer). `Pseudonymizer`/`SecurityCheckService`
+bekamen denselben optionalen Parameter (Default `None` - unverändertes, schnelles
+Verhalten für die meisten Tests, analog zum bestehenden
+`FastEmbedProvider`/`FakeEmbeddingProvider`-Injektionsmuster bei den Embeddings).
+`ClaudePrivacyGateway` (der produktiv verdrahtete Weg zu Claude) verwendet als Default
+den echten Presidio-Detector - sicher-by-default im Produktivbetrieb.
+
+### Teil 2: Claude/Anthropic wird einziger Textproduktions-Pfad
+
+Die eigentliche sichere Übergabe an Claude (`AnthropicClaudeWritingProvider`/
+`AnthropicClaudeReviewProvider`, `SecretStr`-API-Key ausschließlich aus `.env`, kein
+`base_url`-Override, siehe `tests/test_no_ai_gateway_proxy.py`) existierte bereits seit
+§60 (dort als HYBRID-Opt-in) - hier entfernt: die jetzt gegenstandslose Verzweigung.
+`app/ai_providers/factory.py::build_writing_provider`/`build_review_provider` bauen
+unconditional den Anthropic-Provider (`ProviderNotConfiguredError` weiterhin bei
+fehlendem Key). `Settings.ai_mode`/`ollama_base_url`/`ollama_model_name` sowie der
+zugehörige Validator vollständig entfernt (nicht nur umbenannt) - `SettingsOut`
+(`app/api/schemas.py`) und die Datenschutz-Transparenzseite (`account_privacy.html`)
+entsprechend angepasst.
+
+### Teil 3: Ollama-Restentfernung
+
+Gelöscht: `app/ai_providers/ollama_writing_provider.py`, `app/review/ollama_review_provider.py`,
+`app/ollama_setup/` (komplettes Paket), die zugehörigen Tests sowie die drei
+Ollama-Installations-/Badge-Partials. Bereinigt (Ollama-Teile entfernt, Rest
+unverändert): Startup-Check (`app/main.py`, `Start.vbs`), Systemstatus-/
+Einstellungsseite (`app/web/monitoring_router.py`, `settings_router.py`,
+`app/system_health/service.py`), Sidebar-/Onboarding-Templates, `app.css`
+(`.ollama-*`-Klassen, `.install-progress__*`), `.env.example`, `app/auth/permissions.py`.
+Die Onboarding-/Systemstatus-Seiten prüfen jetzt Claude-API-Erreichbarkeit
+(`/dashboard/monitoring/check-api`) statt Ollama-Erreichbarkeit.
+
+**Bewusst NICHT Teil dieses Schritts:** PyInstaller-Bundling des spaCy-Modells
+(`windows/kanzlei_ai.spec` müsste für den Windows-Installer-Build einen zusätzlichen
+Daten-Include für das Modell bekommen, sonst fehlt es im gepackten Build) - reiner
+Windows-Packaging-Folgepunkt, kein Architekturthema.
+
+### Getestet
+
+Neu: `tests/test_privacy_presidio_ner.py` (echter Presidio-/spaCy-Stack, synthetische
+Beispielsätze). Ergänzt um `ner_detector`-Injektionsfälle (Fake statt echtem Presidio,
+schnell/deterministisch): `test_privacy_pseudonymizer.py`, `test_privacy_security_check.py`,
+`test_privacy_gateway.py` (inkl. eines Falls mit dem echten Gateway-Default). Neu
+geschrieben: `tests/test_ai_provider_factory.py` (keine LOCAL_ONLY/HYBRID-Verzweigung
+mehr). Angepasst (Ollama-Fälle entfernt, Rest unverändert): `test_web_system_health.py`,
+`test_web_settings.py`, `test_web_inbox.py`, `test_start_vbs.py`,
+`test_background_badges_password_change_exempt.py`.
+
+## 64. Automatische Fristenerkennung an den realen Produktionspfad angebunden (20.08.)
+
+Die bestehende, regelbasierte Fristenerkennung (`app/deadlines/`, Prompt 10) war
+vollständig implementiert und getestet, wurde aber im laufenden Betrieb **von keinem
+Code aufgerufen** - `DeadlineAnalysisService.analyze_document` erschien ausschließlich in
+Tests. Diese Lücke wurde geschlossen, OHNE die Erkennungslogik selbst anzufassen (bleibt
+regelbasiert, kein LLM) und OHNE die Privacy-/Claude-Pipeline zu berühren:
+
+- **Anbindungsstelle**: `DocumentProcessingService.process_document()`
+  (`app/documents/service.py`) - die einzige Funktion im Projekt, die man als
+  "Dokument-Text-Processing" bezeichnen kann und die tatsächlich produktiv aufgerufen
+  wird (Retry-Pfad in `app/errors/service.py`, Schriftsatz-Upload in
+  `app/web/schriftsatz_router.py`). Es gab **keine** bestehende automatische Verkettung
+  Intake→OCR→Klassifikation→Aktenzuordnung - jede Stufe war zuvor komplett isoliert.
+- **Trigger-Bedingung**: nur bei tatsächlich erfolgreicher Extraktion/OCR
+  (`ocr_status in ("not_needed", "done")`) UND bereits erfolgter Aktenzuordnung
+  (`document.matter_id` gesetzt) - ohne Akte würde die Analyse ohnehin nur no-op +
+  Audit-Rauschen erzeugen (eigener Guard in `DeadlineAnalysisService`).
+- **Idempotenz** (neu, notwendig wegen des Retry-Pfads): `analyze_document` prüft
+  vorab, ob für das `document_id` bereits `Deadline`-Datensätze existieren - falls ja,
+  keine erneute Erkennung, keine Duplikate, die bestehenden Fristen werden unverändert
+  zurückgegeben (Audit-Event `deadline_analysis_already_done`).
+- **`Deadline.reasoning`** (neues nullable Feld, Migration `schritt3_009`): der vom
+  Extractor berechnete Erklärungstext ("...NICHT als verbindlich bestätigt, manuelle
+  Prüfung erforderlich") wurde zuvor beim Persistieren verworfen - jetzt gespeichert und
+  über `DeadlineOut`/`GET /api/deadlines` strukturiert abrufbar.
+
+`review_status`-Semantik unverändert (Default `"unreviewed"`, nie automatisch gesetzt).
+Datei-Watcher (`app/ingestion/watcher.py`) und E-Mail-Anhänge (`app/mail/service.py`)
+rufen `process_document` weiterhin nicht auf - für diese beiden Einstiegspunkte greift
+die Fristenerkennung folglich noch nicht (bewusst nicht Teil dieses Schritts).
+
+## 65. Lokale KI (Ollama) als Pflicht-Zwischenschritt vor Claude (20.08.)
+
+Ausdrücklicher, nach mehreren sich widersprechenden Zwischenanfragen zur Ollama-Frage
+(siehe §63 - Ollama entfernt - sowie mehrere danach verworfene Vorschläge für einen
+vollen Ollama-Installer/Hardware-Erkennung/Model-Catalog, die bewusst NICHT umgesetzt
+wurden) explizit bestätigter Auftrag: lokale KI ist ab jetzt fester Bestandteil der
+Pipeline, **keine Alternative zu Claude**. Bewusst NUR der Kern-Pfad umgesetzt - explizit
+NICHT Teil dieses Schritts: Windows-Installer, Hardware-Erkennung, Model-Catalog mit
+mehreren Modellen, Modellwechsel-UI, Auto-Update, Repair-System (diese Themen bleiben
+spätere, eigenständige Schritte).
+
+**Verbindlicher Datenfluss** (siehe app/drafting/service.py::DraftingService.create_draft):
+
+```
+Input -> ClaudePrivacyGateway (Presidio-Pseudonymisierung + SecurityCheck)
+      -> pseudonymisierte ClaudeRequestPayload
+      -> LocalLLMProvider (Ollama)              <- NEU, § 65
+      -> Claude (ClaudeWritingProvider)
+      -> lokale Rekonstruktion (unveraendert)
+```
+
+- **`app/ai_providers/local_llm_provider.py`** (neu): Protocol `LocalLLMProvider`
+  (`process(payload: ClaudeRequestPayload) -> LocalLLMResult`,
+  `check_health() -> LocalAIHealthStatus`), Exception `LocalLLMUnavailableError`. Bewusst
+  ANDERS benannt als das bestehende `app/ai_providers/local_ai_provider.py::LocalAIProvider`
+  (das dortige Protocol bündelt nur bereits vorhandene, deterministische DB-Abfragen -
+  läuft dort KEIN Modell). `process()` nimmt strukturell denselben Typ entgegen wie
+  `ClaudeWritingProvider.write()` - kein Weg, versehentlich unpseudonymisierten Text
+  einzuschleusen.
+- **`app/ai_providers/ollama_provider.py`** (neu): `OllamaLocalLLMProvider`, einzige
+  Stelle im Projekt, die die konkrete Ollama-HTTP-API kennt (`/api/generate` für die
+  Inferenz, `/api/tags` für den Health-Check). Aufgabe des lokalen Modells bewusst ENG
+  gehalten: rein faktenbasierte lokale Zusammenfassung des bereits pseudonymisierten
+  Sachverhalts (eigener, von `WRITING_SYSTEM_PROMPT` unabhängiger, engerer System-Prompt)
+  - KEINE rechtliche Bewertung, KEINE Argumentation. `temperature=0.0` (dieselbe
+  Begründung wie bei den Anthropic-Providern).
+- **`DraftingService`**: neuer optionaler Konstruktorparameter `local_llm_provider`.
+  `None` (Standard) = unverändertes Verhalten wie vor §65 - JEDER bestehende Test/Aufruf
+  ohne diesen Parameter bleibt exakt gleich. Ist ein Provider gesetzt, ist der Schritt
+  PFLICHT: schlägt `process()` fehl (`LocalLLMUnavailableError`), wird die Anfrage
+  kontrolliert blockiert (`ApiCallLogger.log_error(..., error_status="local_ai_unavailable")`)
+  und Claude **niemals** aufgerufen - kein Klartext-Fallback, Datenschutz vor
+  Verfügbarkeit. Bei Erfolg wird das Ergebnis als zusätzlicher, klar gekennzeichneter
+  Eintrag ("Lokale Vorabanalyse (automatisiert, Ollama, keine rechtliche Bewertung): ...")
+  an `anonymisierte_argumentationspunkte` angehängt - die bestehende, strikte
+  `ClaudeRequestPayload` (sieben Allowlist-Felder) bleibt strukturell unverändert.
+- **Konfiguration** (`app/config/settings.py`, bestehende Settings-Architektur
+  wiederverwendet, keine zweite Konfigurationsquelle): `local_ai_enabled` (Default
+  `False` - bestehende Presidio+Claude-Pipeline bleibt ohne Ollama-Installation
+  unverändert lauffähig), `local_ai_runtime` (aktuell nur `"ollama"`, Feld existiert
+  bereits für eine mögliche künftige weitere Runtime), `ollama_base_url` (Default
+  `http://localhost:11434`), `ollama_model` (Default `qwen3:4b` - EIN konkretes Modell,
+  bewusst kein Model-Catalog).
+- **`ApiCallLogger.log_error`**: neuer optionaler `error_status`-Parameter (Default
+  unverändert `"writing_provider_exception"`), damit der Ollama-Fehlerfall als eigene,
+  weiterhin inhaltsfreie Kategorie (`"local_ai_unavailable"`) unterscheidbar ist, ohne
+  eine zweite, parallele Logging-Struktur zu bauen.
+- **`scripts/local_ai_smoke_test.py`** (neu): manuell auf einem echten Rechner mit
+  laufendem Ollama und konfiguriertem `ANTHROPIC_API_KEY` ausführbarer End-zu-Ende-Test
+  (Ollama erreichbar → Modell vorhanden → Presidio erkennt synthetische PII →
+  Pseudonymisierung → Ollama-Aufruf → Claude-Aufruf → Rekonstruktion). Bewusst NICHT Teil
+  der automatisierten Suite (macht echte Netzwerkaufrufe) und bewusst nur mit
+  synthetischen Testdaten.
+
+### Getestet (Mocks/Fakes, kein echter Ollama-Prozess)
+
+`tests/test_ollama_local_llm_provider.py` (neu, `httpx.get`/`httpx.post` gemockt -
+Health-Check erreichbar/Modell vorhanden/Modell fehlt/nicht erreichbar; `process()`
+Erfolg/Timeout/Verbindungsfehler/leere-oder-fehlerhafte-Antwort). `tests/test_drafting_service.py`
+ergänzt: kein Verhaltenswechsel ohne `local_llm_provider`; lokales Ergebnis wird als
+Argumentationspunkt angehängt; Claude erhält aktiv geprüft niemals den Originaltext;
+Ollama nicht erreichbar → Claude wird NIE aufgerufen + kontrollierter Fehler + PII-freies
+Log; vollständiger orchestrierter Pfad Presidio→Local-AI→Claude→Rekonstruktion mit
+Fake-Providern. `tests/test_ai_provider_factory.py` ergänzt: `build_local_llm_provider`
+liefert `None`/`OllamaLocalLLMProvider` je nach `local_ai_enabled`.
+
+**Nicht durchgeführt** (siehe scripts/local_ai_smoke_test.py): ein echter Lauf gegen ein
+tatsächlich laufendes Ollama und die echte Anthropic-API - das setzt eine reale
+Ollama-Installation auf einem Kanzlei-/Entwicklungsrechner voraus, die in dieser
+Sandbox-Umgebung nicht existiert. Bis zu einem solchen echten Lauf gilt der Kern-Pfad als
+durch Unit-/Integrationstests mit Mocks abgesichert, NICHT als "auf einem echten Rechner
+End-zu-Ende verifiziert".
+
+## 66. Realer End-zu-Ende-Smoketest des lokalen KI-Kerns durchgeführt (20./21.08.)
+
+Auf ausdrücklichen Auftrag Ollama auf diesem Windows-Testrechner (Windows 10 Pro,
+10.0.19043) über den offiziellen Installer (`https://ollama.com/download/OllamaSetup.exe`,
+verifiziert als offizielle Weiterleitung auf `github.com/ollama/ollama/releases`) installiert
+(Version 0.32.15), `qwen3:4b` per `ollama pull` geladen (2,5 GB, Prüfsumme verifiziert) und
+`scripts/local_ai_smoke_test.py` real ausgeführt - erstmals ein tatsächlicher Lauf
+Presidio→Ollama→Claude→Rekonstruktion, nicht nur Unit-Tests mit Mocks.
+
+**Ergebnis: E2E-SMOKETEST BESTANDEN.** Alle sieben geprüften Schritte real erfolgreich
+(Ollama erreichbar, Modell vorhanden, Presidio erkennt synthetische Testperson,
+Pseudonymisierung, echter Ollama-Aufruf mit echter Antwort, echter Claude-Aufruf mit echter
+Antwort, lokale Rekonstruktion ohne Netzwerkaufruf). Der zuvor separat verifizierte
+Negativfall (Ollama nicht erreichbar → Claude wird nicht aufgerufen, siehe §65) wurde dabei
+zusätzlich real bestätigt (echter, nicht simulierter Verbindungsversuch gegen das zu diesem
+Zeitpunkt noch nicht installierte Ollama, echter - nur mit Aufrufzähler instrumentierter -
+Claude-Provider: 0 Aufrufe).
+
+**Zwei echte Bugs gefunden und minimal behoben** (beide nur durch den echten API-/Ollama-Lauf
+sichtbar geworden, keine Mock-Testabdeckung hatte sie erkannt):
+
+1. `temperature=0.0` (siehe §-Historie: bei einer früheren Anfrage ergänzt) wird von der
+   Anthropic-API für das konfigurierte Modell `claude-sonnet-5` als
+   `BadRequestError: temperature is deprecated for this model` abgelehnt - Parameter aus
+   `AnthropicClaudeWritingProvider.write` und `AnthropicClaudeReviewProvider.review` wieder
+   entfernt (Modell-Default gilt).
+2. `OllamaLocalLLMProvider`-Timeout war mit 30s (später versuchsweise 120s) für reale
+   CPU-only-Inferenz drastisch zu knapp - real gemessen: ein trivialer Test-Prompt brauchte
+   bereits ~22s, der tatsächliche, mehrsätzige Vorabanalyse-Prompt (qwen3 als "Thinking"-Modell
+   mit ausführlichem internem Reasoning vor der Antwort) ~247s. Timeout-Default auf 600s
+   angehoben (reiner Konfigurationswert, keine Architekturänderung).
+
+**Wichtiger, ehrlich zu benennender Befund zur praktischen Nutzbarkeit:** `qwen3:4b` auf
+reiner CPU-Hardware (keine dedizierte GPU auf diesem Testrechner) brauchte für den lokalen
+Vorabanalyse-Schritt **247 Sekunden** (die Claude-Antwort selbst kam nach 10,6s, die
+Gesamtlatenz des kompletten Pfads betrug 261,1s). Das ist für einen synchronen,
+interaktiven Anfrage-/Antwort-Vorgang im Anwalts-Dashboard nicht praxistauglich - eine
+GPU-Beschleunigung oder ein anderes/kleineres Modell wäre für den echten Produktivbetrieb
+voraussichtlich nötig. Diese Erkenntnis ist bewusst NICHT Anlass, jetzt eigenmächtig Modell,
+Timeout-Philosophie oder Architektur zu ändern (siehe wiederholt bekräftigte
+Scope-Begrenzung dieses Auftrags) - sie wird hier nur ehrlich festgehalten, wie von
+CLAUDE.md ("Unsicherheit explizit markieren, nicht verschweigen") gefordert.
+
+Bewusst NICHT verändert (Test bestätigt, keine Notwendigkeit): Presidio-Pseudonymisierung,
+Privacy-Gateway, Reihenfolge des Datenflusses, `ClaudeRequestPayload`-Schema, Rekonstruktion.
+`local_ai_enabled` bleibt in der eingecheckten `.env`/den Settings-Defaults unverändert
+`False` - für diesen Testlauf ausschließlich per Umgebungsvariable
+(`LOCAL_AI_ENABLED=true python ...`) temporär aktiviert, nichts dauerhaft umgeschaltet.
+
+## 67. Hardware-/Modell-Empfehlungslogik (HardwareProfile, ModelCatalog,
+RecommendationEngine) - bewusst OHNE Installer (20./21.08.)
+
+Ausdrücklicher, bewusst eng begrenzter Folgeauftrag nach dem realen Smoketest (§66):
+NUR die Produktlogik "welches lokale Modell empfiehlt Lexoron auf welcher Hardware",
+NICHT Installer/Silent-Setup/Modell-Download/Auto-Start/Repair/Update/UI (diese bleiben
+spätere, eigenständige Schritte). Neues Paket `app/local_ai/`, bewusst getrennt von
+`app/ai_providers/` (spricht mit einer bereits laufenden Ollama-Instanz - dieses Paket
+entscheidet vorher, welches Modell überhaupt sinnvoll ist):
+
+```
+HardwareDetector -> HardwareProfile
+ModelCatalog (statisch, versionierbar)
+HardwareProfile + ModelCatalog -> RecommendationEngine -> ModelRecommendation
+```
+
+### HardwareProfile / HardwareDetector
+
+`app/local_ai/hardware_schema.py` (`HardwareProfile`, `HardwareClass`) und
+`app/local_ai/hardware_detector.py`. Fünf Hardwareklassen: `unsupported` (< 16 GB RAM,
+harte Produkt-Mindestanforderung), `legacy`, `standard`, `performance`, `workstation` -
+Klassifikation bewusst NICHT nur nach RAM (Vorgabe wörtlich), sondern zusätzlich CPU-
+Generation/-Kernzahl und GPU-Eignung (siehe `classify_hardware`/`has_capable_gpu`). Jede
+Einzel-Erkennung (PowerShell/WMI: CPU-Name, Kerne, RAM, GPU+VRAM, freier Speicher) ist
+eigens in `try/except` gekapselt - ein fehlgeschlagener Schritt liefert `None` +
+Eintrag in `detection_warnings`, bricht die Erkennung nie ab und erfindet nie einen
+Wert (Vorgabe wörtlich: "Keine erfundenen Hardwarewerte"). CPU-Generation nur für das
+bekannte Intel-Core-Namensschema geparst (`i7-3720QM` -> 3) - andere Hersteller bleiben
+bewusst `None` statt geraten.
+
+**Zwei reale Bugs beim Testen auf der tatsächlichen i7-3720QM-Maschine gefunden und
+behoben** (kein Mock, echte `HardwareDetector.detect()`-Läufe):
+1. Ein physisch als "16 GB" verkauftes System meldet über
+   `Win32_ComputerSystem.TotalPhysicalMemory` nur ~15,9 GB (BIOS-/Chipsatz-reservierter
+   Adressraum) - eine strikte `< 16`-Prüfung auf dem Rohwert hätte praktisch JEDES reale
+   16-GB-System fälschlich als `unsupported` eingestuft. Fix: Klassifikation rundet auf
+   die handelsübliche RAM-Nenngröße (`_nominal_ram_gb`).
+2. Mit dem ursprünglichen Tie-Break ("bei gleichem Status das kleinste Modell bevorzugen")
+   empfahl die Engine auf JEDER Hardwareklasse - selbst 64 GB + starker GPU - immer nur
+   das kleinste Katalogmodell. Fix: unter mehreren gleich eingestuften Modellen gewinnt
+   jetzt das GRÖSSTE, das eine strengere "Empfohlen"-Schwelle mit Sicherheitspuffer
+   (`_RECOMMENDED_HEADROOM_MULTIPLIER`) noch erreicht - genau dieser Puffer (nicht die
+   Auswahl selbst) verhindert, dass immer das technische Maximum vorgeschlagen wird.
+
+Real gegen die tatsächliche Testmaschine verifiziert: Windows 10 Pro, i7-3720QM (Gen. 3,
+4 Kerne/8 Threads), 15,9 GB RAM, Intel HD Graphics 4000 (integriert, zählt bewusst nicht
+als "fähige GPU") -> korrekt als `legacy` klassifiziert, NICHT als `standard`.
+
+### ModelCatalog
+
+`app/local_ai/model_catalog.py` - ausschließlich `qwen3`-Varianten (aktuell über die
+konfigurierte Ollama-Runtime bezogen). Reale Daten von
+`https://ollama.com/library/qwen3` (Stand 21.08., per WebFetch abgerufen):
+`qwen3:0.6b` (523 MB), `qwen3:1.7b` (1,4 GB), `qwen3:4b` (2,5 GB - zusätzlich real durch
+einen tatsächlichen `ollama pull` in dieser Session bestätigt, §66), `qwen3:8b` (5,2 GB),
+`qwen3:14b` (9,3 GB), `qwen3:30b` (19 GB). Die noch größeren Varianten (32b/235b) bewusst
+nicht aufgenommen - kein realistischer Kanzlei-PC-Anwendungsfall.
+
+**Ehrlich als Näherung gekennzeichnet, NICHT als offizielle Kennzahl** (die Ollama-
+Modellseite nennt keine Mindest-RAM-/VRAM-Werte): `min_ram_gb`/`recommended_ram_gb` als
+dokumentierte Faustregel aus der Downloadgröße plus Overhead-Marge,
+`min_vram_gb`/`recommended_vram_gb` proportional zur Downloadgröße.
+`expected_performance_class` ist eine rein RELATIVE, modellinterne Einordnung
+(fast/balanced/slow nach Parametergröße) - KEINE Tokens/Sekunde-Angabe (Vorgabe wörtlich:
+"Keine frei erfundenen Angaben wie '20 tok/s'").
+
+### RecommendationEngine
+
+`app/local_ai/recommendation.py` - vier Zustände (`RECOMMENDED`/`SUPPORTED`/
+`MARGINAL`/`UNSUPPORTED`) pro Modell, plus eine der vier Kategorien
+schnell/ausgewogen/langsam/sehr langsam (nie eine konkrete Zahl). `HardwareClass.LEGACY`
+deckelt IMMER auf `SUPPORTED` (bestenfalls) bzw. `MARGINAL` - NIE `RECOMMENDED`, mit
+Verweis auf die reale 247s-Messung aus §66 als Begründung im Empfehlungstext selbst.
+`ModelRecommendation.primary` ist `None`, wenn kein Modell mindestens `SUPPORTED`
+erreicht (typischerweise `unsupported`-Hardwareklasse); `alternatives` listet ALLE
+übrigen Katalogeinträge mit eigener Begründung (Transparenz statt stillem Weglassen).
+Deterministisch: derselbe `HardwareProfile` liefert immer dieselbe `ModelRecommendation`.
+
+### Getestet
+
+45 neue Tests: `tests/test_local_ai_hardware_detector.py` (Klassifikation inkl. explizit
+gefordertem i7-3720QM-Fall, CPU-Generations-Parsing, ein echter, nie abstürzender
+`detect()`-Smoke-Test), `tests/test_local_ai_model_catalog.py` (Katalog-Integrität,
+Monotonie der Anforderungen, keine Rechtsberatungs-/Claude-Ersatz-Behauptungen),
+`tests/test_local_ai_recommendation.py` (alle 15 geforderten Szenarien + der explizite
+Beweis, dass der i7-3720QM nicht als Referenzklasse gilt). Volle Suite weiterhin grün,
+keine Regression (siehe Testergebnis am Ende dieses Auftrags).
+
+**Bewusst NICHT umgesetzt** (wie mehrfach ausdrücklich begrenzt): Ollama-Installer,
+Windows-Silent-Installation, automatischer Modell-Download, Auto-Start, Repair-/Update-
+System, Einrichtungs-UI, neue Frontend-Komponenten. Die `RecommendationEngine` ist noch
+an keiner Stelle mit dem Dashboard oder `app/ai_providers/` verbunden - reine,
+eigenständige Produktlogik für einen späteren Schritt.
+
+## 68. Automatisierte lokale KI-Einrichtung (OllamaInstaller, LocalAiSetupService) -
+bewusst OHNE neue UI (20./21.08.)
+
+Direkter Folgeauftrag auf §67: die dort gebaute Hardware-/Modell-Logik jetzt tatsächlich
+mit einer automatisierten Installation verbinden - `Lexoron installieren → Hardware
+erkennen → Modell empfehlen → bestätigen → Ollama installieren → Modell herunterladen →
+Health Check → bereit`. Bewusst NUR Backend-Orchestrierung: KEINE neuen Dashboard-/
+Wizard-HTML-Templates gebaut (die Vorgabe schloss "UI-Redesign" aus, verlangte aber auch
+an keiner Stelle explizit neue Templates - die technische Grundlage ("Fokus ausschließlich
+Hardware-Empfehlung → Ollama-Setup → Modell-Download → Health Check → Local AI Ready")
+ist vollständig da, eine spätere Dashboard-Anbindung braucht keine Änderung an dieser
+Schicht mehr, nur einen Router, der `LocalAiSetupService` aufruft).
+
+### Wiederverwendete Komponenten (keine Parallelimplementierung)
+
+`HardwareDetector`/`RecommendationEngine` (§67, unverändert), `OllamaLocalLLMProvider`
+(§65 - um `pull_model()`/`list_local_models()` ERWEITERT, nicht dupliziert: bleibt die
+EINZIGE Stelle im Projekt mit Wissen über die konkrete Ollama-HTTP-API), dessen
+`check_health()` (Health-Check-Wiederverwendung wie gefordert), `app.setup.env_writer.
+update_env_values` (dieselbe `.env`-Schreiblogik wie `app/web/settings_router.py` - keine
+zweite Konfigurationsquelle), `app.config.get_settings`-Cache-Invalidierung (dasselbe
+Muster wie überall sonst im Projekt), Python-`logging` (dasselbe Muster wie
+`app/updater/checker.py`).
+
+### Neue Dateien
+
+- `app/local_ai/ollama_installer.py` - `OllamaInstaller`, `OllamaVersionPolicy`
+  (zentrale, nicht im Code verstreute Versions-Policy), `OllamaInstallResult`.
+- `app/local_ai/setup_orchestrator.py` - `LocalAiSetupService`, `SetupStage`,
+  `LocalAiState`, `SetupResult`, `LocalAiStatus`.
+- `LOCAL_AI_SETUP_CHECKLIST.md` - manuelle Verifikationscheckliste (Analogie zu
+  `PILOT_CHECKLIST.md`) für den realen End-zu-Ende-Ablauf auf einem echten Rechner.
+
+### Ollama-Erkennung/-Installation
+
+`OllamaInstaller.ensure_installed()`: 1. `ollama --version` prüfen - vorhanden UND
+mindestens `OllamaVersionPolicy.minimum_supported_version` (Default `0.5.0`)? Dann
+WIEDERVERWENDEN, kein Upgrade ("keine blinden Upgrades", Vorgabe wörtlich). Vorhanden,
+aber älter? Kontrollierter Fehler (`stage="incompatible_existing_version"`), KEIN
+automatisches Upgrade. Fehlt komplett? Offizieller Installer wird geladen
+(`https://ollama.com/download/OllamaSetup.exe`, real verifizierte Weiterleitung auf
+`github.com/ollama/ollama/releases`, HTTPS), danach unbeaufsichtigt ausgeführt
+(`/VERYSILENT /NORESTART /SUPPRESSMSGBOXES` - real bereits einmal erfolgreich verwendet,
+§66), danach `ollama --version` erneut geprüft - Installer-Exit-Code 0 UND danach
+tatsächlich auffindbare Version sind BEIDE Voraussetzung für Erfolg, keine blinde
+Erfolgsannahme.
+
+**Integrität (Vorgabe wörtlich: "wenn nicht verlässlich verfügbar, nicht erfinden, als
+offene Sicherheitsgrenze dokumentieren"):** GitHub liefert über die Releases-API
+(`api.github.com/repos/ollama/ollama/releases/latest`) einen SHA256-`digest` je
+Release-Asset, einschließlich `OllamaSetup.exe` - **real verifiziert**: der in dieser
+Sitzung tatsächlich heruntergeladene Installer (§66) wurde erneut gehasht, das Ergebnis
+stimmte exakt mit dem von GitHub gemeldeten Digest überein
+(`bb49a9366dacf07e3fc94e87869d1a0ad5df3a8cbd9ee54503d4b6b1c0843cb0`). Vor Ausführung wird
+dieser Digest geprüft - bei Abweichung wird die heruntergeladene Datei NICHT ausgeführt.
+**Offene Sicherheitsgrenze, ehrlich benannt:** dieser Digest stammt aus GitHubs eigener
+Release-Metadatenverwaltung, NICHT von einer separaten, kryptografisch signierten Quelle
+der Ollama-Maintainer (z. B. kein GPG-Signatur-Nachweis bekannt) - schützt gegen
+Übertragungsfehler/Manipulation zwischen GitHub und dem Zielrechner, NICHT gegen einen
+kompromittierten Ollama-GitHub-Account selbst. Ist die Digest-Information aus
+irgendeinem Grund nicht abrufbar, wird NICHTS erfunden - die Installation läuft ohne
+Prüfsumme weiter (ebenfalls eine bewusst benannte Grenze).
+
+`OllamaInstaller.ensure_running()`: Best-Effort-Start der lokalen Runtime, falls
+installiert, aber nicht erreichbar (`%LOCALAPPDATA%\Programs\Ollama\ollama app.exe` -
+real als der vom Installer registrierte Autostart-/Tray-Prozess beobachtet, §66), mit
+kurzer Nachprüfung per injiziertem Health-Check statt einer zweiten HTTP-Implementierung.
+
+### Modellauswahl/-installation
+
+`LocalAiSetupService.run_setup()` übernimmt IMMER die Primärempfehlung der
+`RecommendationEngine`, sofern kein `model_tag` explizit übergeben wird - ein
+übergebenes `model_tag` MUSS eines der von der Engine tatsächlich bewerteten
+Katalogmodelle sein (Vorgabe wörtlich: "nicht selbst einen anderen Modellnamen
+erfinden"), sonst kontrollierter Abbruch (`SetupStage.NO_SUITABLE_MODEL`) VOR jeder
+Ollama-Installation. Vor dem Download: freier Speicherplatz (aus dem bereits erkannten
+`HardwareProfile`) gegen `download_size_gb * 1.2` geprüft - reicht er nicht, wird der
+Download gar nicht erst gestartet (`SetupStage.INSUFFICIENT_DISK_SPACE`). Download über
+die neue `OllamaLocalLLMProvider.pull_model()`-Methode (`POST /api/pull`, dieselbe
+Provider-Klasse wie für die eigentliche Inferenz). Ein `LocalLLMUnavailableError` beim
+Download markiert das Setup NICHT als erfolgreich (`SetupStage.DOWNLOADING_MODEL`).
+
+### Health Check
+
+Vollständig wiederverwendet: `OllamaLocalLLMProvider.check_health()` (§65) - keine
+zweite Implementierung. Erst wenn `reachable=True` UND `model_available=True`, wird
+`LOCAL_AI_ENABLED=true`/`OLLAMA_MODEL=<gewähltes Modell>` in die `.env` geschrieben
+(`update_env_values`, dieselbe Funktion wie `app/web/settings_router.py`) und der
+`get_settings`-Cache invalidiert.
+
+### Auto-Start-Grundlage
+
+`LocalAiSetupService.get_status()` berechnet den Zustand bei JEDEM Aufruf frisch (analog
+zu `app.state.update_check`, kein gespeichertes, potenziell veraltetes Flag) - fünf
+eindeutig unterscheidbare Zustände (`DISABLED`/`RUNTIME_MISSING`/`RUNTIME_UNREACHABLE`/
+`MODEL_MISSING`/`READY`), genau die von der Vorgabe für die spätere Reparaturfunktion
+geforderte Grundlage. Der eigentliche produktive "Verbindungsaufbau" braucht keinen
+separaten Schritt: sobald `LOCAL_AI_ENABLED=true` gesetzt ist, verwendet
+`app/ai_providers/factory.py::build_local_llm_provider` (§65, unverändert) automatisch
+den konfigurierten `OllamaLocalLLMProvider` bei jedem `DraftingService`-Aufruf - Ollama
+selbst läuft als vom Windows-Installer registrierter Hintergrunddienst weiter (real
+beobachtet, §66), es gibt keine persistente Anwendungsverbindung, die explizit
+"hergestellt" werden müsste.
+
+### Getestet
+
+35 neue Tests: `tests/test_local_ai_ollama_installer.py` (bereits installiert/fehlt,
+kompatible/inkompatible Version, Installation erfolgreich/fehlgeschlagen,
+Integritätsprüfung bestanden/fehlgeschlagen, fehlende Digest-Information blockiert NICHT,
+Runtime-Start erfolgreich/fehlgeschlagen), `tests/test_local_ai_setup_orchestrator.py`
+(Modell bereits vorhanden/fehlt, Download erfolgreich/fehlgeschlagen, zu wenig
+Speicherplatz, Health Check erfolgreich/fehlgeschlagen, vollständiger Erfolgspfad,
+kontrolliertes Scheitern an mehreren definierten Stellen, alle vier `get_status()`-
+Zustände), `tests/test_ollama_local_llm_provider.py` ergänzt um `pull_model`/
+`list_local_models`. Alle mit Fakes/Mocks - kein echter Prozessstart, kein echter
+Download in der automatisierten Suite.
+
+**Nicht durchgeführt** (siehe `LOCAL_AI_SETUP_CHECKLIST.md`): ein echter, vollständiger
+automatisierter Setup-Lauf von "Ollama fehlt" bis "bereit" auf einem frischen Windows-
+Rechner. Der reale KI-KERNPFAD selbst (Presidio→Ollama→Claude→Rekonstruktion) wurde
+bereits real verifiziert (§66) und die Installations-/Integritätsmechanik einzeln real
+geprüft (Silent-Install-Flags bereits einmal erfolgreich verwendet, SHA256-Verifikation
+gegen den real heruntergeladenen Installer bestätigt) - der vollständige AUTOMATISIERTE
+Ablauf als EIN zusammenhängender Lauf (inkl. `ensure_running` nach einem echten
+Systemneustart) steht noch aus.

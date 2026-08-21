@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}{{ document.title }}{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">{{ document.title }}</h1>
+    <div class="topbar__meta">
+      Akte <strong>{{ matter.title if matter else "–" }}</strong>
+      · Erstellt {{ document.created_at.strftime("%d.%m.%Y, %H:%M") }}
+    </div>
+  </div>
+
+  {% if unresolved_placeholders %}
+    <div class="banner banner--error">
+      <strong>{{ unresolved_placeholders|length }} Platzhalter konnte{{ "" if unresolved_placeholders|length == 1 else "n" }}
+      nicht befüllt werden</strong> und {{ "steht" if unresolved_placeholders|length == 1 else "stehen" }} unverändert
+      im Text: {% for p in unresolved_placeholders %}<code class="mono">{{ p }}</code>{{ ", " if not loop.last }}{% endfor %}.
+      Bitte vor dem Export manuell prüfen/ergänzen.
+    </div>
+  {% endif %}
+
+  <div class="draft-page">
+    <div class="instructions-panel">
+      <h2 class="panel-title">Text prüfen &amp; bearbeiten</h2>
+      <p class="form-hint">
+        Vollständig lokal erzeugt (reine Textersetzung, keine KI beteiligt) - vor dem Export bitte
+        wie jeden anderen Schriftsatzentwurf sorgfältig prüfen.
+      </p>
+      <form method="post" action="/dashboard/tools/dokumentgenerator/{{ document.id }}/save" class="dashboard-form" style="max-width: none;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <textarea name="content" rows="22" required style="font-family: var(--font-mono); font-size: 13px; line-height: 1.6;">{{ document.content }}</textarea>
+        <button type="submit" class="btn btn--primary" style="align-self: flex-start;">Speichern</button>
+      </form>
+    </div>
+
+    <div class="action-bar">
+      <form method="post" action="/dashboard/tools/dokumentgenerator/{{ document.id }}/export/docx">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <button type="submit" class="btn">{{ icons.download(class_="icon") }} Als Word (.docx) exportieren</button>
+      </form>
+      <form method="post" action="/dashboard/tools/dokumentgenerator/{{ document.id }}/export/pdf">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+        <button type="submit" class="btn">{{ icons.download(class_="icon") }} Als PDF exportieren</button>
+      </form>
+      <a href="/dashboard/tools/dokumentgenerator" class="btn">Zurück zum Generator</a>
+    </div>
+  </div>
+{% endblock %}

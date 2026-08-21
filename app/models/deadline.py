@@ -29,6 +29,15 @@ class Deadline(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     source_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Erklaerender Text, WARUM diese Konfidenz/Erkennung so zustande kam
+    # (z. B. "Datum ohne erkennbares Fristen-Schluesselwort in der Naehe -
+    # koennte auch ein reines Referenzdatum sein") und der ausdrueckliche
+    # Hinweis, dass die Frist NICHT als verbindlich bestaetigt gilt - siehe
+    # app/deadlines/extractor.py::ExtractedDeadline.reasoning, von dort
+    # unveraendert uebernommen (app/deadlines/service.py). Nullable, da
+    # aeltere/anders erzeugte Datensaetze (z. B. Synthetic-Data-Fixtures)
+    # keinen Reasoning-Text mitbringen.
+    reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
     # unreviewed / confirmed / rejected - niemals automatisch "confirmed".
     review_status: Mapped[str] = mapped_column(
         String(32), default="unreviewed", nullable=False

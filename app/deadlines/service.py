@@ -10,6 +10,15 @@ Annahmen zu treffen.
 `review_status` wird NIE von diesem Service gesetzt/verändert - der
 Deadline-Modell-Default "unreviewed" (Prompt 04) bleibt für jede hier
 erzeugte Frist bestehen, bis ein Mensch sie bestätigt oder verwirft.
+
+Seit der Anbindung an `DocumentProcessingService` (§64, automatischer
+Aufruf nach erfolgreich abgeschlossener Textextraktion/OCR): `analyze_document`
+ist bewusst IDEMPOTENT - existieren für ein `Document` bereits `Deadline`-
+Datensätze, wird KEINE erneute Erkennung durchgeführt und es entstehen
+KEINE Duplikate, sondern die bereits vorhandenen Fristen werden unverändert
+zurückgegeben. Notwendig, weil `process_document` (z. B. über den
+Retry-Pfad bei einem vorherigen OCR-Fehlschlag) für dasselbe Dokument
+mehrfach aufgerufen werden kann.
 """
 
 from __future__ import annotations
@@ -54,6 +63,29 @@ class DeadlineAnalysisService:
             db.commit()
             return []
 
+        already_analyzed = (
+            db.query(Deadline).filter(Deadline.document_id == document.id).all()
+        )
+        if already_analyzed:
+            # Idempotenz (siehe Moduldocstring): keine erneute Erkennung,
+            # keine Duplikate - dieselben, bereits vorhandenen Fristen
+            # werden unveraendert zurueckgegeben.
+            db.add(
+                AuditEvent(
+                    entity_type="Document",
+                    entity_id=document.id,
+                    event_type="deadline_analysis_already_done",
+                    actor="system",
+                    details=(
+                        f"Fristenanalyse bereits zuvor durchgefuehrt "
+                        f"({len(already_analyzed)} bestehende Frist(en)) - "
+                        "keine erneute Erkennung, keine Duplikate"
+                    ),
+                )
+            )
+            db.commit()
+            return already_analyzed
+
         extracted = self.extractor.extract(document.extracted_text)
         created_deadlines: list[Deadline] = []
 
@@ -66,6 +98,7 @@ class DeadlineAnalysisService:
                 source_text=f"{candidate.raw_date_text} :: {candidate.source_text}",
                 due_date=candidate.due_date,
                 confidence=candidate.confidence,
+                reasoning=candidate.reasoning,
             )
             db.add(deadline)
             created_deadlines.append(deadline)

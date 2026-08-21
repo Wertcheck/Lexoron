@@ -1,7 +1,7 @@
-"""Regressionsschutz: die vier Hintergrund-Endpunkte, die JEDE angemeldete
-Seite per HTMX/fetch nachlädt (budget-badge, update-badge, ollama-badge,
-lock-config - siehe app/web/templates/base.html), müssen auch erreichbar
-bleiben, wenn für den Nutzer eine Passwortänderung erzwungen ist
+"""Regressionsschutz: die Hintergrund-Endpunkte, die JEDE angemeldete
+Seite per HTMX/fetch nachlädt (budget-badge, update-badge, lock-config -
+siehe app/web/templates/base.html), müssen auch erreichbar bleiben, wenn
+für den Nutzer eine Passwortänderung erzwungen ist
 (`must_change_password=True`).
 
 Gefunden bei einem echten Browser-Test dieses Schritts: ohne die Ausnahme
@@ -76,7 +76,6 @@ def user_forced_to_change_password(db_session: Session) -> None:
     [
         "/dashboard/monitoring/budget-badge",
         "/dashboard/monitoring/update-badge",
-        "/dashboard/monitoring/ollama-badge",
         "/dashboard/lock-config",
     ],
 )

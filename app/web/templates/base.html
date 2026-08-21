@@ -19,8 +19,8 @@
    oder vorgetaeuschte Funktionen. Profil/Einstellungen bewusst GETRENNT
    vom Hauptmenue ganz unten links (app/web/account_router.py) - siehe
    ARCHITECTURE.md §53 - jetzt als zweigeteilter SaaS-Footer: oben ein
-   dezenter Hilfe-/Systemstatus-Streifen (Ollama-Erreichbarkeit +
-   Pilot-Feedback), darunter Account-Zeile (Avatar/Initialen + Rolle) mit
+   dezenter Hilfe-/Systemstatus-Streifen (Pilot-Feedback), darunter
+   Account-Zeile (Avatar/Initialen + Rolle) mit
    einem EIGENEN Zahnrad-Button, der direkt auf die Einstellungsseite
    fuehrt (Admin: /dashboard/settings, sonst die Profil-Uebersicht - fuer
    Nicht-Admins gibt es keine eigene Einstellungsseite). #}
@@ -111,6 +111,7 @@
             "icon": icons.bulb,
             "links": [
               ("Schriftsatz-Generator", "/dashboard/tools/schriftsatz", icons.printer, false),
+              ("Dokumentengenerator", "/dashboard/tools/dokumentgenerator", icons.document, false),
               ("Fristen-Check", "/dashboard/tools/fristen", icons.clock, false),
               ("Zeitleiste", "/dashboard/tools/zeitleiste", icons.chart, false),
               ("Beleg-Extraktion", "/dashboard/tools/beleg-extraktion", icons.upload, false),
@@ -170,14 +171,8 @@
         <div class="sidebar__footer">
           {# Dezenter Hilfe-/Systemstatus-Streifen - ersetzt die vorherige
              eigene Sidebar-Gruppe "Pilot-Feedback & Support" (die Seite
-             existiert unveraendert weiter, ist aber kein Hauptmodul). Der
-             Ollama-Badge nutzt bewusst denselben HTMX-Endpunkt/dieselbe
-             Partial wie die Kopfzeile (partials/ollama_badge.html) statt
-             einer eigenen Kopie - kein zusaetzlicher Netzwerkaufruf pro
-             Ladevorgang (siehe dortige Begruendung), nur ein zweites
-             Rendering derselben bereits gecachten Ollama-Erreichbarkeit. #}
+             existiert unveraendert weiter, ist aber kein Hauptmodul). #}
           <div class="sidebar__footer-status">
-            <span class="sidebar__footer-status-ollama" hx-get="/dashboard/monitoring/ollama-badge" hx-trigger="load" hx-swap="innerHTML"></span>
             <a href="/dashboard/feedback" class="sidebar__footer-help" title="Hilfe &amp; Support">
               {{ icons.help(class_="icon") }}
               <span>Hilfe &amp; Support</span>
@@ -230,10 +225,6 @@
              diese Werte einzeln in seinen Kontext aufnehmen muss. #}
           <span hx-get="/dashboard/monitoring/budget-badge" hx-trigger="load" hx-swap="innerHTML"></span>
           <span hx-get="/dashboard/monitoring/update-badge" hx-trigger="load" hx-swap="innerHTML"></span>
-          {# KI-Modus/Ollama-Status (20.08.) - "prominent, ueberall sichtbar",
-             siehe partials/ollama_badge.html fuer die Begruendung, warum
-             das keinen Netzwerkaufruf pro Seitenaufruf ausloest. #}
-          <span hx-get="/dashboard/monitoring/ollama-badge" hx-trigger="load" hx-swap="innerHTML"></span>
           <a href="/dashboard/inbox" class="header-icons__btn" title="Posteingang" aria-label="Posteingang">
             {{ icons.envelope(class_="icon") }}
           </a>

@@ -3,6 +3,7 @@
 Kernanforderung: kein Claude-API-Aufruf-Code in diesem Modul (noch nicht
 gebaut) - reine, seiteneffektfreie Textverarbeitung."""
 
+from app.privacy.detectors import DetectedSpan
 from app.privacy.pseudonymizer import Pseudonymizer
 
 
@@ -119,3 +120,53 @@ def test_prompt_injection_attempt_is_pseudonymized_like_any_other_text() -> None
     assert "IGNORE INSTRUCTIONS." in result  # unveraendert als Text erhalten
     assert "Max Mustermann" not in result
     assert len(mappings) == 1
+
+
+# --- NER-Injektion (app/privacy/presidio_ner.py, ueber Fake statt echtem
+# Presidio - schnell, deterministisch; der echte Presidio-Stack wird
+# separat in test_privacy_presidio_ner.py geprueft) ---
+
+
+def _fake_ner_detector(text: str) -> list[DetectedSpan]:
+    idx = text.find("Peter Müller")
+    if idx == -1:
+        return []
+    return [DetectedSpan(category="person", start=idx, end=idx + len("Peter Müller"), value="Peter Müller")]
+
+
+def test_ner_detector_spans_are_pseudonymized_with_neutral_category() -> None:
+    p = Pseudonymizer(ner_detector=_fake_ner_detector)
+    text = "Bitte auch Peter Müller informieren."
+
+    result, mappings = p.pseudonymize(text)
+
+    assert "Peter Müller" not in result
+    assert "[PERSON_01]" in result
+    assert mappings[0].category == "person"
+
+
+def test_ner_detector_is_not_used_by_default() -> None:
+    """Ohne explizite Injektion (Default None) bleibt ein Presidio-NER-
+    Treffer wie "Peter Müller" unerkannt - Regex/known_entities allein
+    finden ihn nicht (bestehendes, unveraendertes Verhalten)."""
+    p = Pseudonymizer()
+    text = "Bitte auch Peter Müller informieren."
+
+    result, mappings = p.pseudonymize(text)
+
+    assert "Peter Müller" in result
+    assert mappings == []
+
+
+def test_known_entities_take_precedence_over_ner_detector_on_overlap() -> None:
+    """Bei exakt gleicher Position/Laenge gewinnt der bekannte, rollen-
+    zugeordnete Treffer gegenueber dem rollenneutralen NER-Treffer (siehe
+    Kommentar in detectors.py::detect_all)."""
+    p = Pseudonymizer(ner_detector=_fake_ner_detector)
+    text = "Mandant Peter Müller wurde informiert."
+
+    result, mappings = p.pseudonymize(text, known_entities={"mandant": ["Peter Müller"]})
+
+    assert "[MANDANT_01]" in result
+    assert "[PERSON_01]" not in result
+    assert mappings[0].category == "mandant"

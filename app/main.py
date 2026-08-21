@@ -37,6 +37,8 @@ from app.web.account_router import router as account_web_router
 from app.web.auth_router import router as auth_web_router
 from app.web.backup_router import router as backup_web_router
 from app.web.clients_router import router as clients_web_router
+from app.web.document_generator_router import router as document_generator_web_router
+from app.web.document_templates_router import router as document_templates_web_router
 from app.web.drafts_router import router as drafts_web_router
 from app.web.feedback_router import router as feedback_web_router
 from app.web.lock_router import router as lock_web_router
@@ -68,43 +70,6 @@ async def _run_silent_update_check(app: FastAPI, manifest_url: str | None) -> No
         logger.info("Update verfügbar: %s", result.latest_version)
 
 
-async def _run_silent_ollama_check(app: FastAPI, ai_mode: str, ollama_base_url: str) -> None:
-    """Prüft beim Start still im Hintergrund, ob der lokale Ollama-Dienst
-    erreichbar ist (Local-First-Architektur, siehe ARCHITECTURE.md §60) -
-    blockiert den App-Start nicht, schreibt das Ergebnis ausschließlich ins
-    Log (kein Nutzer-Hinweis noetig, der Admin kann jederzeit erneut über
-    die Systemstatus-Seite prüfen, siehe app/web/monitoring_router.py:
-    check_ollama_reachability). `SystemHealthService.check_ollama_reachability`
-    fängt selbst jeden Fehler ab, daher hier kein zusätzliches try/except
-    nötig - ein WARNING statt ERROR, da ein nicht laufendes Ollama beim
-    Start kein Absturzgrund ist (der erste tatsächliche Entwurfsversuch
-    zeigt dem Anwalt ohnehin einen verständlichen Fehler)."""
-    from app.system_health import SystemHealthService
-
-    if ai_mode != "LOCAL_ONLY":
-        return
-    result = await asyncio.to_thread(
-        SystemHealthService().check_ollama_reachability, ollama_base_url
-    )
-    # Im app.state abgelegt (wie app.state.update_check) - die Kopfzeilen-
-    # Badge (partials/ollama_badge.html, ueber /dashboard/monitoring/
-    # ollama-badge geladen) zeigt diesen EINEN, beim Start ermittelten Wert
-    # auf JEDER Seite an, OHNE bei jedem Seitenaufruf erneut Ollama
-    # anzusprechen (derselbe Grundsatz wie bei der Claude-API-Pruefung,
-    # siehe app/system_health/service.py-Docstring: kein automatischer
-    # Hintergrundaufruf pro Seitenaufruf).
-    app.state.ollama_check = result
-    if result.reachable:
-        logger.info("Ollama erreichbar (%s, %s ms)", ollama_base_url, result.latency_ms)
-    else:
-        logger.warning(
-            "Ollama nicht erreichbar (%s): %s - AI_MODE=LOCAL_ONLY, Entwurfs-/"
-            "Prüfaufrufe schlagen fehl, bis der Dienst läuft.",
-            ollama_base_url,
-            result.error,
-        )
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Laedt die validierte Konfiguration beim Start und konfiguriert das
@@ -120,32 +85,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     nebenläufig zum eigentlichen Start, verzögert ihn also nicht, und
     scheitert niemals hart (Standardwert `checked=False`, solange die
     Prüfung noch läuft oder deaktiviert ist).
-
-    Seit der Local-First-Umstellung (20.08., ARCHITECTURE.md §60) zusätzlich
-    eine ebenso stumme, nicht-blockierende Ollama-Erreichbarkeitsprüfung im
-    Hintergrund (nur bei AI_MODE=LOCAL_ONLY) - Ergebnis landet im Log
-    (app.log, siehe Start.vbs) UND in `app.state.ollama_check` (seit dem
-    "sichtbares Ollama"-Auftrag, ebenfalls 20.08.) für die Kopfzeilen-Badge
-    (partials/ollama_badge.html) - EIN einmalig beim Start ermittelter Wert,
-    kein erneuter Netzwerkaufruf pro Seitenaufruf. Kein App-Start-Abbruch
-    bei nicht erreichbarem Ollama.
     """
     settings = get_settings()
     configure_logging(log_level=settings.log_level, log_file_path=settings.log_file_path)
     app.state.settings = settings
     app.state.app_env = settings.app_env
     app.state.update_check = UpdateCheckResult(checked=False, update_available=False)
-    app.state.ollama_check = None
-    logger.info("Anwendung gestartet (app_env=%s, ai_mode=%s)", settings.app_env, settings.ai_mode)
+    logger.info("Anwendung gestartet (app_env=%s)", settings.app_env)
     update_task = asyncio.create_task(
         _run_silent_update_check(app, settings.update_manifest_url)
     )
-    ollama_check_task = asyncio.create_task(
-        _run_silent_ollama_check(app, settings.ai_mode, settings.ollama_base_url)
-    )
     yield
     update_task.cancel()
-    ollama_check_task.cancel()
     logger.info("Anwendung wird beendet")
 
 
@@ -198,6 +149,8 @@ app.include_router(backup_web_router)
 app.include_router(clients_web_router)
 app.include_router(global_search_web_router)
 app.include_router(laws_web_router)
+app.include_router(document_templates_web_router)
+app.include_router(document_generator_web_router)
 app.include_router(quality_web_router)
 app.include_router(account_web_router)
 app.include_router(settings_web_router)

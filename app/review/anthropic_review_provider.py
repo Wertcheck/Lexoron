@@ -42,6 +42,9 @@ class AnthropicClaudeReviewProvider:
         response = self._client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
+            # KEIN expliziter `temperature`-Parameter - siehe
+            # AnthropicClaudeWritingProvider.write fuer die Begruendung
+            # (echter API-Fehler beim realen Smoketest, 20.08.).
             system=[
                 {
                     "type": "text",

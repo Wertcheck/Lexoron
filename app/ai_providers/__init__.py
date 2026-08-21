@@ -6,9 +6,9 @@ Zwei Protocols, wie von der Vorgabe (Punkt 11) gefordert:
   Wissensabruf, Fristen). Aktuelle konkrete Implementierung
   (`RuleBasedLocalAIProvider`) bündelt die bereits bestehenden, getesteten
   Platzhalter-Services (Prompt 08-12) zu EINER austauschbaren Schnittstelle
-  - keine Neuimplementierung der Logik. Eine zukünftige
-  `OllamaLocalAIProvider` (siehe zweite Architekturvorgabe/TODO.md) könnte
-  dasselbe Protocol erfüllen, ohne den Workflow zu ändern.
+  - keine Neuimplementierung der Logik. Eine zukünftige lokale
+  Provider-Implementierung könnte dasselbe Protocol erfüllen, ohne den
+  Workflow zu ändern.
 - `ClaudeWritingProvider`: externe sprachliche Textproduktion. NOCH OHNE
   konkrete Implementierung - der tatsächliche Claude-API-Aufruf ist
   bewusst ein separater, letzter Schritt (verschmilzt mit Prompt 17), der

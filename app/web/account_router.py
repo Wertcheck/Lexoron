@@ -119,7 +119,6 @@ def account_privacy(
         # settings.* konfigurierbar - daher hier bewusst als Konstante statt
         # aus einem (nicht existierenden) Einstellungswert gelesen.
         "pii_pseudonymization_active": True,
-        "ai_mode": settings.ai_mode,
         "claude_api_configured": settings.anthropic_api_key is not None,
         "session_cookie_secure": settings.resolved_session_cookie_secure,
         "retention_days": settings.retention_days,

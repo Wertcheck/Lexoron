@@ -9,6 +9,7 @@ kann (nicht den ganzen Satz).
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 
 _GERMAN_MONTHS = (
@@ -167,19 +168,29 @@ _ALL_REGEX_DETECTORS = (
 
 
 def detect_all(
-    text: str, known_entities: dict[str, list[str]] | None = None
+    text: str,
+    known_entities: dict[str, list[str]] | None = None,
+    *,
+    ner_detector: Callable[[str], list[DetectedSpan]] | None = None,
 ) -> list[DetectedSpan]:
     """Führt alle Detektoren aus und löst Überlappungen auf.
 
     Bei überlappenden Treffern gewinnt der LÄNGERE Treffer (spezifischer)
     - z. B. eine bekannte Entität, die zufällig auch Teil eines
-    Datums-/Zahlenmusters wäre.
+    Datums-/Zahlenmusters wäre. Bei gleicher Länge gewinnt der zuerst
+    hinzugefügte Treffer (stabile Sortierung) - deshalb werden `ner_detector`-
+    Treffer bewusst NACH `known_entities` angehängt: eine bekannte,
+    rollenzugeordnete Entität soll einer generischen NER-Erkennung (siehe
+    app/privacy/presidio_ner.py, optional per `ner_detector` injiziert)
+    vorgehen.
     """
     all_spans: list[DetectedSpan] = []
     for detector in _ALL_REGEX_DETECTORS:
         all_spans.extend(detector(text))
     if known_entities:
         all_spans.extend(detect_known_entities(text, known_entities))
+    if ner_detector is not None:
+        all_spans.extend(ner_detector(text))
 
     return _resolve_overlaps(all_spans)
 

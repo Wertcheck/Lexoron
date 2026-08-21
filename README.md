@@ -81,7 +81,9 @@ For local development (not recommended during pilot):
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
+python -m spacy download de_core_news_lg  # lokales PII-Erkennungsmodell (Presidio)
 cp .env.example .env
+# .env: ANTHROPIC_API_KEY setzen (sonst funktionieren Entwurfserstellung/-pruefung nicht)
 alembic upgrade head
 ADMIN_EMAIL=admin@example.test python scripts/create_admin.py
 uvicorn app.main:app --reload
@@ -156,7 +158,7 @@ See **SECURITY_REVIEW.md** for full checklist.
 - **v0.2.0** (next week): Dashboard UI for quality ratings, email polling, log rotation
 - **v0.3.0** (+2 weeks): Multi-profile support, advanced templates, structured logging
 - **v0.4.0** (+1 month): UI redesign, bulk operations, search improvements
-- **v1.0** (+3–6 months): 2FA, HTTPS, Windows service, Ollama integration, macOS support
+- **v1.0** (+3–6 months): 2FA, HTTPS, Windows service, macOS support
 
 See **FUTURE_ROADMAP.md** for detailed planning and risk assessment.
 

@@ -29,11 +29,31 @@ dependencies = [
     "openpyxl>=3.1",
     "fastembed>=0.4",
     "anthropic>=0.40",
-    # HTTP-Client fuer app/updater/checker.py (Update-Manifest-Abruf) UND,
-    # seit der Local-First-Umstellung (20.08., ARCHITECTURE.md §60), fuer
-    # die Ollama-Anbindung (app/ai_providers/ollama_writing_provider.py,
-    # app/review/ollama_review_provider.py, app/system_health/service.py).
-    # War zuvor nur unter [dev] gelistet (dort ueber FastAPIs eigenen
+    # Lokale PII-Erkennung/-Anonymisierung (app/privacy/presidio_ner.py, §63
+    # 20.08.) - laeuft komplett offline, keine Mandantendaten verlassen dabei
+    # die Kanzlei-Maschine. presidio-anonymizer wird fuer API-Vollstaendigkeit
+    # mitgefuehrt (Operator-/Ergebnistypen), die eigentliche Platzhalter-
+    # Vergabe/Rekonstruktion bleibt aus Konsistenzgruenden beim bestehenden
+    # app/privacy/pseudonymizer.py::Pseudonymizer (siehe Docstring dort).
+    "presidio-analyzer>=2.2",
+    "presidio-anonymizer>=2.2",
+    # Kein oberes Versionslimit: das deutsche Modell (siehe unten) wird
+    # bewusst NICHT als fest verdrahtete Wheel-URL-Dependency gepinnt,
+    # sondern per `python -m spacy download de_core_news_lg` installiert
+    # (siehe README.md/Setup) - spaCys eigener Downloader loest dabei
+    # automatisch die zur tatsaechlich installierten spacy-Version
+    # kompatible Modellversion auf. Eine hart gepinnte alte Modell-Wheel-URL
+    # (erster Versuch: de_core_news_lg-3.7.0) erzwang ueber deren eigene
+    # Metadaten ein altes spacy<3.8, dessen thinc/blis-Abhaengigkeit auf
+    # Python 3.13 nicht als Wheel verfuegbar ist und der Source-Build daran
+    # scheitert (Cython-Fehler in blis) - deshalb dieser Ansatz.
+    "spacy>=3.7",
+    # HINWEIS (Folgepunkt, bewusst nicht Teil von §63): Das PyInstaller-Spec
+    # (windows/kanzlei_ai.spec) buendelt das spaCy-Modell noch nicht - fuer
+    # den Windows-Installer-Build muss dort ein zusaetzlicher Daten-Include
+    # ergaenzt werden, sonst fehlt das Modell im gepackten Build.
+    # HTTP-Client fuer app/updater/checker.py (Update-Manifest-Abruf). War
+    # zuvor nur unter [dev] gelistet (dort ueber FastAPIs eigenen
     # httpx-Bedarf fuer TestClient bereits vorhanden) - echter, bisher
     # unbemerkter Laufzeit-Bedarf, jetzt korrekt als Kernabhaengigkeit
     # gefuehrt, damit auch der PyInstaller-Build (windows/kanzlei_ai.spec)

@@ -28,8 +28,9 @@ Warnungen ignoriert und trotzdem grünes Licht gibt.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 
-from app.privacy.detectors import detect_all
+from app.privacy.detectors import DetectedSpan, detect_all
 from app.privacy.pseudonymizer import PseudonymMapping
 from app.privacy.security_check_schema import SecurityCheckResult
 
@@ -63,12 +64,15 @@ ALLOWED_PURPOSES = frozenset(
 # gewertet, wenn KEINES der beiden Woerter in dieser Liste steht.
 #
 # WICHTIGE EINSCHRAENKUNG (ehrlich benannt, siehe ARCHITECTURE.md): Das
-# ist weiterhin keine echte NER-Erkennung. Die Liste ist nicht
-# erschoepfend - es bleiben sowohl false positives (seltene, hier nicht
-# gelistete Substantive) als auch false negatives (ein Name, der zufaellig
-# aus zwei gelisteten Woertern besteht) moeglich. Eine zuverlaessigere
-# Loesung braucht ein echtes lokales Sprachmodell (siehe TODO.md, Schritt
-# 4 / Ollama-Diskussion) - das ist bewusst NICHT Teil dieses Schritts.
+# ist weiterhin keine echte NER-Erkennung, sondern eine bewusst simple
+# Zusatzheuristik. Die Liste ist nicht erschoepfend - es bleiben sowohl
+# false positives (seltene, hier nicht gelistete Substantive) als auch
+# false negatives (ein Name, der zufaellig aus zwei gelisteten Woertern
+# besteht) moeglich. Die zuverlaessigere Erkennung uebernimmt inzwischen
+# echte deutsche NER via Presidio (siehe app/privacy/presidio_ner.py,
+# per `ner_detector` in `check()` eingebunden) - diese Heuristik bleibt
+# als zusaetzliche, unabhaengige Sicherheitsebene bestehen (Defense in
+# Depth), nicht als deren Ersatz.
 
 _COMMON_GERMAN_FORMAL_WORDS = frozenset(
     {
@@ -129,6 +133,16 @@ def _find_possible_unrecognized_names(text: str) -> list[str]:
 
 
 class SecurityCheckService:
+    def __init__(
+        self, *, ner_detector: Callable[[str], list[DetectedSpan]] | None = None
+    ) -> None:
+        """`ner_detector` (optional, siehe Pseudonymizer.__init__ fuer
+        dieselbe Begruendung) wird beim Restrisiko-Scan (Punkt 2/3/4)
+        zusaetzlich zu den Regex-Detektoren eingesetzt - schaerft genau den
+        Check, der aufdecken soll, ob die Pseudonymisierung etwas
+        uebersehen hat."""
+        self.ner_detector = ner_detector
+
     def check(
         self,
         pseudonymized_text: str,
@@ -148,7 +162,7 @@ class SecurityCheckService:
         # Punkt 2/3/4: erneute PII-Pruefung AUF DEM PSEUDONYMISIERTEN TEXT.
         # Bewusst ohne known_entities - genau diese sollten bereits ersetzt
         # sein; ein Treffer hier bedeutet: etwas wurde uebersehen.
-        residual_spans = detect_all(pseudonymized_text)
+        residual_spans = detect_all(pseudonymized_text, ner_detector=self.ner_detector)
         if residual_spans:
             categories = sorted({span.category for span in residual_spans})
             reasons.append(

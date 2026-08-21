@@ -722,6 +722,64 @@ Wird als Vorlage für Prompt 21-24 herangezogen, sobald diese Phase ansteht.
       verankerten "nur manuelle Eingabe"-Regel in `app/models/source.py`, Rückfrage an den
       Anwalt nötig statt stiller Umsetzung. Installer erneut komplett neu gebaut. Siehe
       ARCHITECTURE.md §62.
+- [x] Presidio-gestützte PII-Erkennung umgesetzt, Ollama vollständig entfernt (20.08.,
+      ausdrücklicher Auftrag) - beantwortet damit sowohl den zurückgestellten
+      "Presidio-Umbau" (§57) als auch die offenen Entscheidungen 5-7 zur zweiten Vorgabe
+      oben ("Ollama für lokale KI-Aufgaben"): diese Entscheidungen sind gegenstandslos,
+      da kein lokales LLM mehr existiert. `app/privacy/presidio_ner.py`
+      (Presidio-AnalyzerEngine + deutsches spaCy-Modell `de_core_news_lg`) ergänzt die
+      bestehenden Regex-Detektoren um echte Namens-/Orts-/Organisationserkennung,
+      eingespeist über einen optionalen `ner_detector`-Parameter in `detect_all()` -
+      Platzhaltervergabe/Rekonstruktion bleiben unverändert beim bestehenden
+      `Pseudonymizer` (Konsistenzgarantie über alle Payload-Felder hinweg bliebe sonst
+      nicht gewahrt). `OllamaWritingProvider`/`OllamaReviewProvider`/`app/ollama_setup/`
+      gelöscht, `AI_MODE`/`ollama_base_url`/`ollama_model_name` aus `Settings` entfernt -
+      Anthropic/Claude ist jetzt der einzige Textproduktions-Pfad
+      (`app/ai_providers/factory.py` widerruft damit §60 Teil 2 bewusst, §57/§60 bleiben
+      als historische Einträge unverändert stehen). Siehe ARCHITECTURE.md §63.
+- [x] Automatische Fristenerkennung an den realen Produktionspfad angebunden (20.08.) -
+      `DeadlineAnalysisService` wurde bisher nur in Tests aufgerufen, jetzt automatisch
+      nach erfolgreicher Textextraktion/OCR (`DocumentProcessingService.process_document`)
+      UND bereits erfolgter Aktenzuordnung. Idempotent (keine Duplikate bei
+      Mehrfachverarbeitung, z. B. Retry-Pfad). `Deadline.reasoning` neu gespeichert und
+      über `GET /api/deadlines` abrufbar. Erkennung bleibt regelbasiert, kein LLM. Siehe
+      ARCHITECTURE.md §64.
+- [x] Lokale KI (Ollama) als Pflicht-Zwischenschritt vor Claude eingeführt (20.08.,
+      nach mehreren verworfenen Zwischenvorschlägen für einen vollen Installer/
+      Hardware-Erkennung/Model-Catalog - bewusst NICHT umgesetzt, nur der Kern-Pfad).
+      Presidio → Ollama → Claude → lokale Rekonstruktion, kein Klartext-Fallback bei
+      nicht erreichbarem Ollama (kontrollierter Fehler statt Aufruf an Claude).
+      `local_ai_enabled` standardmäßig `False` - bestehende Pipeline bleibt ohne
+      Ollama-Installation unverändert lauffähig. Siehe ARCHITECTURE.md §65.
+- [x] Realer End-zu-Ende-Smoketest des lokalen KI-Kerns auf echtem Windows-Testrechner
+      (20./21.08.) - Ollama real installiert, `qwen3:4b` real geladen, kompletter Pfad
+      Presidio→Ollama→Claude→Rekonstruktion real ausgeführt (BESTANDEN). Zwei echte,
+      nur durch den echten Lauf sichtbare Bugs gefunden und behoben (`temperature`-
+      Parameter vom Modell abgelehnt, Ollama-Timeout zu knapp). Reale Latenz auf dieser
+      CPU-only-Legacy-Maschine: 247s Ollama, 10,6s Claude - ehrlich als für
+      interaktive Nutzung nicht praxistauglich festgehalten, ohne deswegen eigenmächtig
+      Architektur/Modell zu ändern. Siehe ARCHITECTURE.md §66.
+- [x] Hardware-/Modell-Empfehlungslogik (HardwareProfile, ModelCatalog,
+      RecommendationEngine) ohne Installer (20./21.08.) - neues Paket `app/local_ai/`.
+      Fünf Hardwareklassen (unsupported/legacy/standard/performance/workstation), NICHT
+      nur nach RAM klassifiziert. Der real vermessene i7-3720QM (§66) korrekt als
+      `legacy` eingestuft, nie als Referenzklasse. ModelCatalog mit realen Ollama-
+      Qwen3-Daten. Zwei echte Logikfehler beim Testen gegen die reale Maschine
+      gefunden und behoben (RAM-Rundung, "immer kleinstes Modell"-Empfehlungsfehler).
+      Bewusst NICHT umgesetzt: Installer, Silent-Setup, Modell-Download, Auto-Start,
+      Repair/Update, UI. Siehe ARCHITECTURE.md §67.
+- [x] Automatisierte lokale KI-Einrichtung: OllamaInstaller + LocalAiSetupService
+      (20./21.08.) - verbindet §67 (HardwareDetector/RecommendationEngine) mit einer
+      tatsächlichen Installation: Ollama erkennen/wiederverwenden oder offiziell
+      installieren (Silent-Flags real bereits verwendet, §66), SHA256-Integritätsprüfung
+      gegen GitHubs Release-API (real gegen den §66-Installer verifiziert), empfohlenes
+      Modell laden (`OllamaLocalLLMProvider.pull_model`, neu), Health Check
+      (wiederverwendet, keine zweite Implementierung), danach `.env` (`LOCAL_AI_ENABLED`,
+      `OLLAMA_MODEL`) über die bestehende `update_env_values`-Funktion geschrieben.
+      `get_status()` liefert fünf unterscheidbare Zustände als Grundlage für Auto-Start/
+      spätere Reparatur. Bewusst OHNE neue Dashboard-/Wizard-UI - reine
+      Backend-Orchestrierung. Siehe ARCHITECTURE.md §68, manuelle Verifikations-
+      Checkliste: LOCAL_AI_SETUP_CHECKLIST.md.
 
 ## Wiederkehrende Grundregeln (gelten für jede Phase)
 - Keine echten Mandantendaten in Tests/Entwicklung.

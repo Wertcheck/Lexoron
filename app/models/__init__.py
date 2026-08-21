@@ -16,12 +16,14 @@ from app.models.base import Base
 from app.models.client import VALID_CLIENT_STATUSES, Client
 from app.models.deadline import Deadline
 from app.models.document import Document
+from app.models.document_template import DocumentTemplate
 from app.models.draft import Draft
 from app.models.draft_feedback import DraftFeedback
 from app.models.draft_quality_rating import DraftQualityRating
 from app.models.draft_reference_links import DraftKnowledgeItemLink, DraftSourceLink
 from app.models.embedding import Embedding
 from app.models.firm_profile import FirmProfile
+from app.models.generated_document import GeneratedDocument
 from app.models.knowledge_item import KnowledgeItem
 from app.models.law import Law
 from app.models.law_section import LawSection
@@ -89,4 +91,6 @@ __all__ = [
     "FirmProfile",
     "Law",
     "LawSection",
+    "DocumentTemplate",
+    "GeneratedDocument",
 ]

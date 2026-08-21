@@ -24,9 +24,41 @@ from tests.fake_embedding_provider import FakeEmbeddingProvider
 class FakeClaudeWritingProvider:
     def __init__(self, response_text: str = "Formulierte Antwort.") -> None:
         self.response_text = response_text
+        self.received_payloads: list[ClaudeRequestPayload] = []
 
     def write(self, payload: ClaudeRequestPayload) -> ClaudeWritingResult:
+        self.received_payloads.append(payload)
         return ClaudeWritingResult(text=self.response_text, token_count=99)
+
+
+class FakeLocalLLMProvider:
+    """Test-Double fuer app/ai_providers/local_llm_provider.py::LocalLLMProvider
+    (§65) - kein echter Ollama-Aufruf."""
+
+    def __init__(self, response_text: str = "Lokale Zusammenfassung.") -> None:
+        self.response_text = response_text
+        self.received_payloads: list[ClaudeRequestPayload] = []
+
+    def process(self, payload: ClaudeRequestPayload):
+        from app.ai_providers.local_llm_provider import LocalLLMResult
+
+        self.received_payloads.append(payload)
+        return LocalLLMResult(text=self.response_text, model="fake-model")
+
+    def check_health(self):
+        raise NotImplementedError("nicht benoetigt in diesen Tests")
+
+
+class FailingLocalLLMProvider:
+    """Simuliert ein nicht erreichbares Ollama (§65 Punkt 10)."""
+
+    def process(self, payload: ClaudeRequestPayload):
+        from app.ai_providers.local_llm_provider import LocalLLMUnavailableError
+
+        raise LocalLLMUnavailableError("Ollama nicht erreichbar (simuliert)")
+
+    def check_health(self):
+        raise NotImplementedError("nicht benoetigt in diesen Tests")
 
 
 @pytest.fixture()
@@ -53,7 +85,7 @@ def _matter(db: Session, client_name: str = "Max Mustermann", title: str = "Test
 
 
 def _service(
-    writing_provider=None, min_score: float = 0.0
+    writing_provider=None, min_score: float = 0.0, local_llm_provider=None
 ) -> tuple[DraftingService, DocumentSearchService]:
     search_service = DocumentSearchService(FakeEmbeddingProvider())
     research_service = LegalResearchService(search_service, min_score_for_sufficient=min_score)
@@ -64,6 +96,7 @@ def _service(
         ClaudePrivacyGateway(),
         writing_provider or FakeClaudeWritingProvider(),
         model_name="claude-sonnet-5",
+        local_llm_provider=local_llm_provider,
     )
     return service, search_service
 
@@ -300,20 +333,11 @@ def test_no_deadlines_means_no_uncertainty_about_deadlines(db_session: Session) 
     assert not any("Frist" in u for u in result.uncertainties)
 
 
-def test_blocked_request_creates_no_draft(db_session: Session) -> None:
+def test_disallowed_purpose_creates_no_draft(db_session: Session) -> None:
     matter = _matter(db_session, title="Testakte")
-    from app.models import Document
-
-    document = Document(
-        matter=matter,
-        file_path="/tmp/x.pdf",
-        extracted_text="Bitte informieren Sie auch Herrn Peter Müller.",
-    )
-    db_session.add(document)
-    db_session.commit()
     service, _ = _service()
 
-    result = service.create_draft(matter.id, "formulate_draft", db_session)
+    result = service.create_draft(matter.id, "analyze_full_file", db_session)
 
     assert result.success is False
     assert result.draft_id is None
@@ -322,6 +346,13 @@ def test_blocked_request_creates_no_draft(db_session: Session) -> None:
 
 
 def test_blocked_request_is_logged_without_pii(db_session: Session) -> None:
+    """Deterministisch ueber einen nicht erlaubten Zweck blockiert (siehe
+    test_disallowed_purpose_creates_no_draft) - seit Presidio (§63) wird ein
+    Name wie "Peter Müller" zuverlaessig erkannt UND pseudonymisiert, waere
+    also kein zuverlaessiger Block-Ausloeser mehr (siehe
+    tests/test_ai_providers_orchestrator.py fuer den analogen
+    Verhaltenswechsel). Kernaussage bleibt: selbst wenn das Dokument echte
+    PII enthaelt, landet nie Klartext im Blocked-Log."""
     matter = _matter(db_session, title="Testakte")
     from app.models import Document
 
@@ -334,7 +365,7 @@ def test_blocked_request_is_logged_without_pii(db_session: Session) -> None:
     db_session.commit()
     service, _ = _service()
 
-    service.create_draft(matter.id, "formulate_draft", db_session)
+    service.create_draft(matter.id, "analyze_full_file", db_session)
 
     logs = db_session.query(ApiCallLog).filter_by(result_status="blocked").all()
     assert len(logs) == 1
@@ -371,3 +402,144 @@ def test_context_never_contains_data_from_other_matter(db_session: Session) -> N
     assert draft is not None
     # Die andere Akte darf ueberhaupt nicht in dieser Aktion beruehrt worden sein.
     assert db_session.query(Draft).filter_by(matter_id=matter_b.id).count() == 0
+
+
+# --- §65: lokaler KI-Zwischenschritt (Ollama) ---
+
+
+def test_without_local_llm_provider_behaves_exactly_as_before(db_session: Session) -> None:
+    """Standardfall (settings.local_ai_enabled=False -> local_llm_provider=None,
+    siehe app/ai_providers/factory.py::build_local_llm_provider): unveraendertes
+    Verhalten wie vor §65."""
+    matter = _matter(db_session)
+    writing_provider = FakeClaudeWritingProvider()
+    service, _ = _service(writing_provider, local_llm_provider=None)
+
+    result = service.create_draft(matter.id, "formulate_draft", db_session)
+
+    assert result.success is True
+    assert len(writing_provider.received_payloads) == 1
+
+
+def test_local_llm_result_is_added_as_argumentationspunkt(db_session: Session) -> None:
+    """Test 3: der lokale KI-Provider verarbeitet die bereits pseudonymisierte
+    Anfrage, sein Ergebnis fliesst als zusaetzlicher, klar gekennzeichneter
+    Argumentationspunkt in die Claude-Anfrage ein."""
+    matter = _matter(db_session)
+    writing_provider = FakeClaudeWritingProvider()
+    local_llm = FakeLocalLLMProvider(response_text="Kurzfassung des Sachverhalts.")
+    service, _ = _service(writing_provider, local_llm_provider=local_llm)
+
+    result = service.create_draft(matter.id, "formulate_draft", db_session)
+
+    assert result.success is True
+    assert len(local_llm.received_payloads) == 1
+    sent_payload = writing_provider.received_payloads[0]
+    assert any(
+        "Kurzfassung des Sachverhalts." in punkt
+        for punkt in sent_payload.anonymisierte_argumentationspunkte
+    )
+    assert any(
+        punkt.startswith("Lokale Vorabanalyse")
+        for punkt in sent_payload.anonymisierte_argumentationspunkte
+    )
+
+
+def test_claude_never_receives_original_plaintext_with_local_llm_enabled(
+    db_session: Session,
+) -> None:
+    """Test 4: Claude erhaelt niemals den urspruenglichen Klartext - aktiv
+    ueberprueft, auch wenn der lokale KI-Schritt aktiv ist."""
+    matter = _matter(db_session, client_name="Max Mustermann")
+    document_text = "Mandant Max Mustermann bittet um Rueckmeldung."
+    from app.models import Document
+
+    db_session.add(
+        Document(matter_id=matter.id, file_path="/tmp/x.pdf", extracted_text=document_text)
+    )
+    db_session.commit()
+    writing_provider = FakeClaudeWritingProvider()
+    local_llm = FakeLocalLLMProvider()
+    service, _ = _service(writing_provider, local_llm_provider=local_llm)
+
+    result = service.create_draft(matter.id, "formulate_draft", db_session)
+
+    assert result.success is True
+    sent_payload = writing_provider.received_payloads[0]
+    assert "Max Mustermann" not in sent_payload.anonymisierter_sachverhalt
+    assert "Max Mustermann" not in local_llm.received_payloads[0].anonymisierter_sachverhalt
+    assert "[MANDANT_01]" in sent_payload.anonymisierter_sachverhalt
+
+
+def test_ollama_unavailable_blocks_request_and_claude_is_never_called(
+    db_session: Session,
+) -> None:
+    """Test 5+6: Ollama nicht verfuegbar -> Claude erhaelt KEINEN Aufruf
+    (auch keinen mit Klartext), Ergebnis ist ein kontrollierter Fehler,
+    kein stiller Fallback."""
+    matter = _matter(db_session)
+    writing_provider = FakeClaudeWritingProvider()
+    service, _ = _service(writing_provider, local_llm_provider=FailingLocalLLMProvider())
+
+    result = service.create_draft(matter.id, "formulate_draft", db_session)
+
+    assert result.success is False
+    assert len(result.blocked_reasons) > 0
+    assert writing_provider.received_payloads == []  # NIE aufgerufen
+    assert db_session.query(Draft).count() == 0
+
+
+def test_ollama_unavailable_is_logged_without_pii(db_session: Session) -> None:
+    matter = _matter(db_session, client_name="Peter Beispiel")
+    from app.models import Document
+
+    db_session.add(
+        Document(
+            matter_id=matter.id,
+            file_path="/tmp/x.pdf",
+            extracted_text="Mandant Peter Beispiel bittet um Rueckmeldung.",
+        )
+    )
+    db_session.commit()
+    service, _ = _service(local_llm_provider=FailingLocalLLMProvider())
+
+    service.create_draft(matter.id, "formulate_draft", db_session)
+
+    logs = db_session.query(ApiCallLog).filter_by(result_status="error").all()
+    assert len(logs) == 1
+    assert logs[0].error_status == "local_ai_unavailable"
+    assert "Peter" not in (logs[0].error_status or "")
+
+
+def test_full_orchestrated_path_presidio_local_ai_claude_reconstruction(
+    db_session: Session,
+) -> None:
+    """Test 8: vollstaendiger orchestrierter Pfad mit Mock-Providern:
+    Input -> Presidio -> Local AI -> Claude -> Reconstruction."""
+    matter = _matter(db_session, client_name="Anna Beispielperson")
+    from app.models import Document
+
+    db_session.add(
+        Document(
+            matter_id=matter.id,
+            file_path="/tmp/x.pdf",
+            extracted_text="Mandantin Anna Beispielperson bittet um Rueckmeldung.",
+        )
+    )
+    db_session.commit()
+    writing_provider = FakeClaudeWritingProvider(
+        response_text="Sehr geehrte Frau [MANDANT_01], vielen Dank für Ihre Nachricht."
+    )
+    local_llm = FakeLocalLLMProvider()
+    service, _ = _service(writing_provider, local_llm_provider=local_llm)
+
+    result = service.create_draft(matter.id, "formulate_draft", db_session)
+
+    assert result.success is True
+    # Local AI hat die pseudonymisierte (nicht die rohe) Payload gesehen.
+    assert "Anna Beispielperson" not in local_llm.received_payloads[0].anonymisierter_sachverhalt
+    # Claude hat ebenfalls nur die pseudonymisierte Payload gesehen.
+    assert "Anna Beispielperson" not in writing_provider.received_payloads[0].anonymisierter_sachverhalt
+    # Die lokale Rekonstruktion liefert am Ende wieder den echten Namen.
+    assert "Anna Beispielperson" in result.draft_text
+    assert "[MANDANT_01]" not in result.draft_text

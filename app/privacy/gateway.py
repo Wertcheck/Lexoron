@@ -34,6 +34,7 @@ from __future__ import annotations
 import re
 
 from app.privacy.gateway_schema import ClaudeRequestPayload, GatewayResult
+from app.privacy.presidio_ner import detect_presidio_entities
 from app.privacy.pseudonymizer import PseudonymMapping, Pseudonymizer
 from app.privacy.security_check import SecurityCheckService
 
@@ -75,8 +76,19 @@ class ClaudePrivacyGateway:
         pseudonymizer: Pseudonymizer | None = None,
         security_check: SecurityCheckService | None = None,
     ) -> None:
-        self.pseudonymizer = pseudonymizer or Pseudonymizer()
-        self.security_check = security_check or SecurityCheckService()
+        # Produktiv-Default: echte Presidio-NER (app/privacy/presidio_ner.py)
+        # sowohl bei der Pseudonymisierung als auch beim Restrisiko-Scan des
+        # SecurityCheckService - der Gateway ist der einzige erlaubte Weg
+        # Richtung Claude (siehe Moduldocstring), muss also sicher-by-default
+        # sein. Tests/Aufrufer, denen die Presidio-Ladezeit nicht wichtig
+        # ist, koennen explizit `Pseudonymizer()`/`SecurityCheckService()`
+        # ohne `ner_detector` injizieren.
+        self.pseudonymizer = pseudonymizer or Pseudonymizer(
+            ner_detector=detect_presidio_entities
+        )
+        self.security_check = security_check or SecurityCheckService(
+            ner_detector=detect_presidio_entities
+        )
 
     def prepare_request(
         self,

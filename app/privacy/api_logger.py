@@ -182,6 +182,7 @@ class ApiCallLogger:
         model: str,
         purpose: str,
         payload: ClaudeRequestPayload | None = None,
+        error_status: str = "writing_provider_exception",
     ) -> ApiCallLog:
         log_entry = ApiCallLog(
             workflow_id=workflow_id,
@@ -194,8 +195,11 @@ class ApiCallLogger:
             result_status="error",
             # Bewusst KEINE Exception-Nachricht gespeichert - koennte
             # ebenfalls Inhalte enthalten (z. B. bei einem Parsing-Fehler
-            # mit Textausschnitt in der Fehlermeldung).
-            error_status="writing_provider_exception",
+            # mit Textausschnitt in der Fehlermeldung). `error_status`
+            # bleibt ein fester, inhaltsfreier Kategorie-Code (§65:
+            # "local_ai_unavailable" fuer den Ollama-Fehlerfall, Default
+            # unveraendert "writing_provider_exception").
+            error_status=error_status,
         )
         db.add(log_entry)
         db.commit()

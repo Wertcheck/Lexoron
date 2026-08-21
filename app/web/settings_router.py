@@ -1,8 +1,7 @@
 """Echte, bedienbare Einstellungsseite (20.08.) - ersetzt die bisherige rein
 lesende Konfigurationsanzeige (app/web/account_router.py: account_privacy)
 für die tatsächlich veränderbaren Werte: Scan-Ordner (INTAKE_WATCHED_FOLDERS),
-E-Mail-Zugangsdaten (MAIL_*), Aufbewahrungsfrist (RETENTION_DAYS) und die
-lokale KI-Konfiguration (OLLAMA_*).
+E-Mail-Zugangsdaten (MAIL_*) und Aufbewahrungsfrist (RETENTION_DAYS).
 
 Admin-only (wie Nutzerverwaltung/Systemstatus/Backup) - E-Mail-Zugangsdaten
 sind ein Secret, Scan-Ordner-Pfade und die Aufbewahrungsfrist sind
@@ -86,7 +85,7 @@ def settings_page(
     # geprueft (kein automatischer Netzwerkaufruf, siehe app/system_health/
     # service.py-Docstring) - die Seite bindet stattdessen denselben
     # Admin-Klick-Endpunkt wie die Systemstatus-Seite ein
-    # (POST /dashboard/monitoring/check-ollama).
+    # (POST /dashboard/monitoring/check-api).
     context = {
         "request": request,
         "current_user": current_user,
@@ -102,9 +101,6 @@ def settings_page(
         "mail_use_ssl": settings.mail_use_ssl,
         "mail_configured": settings.mail_password is not None,
         "retention_days": settings.retention_days,
-        "ai_mode": settings.ai_mode,
-        "ollama_base_url": settings.ollama_base_url,
-        "ollama_model_name": settings.ollama_model_name,
         "anthropic_api_key_configured": settings.anthropic_api_key is not None,
     }
     return templates.TemplateResponse(request, "settings.html", context)
@@ -178,21 +174,6 @@ def update_retention(
 
     _apply({"RETENTION_DAYS": retention_days})
     return _redirect(success="Aufbewahrungsfrist gespeichert")
-
-
-@router.post("/ollama")
-def update_ollama_settings(
-    ollama_base_url: str = Form(...),
-    ollama_model_name: str = Form(...),
-    current_user: User = Depends(require_role("admin")),
-) -> RedirectResponse:
-    base_url = ollama_base_url.strip()
-    model_name = ollama_model_name.strip()
-    if not base_url or not model_name:
-        return _redirect(error="Ollama-URL und Modellname dürfen nicht leer sein")
-
-    _apply({"OLLAMA_BASE_URL": base_url, "OLLAMA_MODEL_NAME": model_name})
-    return _redirect(success="Ollama-Konfiguration gespeichert")
 
 
 # --- Kanzlei-Profil (Name/Anschrift/Kontakt, 20.08.) ---

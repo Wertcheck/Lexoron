@@ -46,6 +46,13 @@ class AnthropicClaudeWritingProvider:
         response = self._client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
+            # KEIN expliziter `temperature`-Parameter: fuer das aktuell
+            # konfigurierte Modell (claude-sonnet-5) lehnt die Anthropic-API
+            # diesen Parameter mit "temperature is deprecated for this
+            # model" hart ab (echter Fund beim realen End-zu-Ende-Smoketest,
+            # 20.08. - eine fruehere Annahme "temperature=0.0 fuer
+            # deterministische Ausgabe" war mit reinen Mock-Tests nicht
+            # aufgefallen). Modellseitiger Default gilt.
             system=[
                 {
                     "type": "text",

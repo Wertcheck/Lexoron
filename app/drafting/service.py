@@ -10,9 +10,18 @@ Ablauf:
    `KnowledgeItem`-Zeilen.
 4. Über den Privacy Gateway (Schritt 1-3) pseudonymisieren, prüfen, ggf.
    blockieren.
-5. Bei Erfolg: `ClaudeWritingProvider` aufrufen, protokollieren
+5. Optional (§65, nur wenn ein `local_llm_provider` injiziert wurde):
+   die bereits pseudonymisierte Payload zusätzlich lokal über Ollama
+   vorverarbeiten (`LocalLLMProvider.process`, siehe app/ai_providers/
+   local_llm_provider.py) - PFLICHT-Schritt, sobald aktiviert: schlägt er
+   fehl (`LocalLLMUnavailableError`), wird die Anfrage kontrolliert
+   blockiert und Claude NIEMALS aufgerufen (Datenschutz vor
+   Verfügbarkeit). Ohne injizierten Provider (Standard - siehe
+   app/web/service_factory.py, `settings.local_ai_enabled=False`)
+   unverändertes Verhalten wie vor §65.
+6. Bei Erfolg: `ClaudeWritingProvider` aufrufen, protokollieren
    (Schritt 5), lokal rekonstruieren, als `Draft` persistieren.
-6. Unsicherheiten ergänzen (z. B. unbestätigte Fristen in der Akte).
+7. Unsicherheiten ergänzen (z. B. unbestätigte Fristen in der Akte).
 
 KEINE Versand-Fähigkeit: dieser Service hat keine Methode, die eine
 E-Mail verschickt oder einen Versand auslöst - das bleibt dem noch nicht
@@ -26,6 +35,7 @@ from sqlalchemy.orm import Session
 
 from app.ai_providers.claude_writing_provider import ClaudeWritingProvider
 from app.ai_providers.local_ai_provider import LocalAIProvider
+from app.ai_providers.local_llm_provider import LocalLLMProvider, LocalLLMUnavailableError
 from app.cost_control import CostControlService
 from app.drafting.quick_matter import create_quick_matter
 from app.drafting.schema import DraftingResult, KnowledgeItemReference, SourceReference
@@ -35,6 +45,10 @@ from app.privacy.api_logger import ApiCallLogger
 from app.privacy.gateway import ClaudePrivacyGateway
 from app.research.service import LegalResearchService
 from app.search.service import DocumentSearchService
+
+_LOCAL_LLM_ARGUMENTATIONSPUNKT_PREFIX = (
+    "Lokale Vorabanalyse (automatisiert, Ollama, keine rechtliche Bewertung): "
+)
 
 
 class DraftingService:
@@ -49,6 +63,7 @@ class DraftingService:
         api_logger: ApiCallLogger | None = None,
         cost_control: CostControlService | None = None,
         model_name: str = "unknown",
+        local_llm_provider: LocalLLMProvider | None = None,
     ) -> None:
         self.local_ai = local_ai
         self.research_service = research_service
@@ -58,6 +73,9 @@ class DraftingService:
         self.api_logger = api_logger if api_logger is not None else ApiCallLogger()
         self.cost_control = cost_control if cost_control is not None else CostControlService()
         self.model_name = model_name
+        # None (Standard) = kein lokaler KI-Zwischenschritt, unveraendertes
+        # Verhalten wie vor §65 - siehe Moduldocstring Schritt 5.
+        self.local_llm_provider = local_llm_provider
 
     def create_draft(
         self,
@@ -168,15 +186,50 @@ class DraftingService:
                 open_review_points=open_review_points,
             )
 
+        payload = gateway_result.payload
+
+        # §65: PFLICHT-Zwischenschritt, sobald ein local_llm_provider
+        # injiziert wurde (siehe app/web/service_factory.py) - schlaegt er
+        # fehl, wird NIEMALS stattdessen direkt Claude aufgerufen
+        # (Datenschutz vor Verfuegbarkeit, siehe Moduldocstring Schritt 5).
+        if self.local_llm_provider is not None:
+            try:
+                local_result = self.local_llm_provider.process(payload)
+            except LocalLLMUnavailableError:
+                self.api_logger.log_error(
+                    db,
+                    workflow_id=matter_id,
+                    model=self.model_name,
+                    purpose=purpose,
+                    payload=payload,
+                    error_status="local_ai_unavailable",
+                )
+                return DraftingResult(
+                    success=False,
+                    blocked_reasons=[
+                        "Lokale KI (Ollama) nicht erreichbar - Anfrage wurde nicht "
+                        "an Claude gesendet."
+                    ],
+                    open_review_points=open_review_points,
+                )
+            payload = payload.model_copy(
+                update={
+                    "anonymisierte_argumentationspunkte": [
+                        *payload.anonymisierte_argumentationspunkte,
+                        f"{_LOCAL_LLM_ARGUMENTATIONSPUNKT_PREFIX}{local_result.text}",
+                    ]
+                }
+            )
+
         try:
-            writing_result = self.writing_provider.write(gateway_result.payload)
+            writing_result = self.writing_provider.write(payload)
         except Exception:
             self.api_logger.log_error(
                 db,
                 workflow_id=matter_id,
                 model=self.model_name,
                 purpose=purpose,
-                payload=gateway_result.payload,
+                payload=payload,
             )
             return DraftingResult(
                 success=False,
@@ -189,7 +242,7 @@ class DraftingService:
             workflow_id=matter_id,
             model=self.model_name,
             purpose=purpose,
-            payload=gateway_result.payload,
+            payload=payload,
             token_count=writing_result.token_count,
             input_tokens=writing_result.input_tokens,
             output_tokens=writing_result.output_tokens,

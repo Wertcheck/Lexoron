@@ -117,6 +117,7 @@ def seeded(db_session: Session) -> dict[str, str]:
         source_text="Einspruch ist innerhalb eines Monats einzulegen.",
         due_date=date(2026, 9, 30),
         confidence=0.5,
+        reasoning="Regelbasiert erkannt - NICHT als verbindlich bestätigt, manuelle Prüfung erforderlich.",
     )
     source = Source(
         title="AO § 355 Einspruchsfrist",
@@ -312,6 +313,23 @@ def test_list_deadlines_filtered_by_review_status(
     response = client.get("/api/deadlines", params={"review_status": "confirmed"})
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_deadline_response_includes_reasoning(client: TestClient, seeded: dict) -> None:
+    """Strukturierte, maschinenlesbare Ausgabe muss die Begruendung
+    enthalten, warum eine erkannte Frist nicht als verbindlich gilt - siehe
+    app/models/deadline.py::Deadline.reasoning."""
+    response = client.get("/api/deadlines", params={"matter_id": seeded["matter_id"]})
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert "NICHT als verbindlich bestätigt" in body[0]["reasoning"]
+
+
+def test_get_single_deadline_includes_reasoning(client: TestClient, seeded: dict) -> None:
+    response = client.get(f"/api/deadlines/{seeded['deadline_id']}")
+    assert response.status_code == 200
+    assert response.json()["reasoning"] is not None
 
 
 # --- Einstellungen ---

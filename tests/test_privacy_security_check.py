@@ -4,6 +4,7 @@ Kernanforderung (Architekturvorgabe, wörtlich): "Bei einem nicht
 eindeutigen Ergebnis: KEIN API-AUFRUF." - jeder Test, der einen Grund zum
 Blockieren simuliert, muss `passed=False` liefern."""
 
+from app.privacy.detectors import DetectedSpan
 from app.privacy.pseudonymizer import PseudonymMapping, Pseudonymizer
 from app.privacy.security_check import ALLOWED_PURPOSES, SecurityCheckService
 
@@ -137,3 +138,42 @@ def test_real_pipeline_output_passes_when_correctly_pseudonymized() -> None:
     result = checker.check(pseudo_text, mappings, purpose="formulate_draft")
 
     assert result.passed is True, result.reasons
+
+
+# --- NER-Injektion beim Restrisiko-Scan (Fake statt echtem Presidio - siehe
+# test_privacy_presidio_ner.py fuer den echten Stack) ---
+
+
+def _fake_ner_detector(text: str) -> list[DetectedSpan]:
+    idx = text.find("Julia Neumann")
+    if idx == -1:
+        return []
+    return [DetectedSpan(category="person", start=idx, end=idx + len("Julia Neumann"), value="Julia Neumann")]
+
+
+def test_ner_detector_catches_residual_pii_the_regex_heuristic_missed() -> None:
+    """Ein Name, den die Grossschreibungs-Heuristik zufaellig NICHT als
+    Kandidat listet (hier simuliert durch einen Fake, der gezielt einen
+    Namen findet), muss ueber den injizierten ner_detector trotzdem zum
+    Blockieren fuehren."""
+    checker = SecurityCheckService(ner_detector=_fake_ner_detector)
+
+    result = checker.check("Kontakt bitte an Julia Neumann.", [], purpose="formulate_draft")
+
+    assert result.passed is False
+
+
+def test_without_ner_detector_behaves_exactly_as_before() -> None:
+    checker = SecurityCheckService()
+
+    result = checker.check(
+        "Sehr geehrter Herr Max Mustermann, Az.: 123/24, Frist 15.03.2027.",
+        [],
+        purpose="formulate_draft",
+    )
+
+    # Unveraendertes Verhalten: die Grossschreibungs-Heuristik (nicht der
+    # NER-Detector) entscheidet weiterhin allein - "Max Mustermann" wird
+    # hier (wie im bestehenden Test test_possible_unrecognized_name_blocks_
+    # the_call) als moeglicher unbekannter Name erkannt.
+    assert result.passed is False

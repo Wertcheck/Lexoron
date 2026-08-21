@@ -6,9 +6,9 @@
    auf einen toten Redirect zur Profil-Uebersicht, sondern oeffnen echte
    modale Eingabefenster, die direkt gegen app/web/settings_router.py
    posten (Scan-Ordner/E-Mail sind seither ECHTE, editierbare Einstellungen,
-   nicht mehr nur ueber die .env-Datei erreichbar). Schritt 3 (Ollama) ist
-   kein Formular, sondern derselbe admin-Klick-Erreichbarkeitscheck wie auf
-   der Systemstatus-/Einstellungsseite. #}
+   nicht mehr nur ueber die .env-Datei erreichbar). Schritt 3 (Claude-API)
+   ist kein Formular, sondern derselbe admin-Klick-Erreichbarkeitscheck wie
+   auf der Systemstatus-/Einstellungsseite. #}
 <div class="onboarding">
   <div class="onboarding-box">
     <h2 class="onboarding-box__title">Willkommen bei Lexono – Erste Schritte</h2>
@@ -39,14 +39,13 @@
       </div>
       <div class="onboarding-step">
         <div class="onboarding-step__icon">{{ icons.bulb(class_="icon") }}</div>
-        <div class="onboarding-step__title">3. Lokale KI prüfen</div>
+        <div class="onboarding-step__title">3. Claude-API prüfen</div>
         <div class="onboarding-step__action" style="flex-direction: column; align-items: flex-start; gap: 6px;">
-          <span id="onboarding-ollama-result">noch nicht geprüft</span>
-          <form hx-post="/dashboard/monitoring/check-ollama" hx-target="#onboarding-ollama-result" hx-swap="innerHTML">
+          <span id="onboarding-api-result">noch nicht geprüft</span>
+          <form hx-post="/dashboard/monitoring/check-api" hx-target="#onboarding-api-result" hx-swap="innerHTML">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-            <button type="submit" class="btn">Ollama jetzt prüfen</button>
+            <button type="submit" class="btn">Jetzt prüfen</button>
           </form>
-          {% include "partials/ollama_install_widget.html" %}
         </div>
       </div>
     </div>

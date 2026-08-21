@@ -123,44 +123,52 @@ class Settings(BaseSettings):
     # Reste faelschlich als vollstaendiger Text gewertet werden).
     min_extracted_text_length: int = 20
 
-    # --- LLM / KI-Modus (Local-First-Architektur, 20.08.) ---
-    # Ersetzt das fruehere reine `llm_provider`-Feld ("anthropic" als
-    # einziger Wert) - siehe ARCHITECTURE.md §60 fuer die Entscheidung:
-    # §57 (direkte Anthropic-API, kein lokales LLM) wurde an diesem Tag
-    # noch einmal ausdruecklich angefragt UND diesmal bewusst bestaetigt
-    # umgekehrt - `ai_mode` ist jetzt der EINZIGE Schalter fuer die
-    # Provider-Auswahl (siehe app/ai_providers/factory.py):
-    #   - "LOCAL_ONLY" (Standard): ausschliesslich das lokale Ollama-Modell
-    #     (ollama_base_url/ollama_model_name) - keine Anfrage verlaesst die
-    #     Kanzlei-Maschine.
-    #   - "HYBRID": Text durchlaeuft weiterhin ZUERST das lokale
-    #     Privacy-Modul (app/privacy/gateway.py: ClaudePrivacyGateway -
-    #     Pseudonymisierung + SecurityCheckService) und wird ERST DANACH,
-    #     ausschliesslich in bereits anonymisierter Form, an Anthropic
-    #     uebergeben. Das war strukturell auch vorher schon so (der Gateway
-    #     sitzt in app/web/service_factory.py IMMER vor der eigentlichen
-    #     Provider-Auswahl, unabhaengig vom Provider) - HYBRID macht nur
-    #     explizit, dass der Cloud-Pfad ueberhaupt aktiv ist.
-    ai_mode: str = "LOCAL_ONLY"
-    # Lokaler Ollama-Dienst (Standard-Port der offiziellen Ollama-
-    # Installation) - siehe app/ai_providers/ollama_writing_provider.py.
-    ollama_base_url: str = "http://localhost:11434"
-    ollama_model_name: str = "llama3.1"
+    # --- LLM / Claude-API (§63, 20.08.: Ollama als eigenstaendiger
+    # Provider vollstaendig entfernt; §65: lokale KI per Ollama als
+    # PFLICHT-Zwischenschritt VOR Claude wieder eingefuehrt - siehe unten
+    # "Lokale KI (Ollama)". Ollama ist weiterhin KEIN Ersatz/keine
+    # Alternative zu Claude, siehe ARCHITECTURE.md §65) ---
+    # Jeder Text durchlaeuft VOR jedem Claude-Aufruf zwingend das lokale
+    # Privacy-Modul (app/privacy/gateway.py: ClaudePrivacyGateway -
+    # Presidio-gestuetzte Pseudonymisierung + SecurityCheckService) und
+    # wird ausschliesslich in bereits anonymisierter Form uebergeben
+    # (siehe app/ai_providers/factory.py).
     anthropic_api_key: SecretStr | None = None
-    # Nur relevant bei ai_mode="HYBRID" (siehe app/ai_providers/factory.py).
     claude_model_name: str = "claude-sonnet-5"
     claude_max_tokens: int = 2000
 
-    @field_validator("ai_mode")
+    # --- Lokale KI (Ollama) (§65, 20.08.) ---
+    # Bewusst standardmaessig DEAKTIVIERT (local_ai_enabled=False): die
+    # bestehende, vollstaendig getestete Presidio+Claude-Pipeline bleibt
+    # ohne jede Verhaltensaenderung nutzbar, solange keine lokale
+    # Ollama-Installation vorhanden ist (z. B. Entwicklungs-/CI-Umgebungen
+    # ohne Ollama). Wird local_ai_enabled=True gesetzt, ist der lokale
+    # KI-Schritt PFLICHT (nicht optional/best-effort) - ist Ollama dann
+    # nicht erreichbar, wird die Anfrage kontrolliert blockiert, NIEMALS
+    # wird stattdessen Klartext/pseudonymisierter Text ohne den lokalen
+    # KI-Schritt direkt an Claude weitergereicht (Datenschutz vor
+    # Verfuegbarkeit, siehe app/ai_providers/local_llm_provider.py).
+    local_ai_enabled: bool = False
+    # Aktuell einzige unterstuetzte lokale Runtime - Feld existiert bereits
+    # jetzt (statt hart "ollama" im Code zu verankern), damit eine
+    # kuenftige weitere Runtime nicht erneut eine Schema-Aenderung braucht.
+    local_ai_runtime: str = "ollama"
+    ollama_base_url: str = "http://localhost:11434"
+    # Konkret unterstuetztes Modell fuer den heutigen Kern-Pfad (Schritt
+    # "erste funktionierende Implementierung", siehe ARCHITECTURE.md §65) -
+    # bewusst EIN Modell, kein Model-Catalog (bleibt ein spaeterer Schritt).
+    ollama_model: str = "qwen3:4b"
+
+    @field_validator("local_ai_runtime")
     @classmethod
-    def ai_mode_must_be_supported(cls, value: str) -> str:
-        supported = {"LOCAL_ONLY", "HYBRID"}
-        upper = value.upper()
-        if upper not in supported:
+    def local_ai_runtime_must_be_supported(cls, value: str) -> str:
+        supported = {"ollama"}
+        lower = value.lower()
+        if lower not in supported:
             raise ValueError(
-                f"ai_mode muss einer von {sorted(supported)} sein, war: {value!r}"
+                f"local_ai_runtime muss einer von {sorted(supported)} sein, war: {value!r}"
             )
-        return upper
+        return lower
 
     # --- Rechtsquellen (Platzhalter, echte Logik erst Prompt 14/15) ---
     # Generische Liste erlaubter Quellen-Identifier; keine architektonische

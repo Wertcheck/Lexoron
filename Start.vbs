@@ -28,20 +28,6 @@ Set objFSO = CreateObject("Scripting.FileSystemObject")
 strScriptDir = objFSO.GetParentFolderName(WScript.ScriptFullName)
 strLogPath = strScriptDir & "\app.log"
 
-' Lokaler Ollama-Dienst-Check (Local-First-Architektur) - rein informativ,
-' best-effort: schreibt EINE Zeile nach app.log, BEVOR der eigentliche
-' Server startet. Der Server selbst fuehrt beim Start UNABHAENGIG davon
-' dieselbe Pruefung erneut durch, dort gegen die tatsaechlich konfigurierte
-' OLLAMA_BASE_URL aus der .env (siehe app/main.py: _run_silent_ollama_check)
-' - dieser Check hier deckt nur den Standardport ab und dient als frueher,
-' zusaetzlicher Log-Eintrag, falls der Server aus irgendeinem Grund gar
-' nicht erst bis zu seiner eigenen Pruefung kommt. Blockiert/verzoegert den
-' eigentlichen App-Start NIE (kurzer Timeout, On Error Resume Next) - eine
-' nicht erreichbare lokale Ollama-Instanz ist ein normaler, erwarteter
-' Zustand (Ollama evtl. noch nicht gestartet), kein Fehlerfall, der den
-' restlichen Ablauf abbrechen duerfte.
-CheckOllamaAndLog strLogPath
-
 ' Persistentes Datenverzeichnis - identische Ableitung wie
 ' app/setup/paths.py (resolve_data_dir): KANZLEI_AI_DATA_DIR-Override,
 ' sonst %PROGRAMDATA%\KanzleiAI.
@@ -95,35 +81,3 @@ Else
     ' interaktive Konsole - NICHT verstecken (1 = normales Fenster).
     objShell.Run strCommand, 1, False
 End If
-
-' Prueft den lokalen Ollama-Standardport (Local-First-Architektur, siehe
-' ARCHITECTURE.md §60) und haengt EINE Ergebniszeile an app.log an -
-' NIEMALS ein Fehler, der WScript.Run oben verhindern duerfte (On Error
-' Resume Next umschliesst den gesamten HTTP-Versuch UND den Logschreibzugriff).
-Sub CheckOllamaAndLog(strLogFilePath)
-    Dim objHttp, objLogFile, strStatusLine
-
-    On Error Resume Next
-    Set objHttp = CreateObject("WinHttp.WinHttpRequest.5.1")
-    If Err.Number = 0 Then
-        objHttp.SetTimeouts 1000, 1000, 1500, 1500
-        objHttp.Open "GET", "http://localhost:11434/api/tags", False
-        objHttp.Send
-        If Err.Number = 0 And objHttp.Status = 200 Then
-            strStatusLine = "[Start.vbs] Ollama erreichbar (http://localhost:11434)."
-        Else
-            strStatusLine = "[Start.vbs] Ollama nicht erreichbar - AI_MODE=LOCAL_ONLY " & _
-                "Entwuerfe/Pruefungen schlagen fehl, bis der Dienst laeuft."
-        End If
-    Else
-        strStatusLine = "[Start.vbs] Ollama-Check uebersprungen (WinHTTP nicht verfuegbar)."
-    End If
-    Err.Clear
-
-    Set objLogFile = objFSO.OpenTextFile(strLogFilePath, 8, True)
-    If Err.Number = 0 Then
-        objLogFile.WriteLine Now & " " & strStatusLine
-        objLogFile.Close
-    End If
-    On Error Goto 0
-End Sub

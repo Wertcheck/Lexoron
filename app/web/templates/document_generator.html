@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% import "_icons.html" as icons %}
+{% block title %}Dokumentengenerator{% endblock %}
+{% block content %}
+  <div class="topbar">
+    <h1 class="topbar__title">Dokumentengenerator</h1>
+    <div class="topbar__meta">
+      Erzeugt einen Schriftsatz aus einer Vorlage (<a href="/dashboard/library/mustertexte">Kanzlei-Mustertexte</a>)
+      und den Falldaten einer Akte
+    </div>
+  </div>
+
+  <div class="banner banner--info">
+    <strong>Vollständig lokal:</strong> die Platzhalter werden durch reine Textersetzung mit
+    Datenbankfeldern befüllt - keine KI, kein Cloud-Anbieter erhält Mandantendaten. Anders als der
+    <a href="/dashboard/tools/schriftsatz">KI-Schriftsatz-Generator</a> (der einen Antwortentwurf
+    formuliert) setzt dieses Werkzeug eine von Ihnen selbst verfasste Vorlage 1:1 mit echten
+    Aktendaten zusammen.
+  </div>
+
+  {% if error %}
+    <div class="banner banner--error">{{ error }}</div>
+  {% endif %}
+
+  <div class="draft-page">
+    <div class="instructions-panel">
+      <h2 class="panel-title">Dokument generieren</h2>
+      {% if not document_templates %}
+        <div class="empty-state">
+          Noch keine Vorlagen vorhanden - <a href="/dashboard/library/mustertexte">zuerst eine Vorlage anlegen</a>.
+        </div>
+      {% else %}
+        <form method="post" action="/dashboard/tools/dokumentgenerator/generate" class="dashboard-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+          <label class="form-label">
+            Vorlage
+            <select name="template_id" required>
+              <option value="">— Vorlage wählen —</option>
+              {% for template in document_templates %}
+                <option value="{{ template.id }}"{% if template.id == preselected_template_id %} selected{% endif %}>
+                  {{ template.name }}{% if template.category %} ({{ template.category }}){% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="form-label">
+            Akte
+            <select name="matter_id" required>
+              <option value="">— Akte wählen —</option>
+              {% for matter in open_matters %}
+                <option value="{{ matter.id }}"{% if matter.id == preselected_matter_id %} selected{% endif %}>
+                  {{ matter.title }}{% if matter.reference_number %} ({{ matter.reference_number }}){% endif %}
+                </option>
+              {% endfor %}
+            </select>
+            {% if not open_matters %}
+              <span class="form-hint">Keine offenen Akten vorhanden.</span>
+            {% endif %}
+          </label>
+          <button type="submit" class="btn btn--primary">Generieren</button>
+        </form>
+      {% endif %}
+    </div>
+
+    <div class="instructions-panel">
+      <h2 class="panel-title">Zuletzt generierte Dokumente</h2>
+      {% if recent_documents %}
+        <div class="table-container">
+          <table class="draft-table">
+            <thead><tr><th>Titel</th><th>Akte</th><th>Erstellt</th></tr></thead>
+            <tbody>
+              {% for document in recent_documents %}
+                <tr onclick="window.location='/dashboard/tools/dokumentgenerator/{{ document.id }}'">
+                  <td>{{ document.title }}</td>
+                  <td>{{ document.matter.title if document.matter else "–" }}</td>
+                  <td class="mono">{{ document.created_at.strftime("%d.%m.%Y, %H:%M") }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="empty-state">Noch keine Dokumente generiert.</div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

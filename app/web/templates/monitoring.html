@@ -64,10 +64,6 @@
             <td><span class="tag {% if mail_configured %}tag--matched{% else %}tag--unmatched{% endif %}">{{ "ja" if mail_configured else "nein" }}</span></td>
           </tr>
           <tr>
-            <td>KI-Modus</td>
-            <td><span class="tag tag--matched">{{ ai_mode }}</span></td>
-          </tr>
-          <tr>
             <td>Claude-API-Schlüssel hinterlegt</td>
             <td><span class="tag {% if claude_api_configured %}tag--matched{% else %}tag--unmatched{% endif %}">{{ "ja" if claude_api_configured else "nein" }}</span></td>
           </tr>
@@ -127,20 +123,10 @@
               </form>
             </td>
           </tr>
-          <tr>
-            <td>Lokales LLM (Ollama)-Erreichbarkeit</td>
-            <td>
-              <span id="ollama-reachability-result">noch nicht geprüft</span>
-              <form hx-post="/dashboard/monitoring/check-ollama" hx-target="#ollama-reachability-result" hx-swap="innerHTML" style="display:inline;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
-                <button type="submit" class="btn" style="margin-left: 8px;">Jetzt prüfen</button>
-              </form>
-            </td>
-          </tr>
         </tbody>
       </table>
       <p class="form-hint" style="margin-top: 10px;">
-        Die Claude-API-/Ollama-Erreichbarkeit wird bewusst NICHT automatisch bei jedem
+        Die Claude-API-Erreichbarkeit wird bewusst NICHT automatisch bei jedem
         Seitenaufruf geprüft, sondern nur auf Klick - vermeidet unnötige ausgehende Verbindungen.
       </p>
     </div>

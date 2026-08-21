@@ -19,6 +19,22 @@ ein Endzustand ohne jeden Weg, es erneut zu versuchen, außer den
 Datensatz manuell zu löschen und neu anzulegen. `RetryService` wird
 bewusst als DEFAULT-Parameter injiziert (nicht hart codiert), damit
 Aufrufer (z. B. Tests) eine eigene Instanz übergeben können.
+
+Seit §64: nach ERFOLGREICH abgeschlossener Extraktion/OCR (`ocr_status`
+"not_needed" oder "done" - also tatsächlich verwertbarer Text vorhanden,
+NICHT bei "failed"/"unsupported_format"/"pending") UND bereits erfolgter
+Aktenzuordnung (`document.matter_id` gesetzt) wird automatisch die
+bestehende, regelbasierte `DeadlineAnalysisService.analyze_document`
+aufgerufen (ebenfalls per DEFAULT-Parameter injiziert, gleiches Muster wie
+`retry_service`). Keine LLM-Fristenerkennung, keine Änderung der Privacy-/
+Claude-Pipeline - reine Verkettung zweier bereits bestehender, unabhängig
+getesteter Services. `analyze_document` ist selbst idempotent (siehe
+app/deadlines/service.py) - ein erneuter `process_document`-Aufruf für
+dasselbe Dokument (z. B. über den Retry-Pfad) erzeugt keine doppelten
+`Deadline`-Datensätze. Fehlt `matter_id` (noch keine Aktenzuordnung
+erfolgt), wird `analyze_document` bewusst gar nicht erst aufgerufen -
+würde ohnehin nur no-op + Audit-Rauschen erzeugen (siehe dortiger
+eigener Guard).
 """
 
 from __future__ import annotations
@@ -27,10 +43,14 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from app.deadlines.extractor import PlaceholderDeadlineExtractor
+from app.deadlines.service import DeadlineAnalysisService
 from app.documents.extraction import extract_text
 from app.documents.ocr import OcrError, configure_tesseract, run_ocr
 from app.errors.service import RetryService
 from app.models import AuditEvent, Document
+
+_TEXT_READY_OCR_STATUSES = ("not_needed", "done")
 
 
 class DocumentProcessingService:
@@ -42,11 +62,15 @@ class DocumentProcessingService:
         min_extracted_text_length: int = 20,
         tesseract_cmd: str | None = None,
         retry_service: RetryService | None = None,
+        deadline_service: DeadlineAnalysisService | None = None,
     ) -> None:
         self.ocr_enabled = ocr_enabled
         self.ocr_languages = ocr_languages
         self.min_extracted_text_length = min_extracted_text_length
         self.retry_service = retry_service or RetryService()
+        self.deadline_service = deadline_service or DeadlineAnalysisService(
+            PlaceholderDeadlineExtractor()
+        )
         configure_tesseract(tesseract_cmd)
 
     def process_document(
@@ -162,4 +186,12 @@ class DocumentProcessingService:
         )
         db.commit()
         db.refresh(document)
+
+        # Automatische Fristenerkennung NUR nach tatsaechlich erfolgreicher
+        # Extraktion/OCR und NUR mit bereits erfolgter Aktenzuordnung (siehe
+        # Moduldocstring) - kein Aufruf bei "failed"/"unsupported_format"/
+        # "pending" oder ohne matter_id.
+        if document.ocr_status in _TEXT_READY_OCR_STATUSES and document.matter_id:
+            self.deadline_service.analyze_document(document, db)
+
         return document

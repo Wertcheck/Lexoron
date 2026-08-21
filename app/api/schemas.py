@@ -157,6 +157,11 @@ class DeadlineOut(_ORMBase):
     source_text: str | None
     due_date: date | None
     confidence: float | None
+    # Erklaerung der Erkennung inkl. des ausdruecklichen Hinweises, dass die
+    # Frist NICHT als verbindlich bestaetigt gilt (siehe
+    # app/deadlines/extractor.py::ExtractedDeadline.reasoning) - None bei
+    # aelteren/anders erzeugten Datensaetzen ohne Reasoning-Text.
+    reasoning: str | None
     review_status: str
     created_at: datetime
     updated_at: datetime
@@ -186,7 +191,6 @@ class SettingsOut(BaseModel):
     ocr_enabled: bool
     ocr_engine: str
     ocr_languages: str
-    ai_mode: str
     claude_model_name: str
     claude_max_tokens: int
     require_human_approval_before_send: bool
@@ -227,7 +231,6 @@ class SettingsOut(BaseModel):
             ocr_enabled=settings.ocr_enabled,
             ocr_engine=settings.ocr_engine,
             ocr_languages=settings.ocr_languages,
-            ai_mode=settings.ai_mode,
             claude_model_name=settings.claude_model_name,
             claude_max_tokens=settings.claude_max_tokens,
             require_human_approval_before_send=settings.require_human_approval_before_send,
