@@ -4445,3 +4445,75 @@ geprüft (Silent-Install-Flags bereits einmal erfolgreich verwendet, SHA256-Veri
 gegen den real heruntergeladenen Installer bestätigt) - der vollständige AUTOMATISIERTE
 Ablauf als EIN zusammenhängender Lauf (inkl. `ensure_running` nach einem echten
 Systemneustart) steht noch aus.
+
+## 69. Local-AI-Status-/Startlogik an den Anwendungslebenszyklus angebunden (21.08.)
+
+Direkter Folgeauftrag auf §68: die dort gebaute, bis hierhin nirgends aufgerufene
+`LocalAiSetupService`/`OllamaInstaller`-Logik jetzt tatsächlich mit dem Start von Lexoron
+verbinden - real geprüft (`git grep LocalAiSetupService` außerhalb von `tests/`): weder
+`app/main.py` noch `app/web/monitoring_router.py` riefen `get_status()`/`ensure_running()`
+bisher irgendwo auf. Ausdrücklich AUSSCHLIESSLICH Verkabelung - keine neue Status-/
+Startlogik, kein neues `LocalAiState`, keine neue `ensure_running()`-Implementierung, keine
+UI, keine Änderung an Presidio/Claude/Fristenlogik (Vorgabe wörtlich).
+
+### Integrationspunkt
+
+`app/main.py::lifespan` - derselbe Ort, an dem bereits die stumme, nicht-blockierende
+Update-Prüfung (`_run_silent_update_check`, Schritt 3) hängt. Gewählt, weil genau dieses
+Muster exakt die Vorgabe erfüllt ("darf beim Start NICHT minutenlang blockieren" /
+"falls die bestehende Startarchitektur einen Background-/Startup-Task vorsieht, diesen
+verwenden"): ein `asyncio.create_task(...)` direkt vor `yield`, per `asyncio.to_thread`
+non-blocking für den synchronen `httpx`-/`subprocess`-Code in `LocalAiSetupService`, beim
+Shutdown mit `.cancel()` beendet - keine zweite, neue Scheduler-/Background-Infrastruktur.
+Alternative verworfen: ein eigener Router-Endpunkt/eine Middleware - beides wäre "UI"/neues
+Backend im Sinne der Vorgabe gewesen, während `lifespan` bereits die vorgesehene Stelle für
+genau diese Art von "beim Start einmalig, im Hintergrund, informativ" ist.
+
+### Ablauf (`_run_silent_local_ai_check`, neue Funktion in `app/main.py`)
+
+1. `service.get_status(settings)` (bestehend, §68) - liefert bereits `DISABLED` bei
+   `LOCAL_AI_ENABLED=false`, OHNE Netzwerkaufruf. Deshalb KEINE eigene
+   Aktiviert-Prüfung in `app/main.py` - hätte die in `get_status()` bereits vorhandene
+   Kurzschlusslogik dupliziert.
+2. Nur bei `RUNTIME_UNREACHABLE` (Runtime installiert, gerade nicht erreichbar - der Fall,
+   für den `ensure_running()` laut eigenem Docstring gebaut wurde): `ensure_running()`
+   (bestehend, §68) aufrufen, mit `wait_seconds=3.0` statt des dort dokumentierten
+   `wait_seconds=0.0`-"Testdefaults" (Docstring von `ensure_running`: Ollama braucht nach
+   dem Start real einen Moment, bis der API-Port gebunden ist - `wait_seconds=0.0` würde
+   diesen Moment nicht abwarten). `RUNTIME_MISSING`/`MODEL_MISSING` lösen bewusst KEINEN
+   `ensure_running()`-Versuch aus (kein Installer-/Download-Schritt hier, das bleibt der
+   admin-ausgelöste Setup-Assistent aus §68).
+3. Status wird IMMER erneut über `get_status()` ermittelt, nie aus dem reinen
+   `ensure_running()`-Rückgabewert abgeleitet - verhindert strukturell einen fälschlich
+   vorgetäuschten `READY`-Status.
+4. Ergebnis landet in `app.state.local_ai_status` (analog zu `app.state.update_check`) -
+   aktuell von keiner Route/UI gelesen, siehe Abgrenzung unten.
+
+### Bewusst NICHT gebaut (Vorgabe wörtlich)
+
+Kein Dashboard-Badge/keine Route, die `app.state.local_ai_status` anzeigt - reine
+Backend-Verkabelung. Kein Reparatur-Button, kein Setup-Wizard-Trigger. Kein neuer
+`asyncio`-Scheduler - dasselbe `create_task`/`.cancel()`-Muster wie beim Update-Check.
+`build_local_llm_provider` (bestehend, `app/ai_providers/factory.py`) statt eines direkten
+Zugriffs auf `LocalAiSetupService`s private `_provider_factory` - vermeidet einen Zugriff
+auf ein Implementierungsdetail einer fremden Klasse, baut exakt dieselbe
+`OllamaLocalLLMProvider`-Instanz wie `get_status()` selbst intern.
+
+### Getestet
+
+`tests/test_main_local_ai_startup_check.py` (neu, 8 Tests, alle mit Fakes - kein echter
+Ollama-Prozess/HTTP-Aufruf): `DISABLED` löst keine Startaktion aus, bereits `READY` löst
+keinen `ensure_running()`-Aufruf aus, `RUNTIME_UNREACHABLE` nutzt `ensure_running()`,
+erfolgreicher Start endet bei `READY`, fehlgeschlagener Start bleibt korrekt NICHT `READY`
+(auch wenn `ensure_running()` `True` zurückmeldet - der Endzustand kommt immer aus dem
+erneuten `get_status()`), `MODEL_MISSING`/`RUNTIME_MISSING` lösen keinen Neustartversuch
+aus, und ein Test mit echtem `TestClient(app)`-Lifespan-Durchlauf bestätigt, dass `/health`
+weiterhin normal antwortet, während der Local-AI-Check im Hintergrund läuft. Gesamte Suite
+erneut ausgeführt (siehe Testlauf-Ergebnis im Session-Protokoll).
+
+**Nicht durchgeführt (real, auf einem echten Windows-Rechner):** Prozessneustart- und
+Reboot-Verhalten selbst (ob der offizielle Ollama-Tray-Autostart nach einem echten
+Windows-Neustart tatsächlich rechtzeitig läuft, ob `ensure_running()` ihn im realen
+Zeitfenster erreicht) - dieser Schritt bereitet den Code dafür vor, behauptet aber keine
+reale Verifikation dieses Verhaltens (siehe `LOCAL_AI_SETUP_CHECKLIST.md`/Windows-
+Abnahmeliste, Abschnitt D).

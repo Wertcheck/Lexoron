@@ -28,9 +28,11 @@ from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.ai_providers.factory import build_local_llm_provider
 from app.api import api_router
 from app.auth.permissions import AppLockedError, ForcePasswordChangeError, NotAuthenticatedError
-from app.config import get_settings
+from app.config import Settings, get_settings
+from app.local_ai.setup_orchestrator import LocalAiSetupService, LocalAiState
 from app.observability import configure_logging
 from app.updater.checker import UpdateCheckResult, check_for_update
 from app.web.account_router import router as account_web_router
@@ -70,6 +72,55 @@ async def _run_silent_update_check(app: FastAPI, manifest_url: str | None) -> No
         logger.info("Update verfügbar: %s", result.latest_version)
 
 
+async def _run_silent_local_ai_check(app: FastAPI, settings: Settings) -> None:
+    """Ermittelt den Local-AI-Status beim Start in einem Hintergrund-Thread
+    (analog zu `_run_silent_update_check` oben) - blockiert den App-Start
+    nicht. Ruft AUSSCHLIESSLICH bereits bestehende Logik auf
+    (`LocalAiSetupService.get_status`/`OllamaInstaller.ensure_running`,
+    ARCHITECTURE.md §68) - keine neue Status- oder Startlogik, keine neue
+    Installations-/Modell-Download-Logik.
+
+    `get_status()` liefert bereits `LocalAiState.DISABLED`, wenn
+    `settings.local_ai_enabled=False` ist, OHNE dabei einen Netzwerkaufruf
+    auszulösen - deshalb hier bewusst KEINE eigene "ist aktiviert"-Prüfung
+    (keine Dopplung der bereits in `get_status()` vorhandenen
+    Kurzschlusslogik).
+
+    Nur im Fall `RUNTIME_UNREACHABLE` (Ollama-Runtime ist installiert, aber
+    gerade nicht erreichbar - typischer Fall nach einem Systemneustart,
+    bevor der vom offiziellen Installer registrierte Autostart-/
+    Tray-Prozess den API-Port gebunden hat) wird die dafür bereits
+    vorgesehene `ensure_running()`-Logik genutzt; danach wird der Status
+    genau EIN weiteres Mal frisch ermittelt - der tatsächliche Endzustand
+    kommt IMMER aus `get_status()` selbst, nie aus dem reinen
+    `ensure_running()`-Rückgabewert, damit niemals ein falscher `READY`-
+    Status vorgetäuscht wird. `RUNTIME_MISSING` (gar nicht installiert) und
+    `MODEL_MISSING` (Runtime läuft, Modell fehlt) werden unverändert
+    übernommen - ein Startversuch würde daran nichts ändern; Installation
+    bzw. Modell-Download bleiben Aufgabe des separaten, admin-ausgelösten
+    Setup-Assistenten (§68), nicht dieses stillen Startchecks."""
+    service = LocalAiSetupService()
+    status = await asyncio.to_thread(service.get_status, settings)
+
+    if status.state == LocalAiState.RUNTIME_UNREACHABLE:
+        provider = build_local_llm_provider(settings)
+        if provider is not None:
+            await asyncio.to_thread(
+                service.ollama_installer.ensure_running,
+                is_reachable=lambda: provider.check_health().reachable,
+                wait_seconds=3.0,
+            )
+            status = await asyncio.to_thread(service.get_status, settings)
+
+    app.state.local_ai_status = status
+    if status.state == LocalAiState.READY:
+        logger.info("Lokale KI bereit (Modell '%s').", status.configured_model)
+    elif status.state != LocalAiState.DISABLED:
+        logger.warning(
+            "Lokale KI nicht bereit (Status %s): %s", status.state.value, status.detail
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Laedt die validierte Konfiguration beim Start und konfiguriert das
@@ -85,6 +136,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     nebenläufig zum eigentlichen Start, verzögert ihn also nicht, und
     scheitert niemals hart (Standardwert `checked=False`, solange die
     Prüfung noch läuft oder deaktiviert ist).
+
+    Analog dazu (§68-Nachtrag): ein stummer, nicht-blockierender Local-AI-
+    Statuscheck im Hintergrund (siehe `_run_silent_local_ai_check` oben) -
+    verbindet die bereits bestehende `LocalAiSetupService`/`OllamaInstaller`-
+    Logik erstmals mit dem tatsächlichen Anwendungsstart, ohne diesen zu
+    verzögern. Solange der Task noch läuft, ist `app.state.local_ai_status`
+    schlicht noch nicht gesetzt (kein erfundener Zwischenzustand) - es gibt
+    aktuell noch keine UI/Route, die diesen Wert läse.
     """
     settings = get_settings()
     configure_logging(log_level=settings.log_level, log_file_path=settings.log_file_path)
@@ -95,8 +154,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     update_task = asyncio.create_task(
         _run_silent_update_check(app, settings.update_manifest_url)
     )
+    local_ai_task = asyncio.create_task(_run_silent_local_ai_check(app, settings))
     yield
     update_task.cancel()
+    local_ai_task.cancel()
     logger.info("Anwendung wird beendet")
 
 
