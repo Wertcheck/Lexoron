@@ -377,22 +377,46 @@ class _NativeApi:
     Pfadfeld), damit Nutzer:innen einen echten nativen Windows-
     Ordnerauswahldialog statt manueller Pfadeingabe bekommen.
 
-    `window` wird ERST NACH `webview.create_window(...)` gesetzt (die
+    `_window` wird ERST NACH `webview.create_window(...)` gesetzt (die
     js_api-Instanz muss bereits beim Erzeugen des Fensters existieren,
     kennt das fertige Fenster-Objekt selbst aber noch nicht - siehe
     `_serve_with_window` unten). Nur im gebündelten Fenster relevant: im
     reinen Browser-/`--no-window`-Modus existiert `window.pywebview` im
     Frontend gar nicht, das Textfeld bleibt dort die einzige Eingabe
-    (Feature-Detection im Template, kein Fehlerfall)."""
+    (Feature-Detection im Template, kein Fehlerfall).
 
-    window: object | None = None
+    BEWUSST `_window` (führender Unterstrich), NICHT `window`: pywebviews
+    eigene JS-Bridge-Generierung (`webview/util.py::get_functions`) läuft
+    beim Laden jeder Seite per `dir()`/`getattr()` rekursiv über alle
+    NICHT mit "_" beginnenden Attribute dieser Klasse, um sie als
+    JS-aufrufbare Funktionen verfügbar zu machen (der Mechanismus, der
+    `pick_folder()` unten überhaupt erst als `window.pywebview.api.
+    pick_folder()` im Frontend bereitstellt - siehe Docstring oben). Ein
+    öffentliches `window`-Attribut wäre selbst kein Zyklus, brächte diese
+    Rekursion aber in den echten `webview.Window`/nativen WinForms-
+    Objektgraphen hinein (u. a. `.native.AccessibilityObject.Bounds`) -
+    dort liefert jeder Property-Zugriff über die .NET-Interop-Schicht
+    (pythonnet) ein NEUES Wrapper-Objekt mit neuer Python-`id()`, wodurch
+    `get_functions`s eigene Zyklus-Erkennung (Ablage besuchter `id()`-Werte)
+    nie zuschlägt und die Rekursion faktisch endlos weiterläuft (real
+    beobachtet: "Lexono (Keine Rückmeldung)" nach dem Rendern des Login-
+    Fensters, Live-Thread-Dump zeigte `Thread-3 (generate_js_object)`
+    dauerhaft in `get_functions` auf genau dieser Kette hängend). Der
+    führende Unterstrich nutzt `get_functions`s eigene, dafür vorgesehene
+    Ausschlussregel (`if name.startswith('_'): continue`, VOR jedem
+    `getattr()`-Aufruf geprüft) und verhindert so, dass dieser gefährliche
+    Objektgraph überhaupt erreicht wird - ohne die JS-Exposition selbst
+    (weiterhin aktiv für `pick_folder()`) oder pywebview selbst
+    anzutasten."""
+
+    _window: object | None = None
 
     def pick_folder(self) -> str:
-        if self.window is None:
+        if self._window is None:
             return ""
         import webview
 
-        result = self.window.create_file_dialog(webview.FOLDER_DIALOG)  # type: ignore[attr-defined]
+        result = self._window.create_file_dialog(webview.FOLDER_DIALOG)  # type: ignore[attr-defined]
         if not result:
             return ""
         return str(result[0])
@@ -496,7 +520,7 @@ def _serve_with_window(settings) -> int:  # noqa: ANN001 - Settings-Typ nur lazy
         background_color="#F8FAFC",
         js_api=native_api,
     )
-    native_api.window = window
+    native_api._window = window
     window.events.shown += _apply_light_title_bar
     # Blockiert im Hauptthread, bis der Nutzer das Fenster schließt.
     webview.start()
